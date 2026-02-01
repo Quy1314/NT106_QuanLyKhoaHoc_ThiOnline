@@ -27,8 +27,6 @@
             LoginPanel = new Panel();
             linkLabel1 = new LinkLabel();
             chkRemember = new CheckBox();
-            label2 = new Label();
-            label1 = new Label();
             LoginTitle = new Label();
             LOGO = new Label();
             lblUsername = new Label();
@@ -42,11 +40,8 @@
             // LoginPanel
             // 
             LoginPanel.BackColor = Color.White;
-            LoginPanel.BackgroundImageLayout = ImageLayout.Stretch;
             LoginPanel.Controls.Add(linkLabel1);
             LoginPanel.Controls.Add(chkRemember);
-            LoginPanel.Controls.Add(label2);
-            LoginPanel.Controls.Add(label1);
             LoginPanel.Controls.Add(LoginTitle);
             LoginPanel.Controls.Add(LOGO);
             LoginPanel.Controls.Add(lblUsername);
@@ -88,43 +83,28 @@
             chkRemember.Text = "Remember me";
             chkRemember.UseVisualStyleBackColor = false;
             // 
-            // label2
-            // 
-            label2.BackColor = Color.LightSalmon;
-            label2.Location = new Point(18, 23);
-            label2.Name = "label2";
-            label2.Size = new Size(10, 36);
-            label2.TabIndex = 8;
-            // 
-            // label1
-            // 
-            label1.AutoSize = true;
-            label1.Location = new Point(18, 32);
-            label1.Name = "label1";
-            label1.Size = new Size(0, 23);
-            label1.TabIndex = 7;
-            // 
             // LoginTitle
             // 
-            LoginTitle.Font = new Font("Segoe UI", 18F, FontStyle.Bold);
-            LoginTitle.Location = new Point(25, 17);
+            LoginTitle.Font = new Font("Segoe UI", 24F, FontStyle.Bold);
+            LoginTitle.ForeColor = Color.FromArgb(56, 113, 224);
+            LoginTitle.Location = new Point(0, 20);
             LoginTitle.Margin = new Padding(4, 0, 4, 0);
             LoginTitle.Name = "LoginTitle";
-            LoginTitle.Size = new Size(110, 41);
+            LoginTitle.Size = new Size(400, 50);
             LoginTitle.TabIndex = 0;
             LoginTitle.Text = "LOGIN";
+            LoginTitle.TextAlign = ContentAlignment.MiddleCenter;
             // 
             // LOGO
             // 
-            LOGO.Anchor = AnchorStyles.None;
-            LOGO.BorderStyle = BorderStyle.FixedSingle;
-            LOGO.ForeColor = Color.DodgerBlue;
-            LOGO.Location = new Point(286, 23);
+            LOGO.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            LOGO.ForeColor = Color.Gray;
+            LOGO.Location = new Point(0, 75);
             LOGO.Margin = new Padding(4, 0, 4, 0);
             LOGO.Name = "LOGO";
-            LOGO.Size = new Size(188, 40);
+            LOGO.Size = new Size(400, 30);
             LOGO.TabIndex = 1;
-            LOGO.Text = "COURSE-GUARD";
+            LOGO.Text = "COURSE GUARD";
             LOGO.TextAlign = ContentAlignment.MiddleCenter;
             // 
             // lblUsername
@@ -196,8 +176,6 @@
             ResumeLayout(false);
         }
 
-        private Label label1;
-        private Label label2;
         private CheckBox chkRemember;
         private LinkLabel linkLabel1;
     }
