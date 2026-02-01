@@ -11,3 +11,6 @@ obj/
 
 # Agent
 .agent/
+
+# Documentation
+GEMINI.md
