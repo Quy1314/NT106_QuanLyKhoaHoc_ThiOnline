@@ -47,14 +47,14 @@ namespace CourseGuard
             // Labels
             lblUsername.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
             lblUsername.ForeColor = Color.FromArgb(64, 64, 64);
-            
+
             lblPassword.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
             lblPassword.ForeColor = Color.FromArgb(64, 64, 64);
 
             // TextBoxes
             txtUsername.Font = new Font("Segoe UI", 11F);
             txtUsername.BorderStyle = BorderStyle.FixedSingle;
-            
+
             txtPassword.Font = new Font("Segoe UI", 11F);
             txtPassword.BorderStyle = BorderStyle.FixedSingle;
 
@@ -100,7 +100,7 @@ namespace CourseGuard
             // Ensure height captures all content (Title + Logo + Inputs + Checkbox + Button + Pasdding)
             // Content requires at least ~380px.
             int newHeight = Math.Max(400, (int)(this.ClientSize.Height / 1.5));
-           
+
             if (newHeight > 550)
                 newHeight = 550;
 
@@ -108,7 +108,7 @@ namespace CourseGuard
                 newWidth = 400;
 
             LoginPanel.Size = new Size(newWidth, newHeight);
-            
+
             // Adjust elements that depend on Panel Width (Title, Logo) if they are not anchored
             LoginTitle.Width = LoginPanel.Width;
             LOGO.Width = LoginPanel.Width;
@@ -122,7 +122,7 @@ namespace CourseGuard
             // Center Title and Logo
             LoginTitle.Width = LoginPanel.Width;
             LOGO.Width = LoginPanel.Width;
-            
+
             // Textbox full width
             txtUsername.Width = fullWidth;
             txtPassword.Width = fullWidth;
@@ -137,11 +137,11 @@ namespace CourseGuard
             // Assuming fixed Y positions relative to top for simplicity, or dynamic?
             // Let's stick to the current relative logic or set hard defaults if easier.
             // But CustomizeUI set initial Y. Let's ensure they are consistent.
-            
-           // Adjust Y positions for spacing
+
+            // Adjust Y positions for spacing
             lblUsername.Top = 130;
             txtUsername.Top = 155;
-            
+
             lblPassword.Top = 205;
             txtPassword.Top = 230;
 
@@ -151,18 +151,49 @@ namespace CourseGuard
             btnLogin.Top = 290;
 
             // Hide old labels/controls logic removed since controls are deleted.
-           
+
             // Re-arrange Checkbox and Forgot Password if they exist
             // My new design didn't account for them explicitly in the Plan but user has them.
             // Let's place them below Password.
             chkRemember.Top = 265;
             linkLabel1.Top = 265;
-            
+
             chkRemember.Left = padding;
             linkLabel1.Left = LoginPanel.Width - linkLabel1.Width - padding;
-            
+
             // Shift Button down
             btnLogin.Top = 310;
         }
+
+        private void btnLogin_Click(object sender, EventArgs e)
+        {
+            string username = txtUsername.Text.Trim();
+            string password = txtPassword.Text.Trim();
+            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            {
+                MessageBox.Show("Vui lòng nhập đầy đủ thông tin!");
+                return;
+            }
+            AuthService authService = new AuthService();
+            UserModel? user = authService.Login(username, password);
+            if (user == null)
+            {
+                MessageBox.Show("Tên đăng nhập hoặc mật khẩu không đúng!");
+                return;
+            }
+
+            if (user.Status != "active")
+            {
+                MessageBox.Show("Tài khoản của bạn không hoạt động. Vui lòng liên hệ quản trị viên.");
+                return;
+            }
+
+            // Login Success
+            CurrentUser = user;
+            this.DialogResult = DialogResult.OK;
+            this.Close();
+        }
+
+        public UserModel? CurrentUser { get; private set; }
     }
 }
