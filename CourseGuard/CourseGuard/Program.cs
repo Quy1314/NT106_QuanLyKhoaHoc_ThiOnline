@@ -1,3 +1,7 @@
+using System;
+using System.Windows.Forms;
+using CourseGuard.Forms.Admin;
+
 namespace CourseGuard
 {
     internal static class Program

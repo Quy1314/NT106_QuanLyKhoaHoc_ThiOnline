@@ -1,4 +1,4 @@
-﻿namespace CourseGuard
+﻿namespace CourseGuard.Forms.Login
 {
     partial class LoginPage
     {
@@ -106,6 +106,7 @@
             LOGO.TabIndex = 1;
             LOGO.Text = "COURSE GUARD";
             LOGO.TextAlign = ContentAlignment.MiddleCenter;
+            LOGO.Click += LOGO_Click;
             // 
             // lblUsername
             // 
@@ -156,6 +157,7 @@
             btnLogin.TabIndex = 6;
             btnLogin.Text = "Log In";
             btnLogin.UseVisualStyleBackColor = false;
+            btnLogin.Click += btnLogin_Click;
             // 
             // LoginPage
             // 
@@ -171,6 +173,7 @@
             Name = "LoginPage";
             StartPosition = FormStartPosition.CenterScreen;
             Text = "Login";
+            Load += LoginPage_Load_1;
             LoginPanel.ResumeLayout(false);
             LoginPanel.PerformLayout();
             ResumeLayout(false);

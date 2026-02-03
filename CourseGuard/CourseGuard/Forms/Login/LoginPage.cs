@@ -1,8 +1,10 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using CourseGuard.Services;
+using CourseGuard.Models;
 
-namespace CourseGuard
+namespace CourseGuard.Forms.Login
 {
     public partial class LoginPage : Form
     {
@@ -192,6 +194,16 @@ namespace CourseGuard
             CurrentUser = user;
             this.DialogResult = DialogResult.OK;
             this.Close();
+        }
+
+        private void LOGO_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void LoginPage_Load_1(object sender, EventArgs e)
+        {
+
         }
 
         public UserModel? CurrentUser { get; private set; }

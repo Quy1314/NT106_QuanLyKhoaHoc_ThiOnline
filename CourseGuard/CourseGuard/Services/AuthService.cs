@@ -3,16 +3,11 @@ using System.Data;
 using Microsoft.Data.SqlClient;
 using System.Security.Cryptography;
 using System.Text;
+using CourseGuard.Models;
+using CourseGuard.Security; 
 
-namespace CourseGuard
+namespace CourseGuard.Services
 {
-    public class UserModel
-    {
-        public int Id { get; set; }
-        public string Username { get; set; } = string.Empty;
-        public string Role { get; set; } = string.Empty;
-        public string Status { get; set; } = string.Empty;
-    }
     internal class AuthService
     {
         private readonly string connectionString =
@@ -20,7 +15,7 @@ namespace CourseGuard
 
         public UserModel? Login(string username, string password) // Cho phép return null nếu đăng nhập thất bại
         {
-            string hashedPassword = HashPassword(password);
+            string hashedPassword = PasswordHasher.HashPassword(password);
 
             using (SqlConnection conn = new SqlConnection(connectionString))
             {
@@ -55,20 +50,6 @@ namespace CourseGuard
             }
 
             return null;
-        }
-
-        private string HashPassword(string password)
-        {
-            using (SHA256 sha256 = SHA256.Create())
-            {
-                byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-                StringBuilder builder = new StringBuilder();
-
-                foreach (byte b in bytes)
-                    builder.Append(b.ToString("x2"));
-
-                return builder.ToString();
-            }
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace CourseGuard
+﻿namespace CourseGuard.Forms.Admin
 {
     partial class RedirectForm
     {
