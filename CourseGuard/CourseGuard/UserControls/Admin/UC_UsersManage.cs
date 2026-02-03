@@ -8,8 +8,7 @@ namespace CourseGuard.UserControls.Admin
 {
     public partial class UC_UsersManage : UserControl
     {
-        private readonly string connectionString =
-            "Server=localhost;Database=CourseGuardDB;Trusted_Connection=True;TrustServerCertificate=True";
+
 
         public UC_UsersManage()
         {
@@ -40,42 +39,33 @@ namespace CourseGuard.UserControls.Admin
 
             try
             {
-                using (SqlConnection conn = new SqlConnection(connectionString))
-                {
-                    conn.Open();
-
-                    string query = @"
+                string query = @"
                         INSERT INTO USERS 
                         (USERNAME, PASSWORD_HASH, FULL_NAME, EMAIL, ROLE_ID, STATUS)
                         VALUES
                         (@username, @password_hash, @full_name, @email, @role_id, @status)";
 
-                    using (SqlCommand cmd = new SqlCommand(query, conn))
-                    {
-                        cmd.Parameters.Add("@username", SqlDbType.NVarChar, 50).Value = username;
-                        cmd.Parameters.Add("@password_hash", SqlDbType.NVarChar, 255).Value = hashedPassword;
-                        cmd.Parameters.Add("@full_name", SqlDbType.NVarChar, 100).Value = fullName;
-                        cmd.Parameters.Add("@email", SqlDbType.NVarChar, 100).Value = email;
-                        cmd.Parameters.Add("@role_id", SqlDbType.Int).Value = roleId;
-                        cmd.Parameters.Add("@status", SqlDbType.NVarChar, 20).Value = status;
+                var parameters = new System.Collections.Generic.Dictionary<string, (SqlDbType, object)>
+                {
+                    { "@username", (SqlDbType.NVarChar, username) },
+                    { "@password_hash", (SqlDbType.NVarChar, hashedPassword) },
+                    { "@full_name", (SqlDbType.NVarChar, fullName) },
+                    { "@email", (SqlDbType.NVarChar, email) },
+                    { "@role_id", (SqlDbType.Int, roleId) },
+                    { "@status", (SqlDbType.NVarChar, status) }
+                };
 
-                        int rowsAffected = cmd.ExecuteNonQuery();
+                int rowsAffected = CourseGuard.Data.DatabaseAction.ExecuteNonQuery(query, parameters);
 
-                        if (rowsAffected > 0)
-                        {
-                            MessageBox.Show("Thêm user thành công.");
-                            ClearForm();
-                        }
-                        else
-                        {
-                            MessageBox.Show("Không thể thêm user.");
-                        }
-                    }
+                if (rowsAffected > 0)
+                {
+                    MessageBox.Show("Thêm user thành công.");
+                    ClearForm();
                 }
-            }
-            catch (SqlException ex)
-            {
-                MessageBox.Show("Lỗi SQL: " + ex.Message);
+                else
+                {
+                    MessageBox.Show("Không thể thêm user.");
+                }
             }
             catch (Exception ex)
             {
