@@ -1,4 +1,4 @@
-﻿namespace CourseGuard.UserControls.Admin
+﻿namespace CourseGuard.UserControls.shareUC
 {
     partial class UC_Dashboard
     {
@@ -28,32 +28,17 @@
         /// </summary>
         private void InitializeComponent()
         {
-            button1 = new Button();
             SuspendLayout();
-            // 
-            // button1
-            // 
-            button1.BackColor = SystemColors.ActiveCaption;
-            button1.ForeColor = SystemColors.ActiveCaption;
-            button1.Location = new Point(190, 127);
-            button1.Name = "button1";
-            button1.Size = new Size(514, 221);
-            button1.TabIndex = 0;
-            button1.Text = "button1";
-            button1.UseVisualStyleBackColor = false;
             // 
             // UC_Dashboard
             // 
             AutoScaleDimensions = new SizeF(8F, 20F);
             AutoScaleMode = AutoScaleMode.Font;
-            Controls.Add(button1);
             Name = "UC_Dashboard";
             Size = new Size(938, 473);
             ResumeLayout(false);
         }
 
         #endregion
-
-        private Button button1;
     }
 }

@@ -38,7 +38,7 @@ namespace CourseGuard.Forms.Admin
             // Initialize mapping: Button -> UserControl
             _navigationMap = new Dictionary<Button, UserControl>
             {
-                { btn_Dashboard, new UC_Dashboard() },
+                { btn_Dashboard, new UC_AdminDashboard() },
                 { btn_users, new UC_UsersManage() },
                 { btn_Courses, new UC_CoursesManage() },
                 { btn_Reports, new UC_AdminReports() }

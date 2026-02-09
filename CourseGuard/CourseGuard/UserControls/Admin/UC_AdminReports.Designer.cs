@@ -28,135 +28,227 @@
         /// </summary>
         private void InitializeComponent()
         {
-            dataGridView1 = new DataGridView();
-            panel1 = new Panel();
-            btn_insert = new Button();
-            btn_delete = new Button();
-            btn_search = new Button();
-            textBox1 = new TextBox();
-            textBox2 = new TextBox();
-            textBox3 = new TextBox();
-            textBox4 = new TextBox();
-            cb_roleID = new ComboBox();
-            ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
-            panel1.SuspendLayout();
-            SuspendLayout();
+
+
+            this.panelHeader = new System.Windows.Forms.Panel();
+            this.lblTitle = new System.Windows.Forms.Label();
+            
+            this.grpFilter = new System.Windows.Forms.GroupBox();
+            this.lblReportType = new System.Windows.Forms.Label();
+            this.cboReportType = new System.Windows.Forms.ComboBox();
+            this.lblStartDate = new System.Windows.Forms.Label();
+            this.dtpStartDate = new System.Windows.Forms.DateTimePicker();
+            this.lblEndDate = new System.Windows.Forms.Label();
+            this.dtpEndDate = new System.Windows.Forms.DateTimePicker();
+            this.btnFilter = new System.Windows.Forms.Button();
+            
+            this.grpExport = new System.Windows.Forms.GroupBox();
+            this.btnExportExcel = new System.Windows.Forms.Button();
+            this.btnExportCSV = new System.Windows.Forms.Button();
+            this.btnExportPDF = new System.Windows.Forms.Button();
+
+            this.dataGridView1 = new System.Windows.Forms.DataGridView();
+
+            this.panelHeader.SuspendLayout();
+            this.grpFilter.SuspendLayout();
+            this.grpExport.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).BeginInit();
+            this.SuspendLayout();
+
+            // 
+            // panelHeader
+            // 
+            this.panelHeader.Controls.Add(this.lblTitle);
+            this.panelHeader.Dock = System.Windows.Forms.DockStyle.Top;
+            this.panelHeader.Height = 50;
+            this.panelHeader.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(249)))), ((int)(((byte)(250)))), ((int)(((byte)(251)))));
+            this.panelHeader.Name = "panelHeader";
+
+            // 
+            // lblTitle
+            // 
+            this.lblTitle.Text = "BÁO CÁO & THỐNG KÊ";
+            this.lblTitle.Font = new System.Drawing.Font("Segoe UI", 16F, System.Drawing.FontStyle.Bold);
+            this.lblTitle.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(58)))), ((int)(((byte)(138)))));
+            this.lblTitle.Location = new System.Drawing.Point(20, 10);
+            this.lblTitle.AutoSize = true;
+            this.lblTitle.Name = "lblTitle";
+
+            // 
+            // grpFilter
+            // 
+            this.grpFilter.Text = "Bộ lọc và Tìm kiếm";
+            this.grpFilter.Dock = System.Windows.Forms.DockStyle.Top;
+            this.grpFilter.Height = 100;
+            this.grpFilter.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.grpFilter.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(58)))), ((int)(((byte)(138)))));
+            this.grpFilter.BackColor = System.Drawing.Color.White;
+            this.grpFilter.Padding = new System.Windows.Forms.Padding(10);
+            this.grpFilter.Name = "grpFilter";
+            
+            // Report Type
+            this.lblReportType.Text = "Loại báo cáo:";
+            this.lblReportType.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.lblReportType.Location = new System.Drawing.Point(20, 30);
+            this.lblReportType.AutoSize = true;
+            this.lblReportType.Name = "lblReportType";
+
+            this.cboReportType.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.cboReportType.Items.AddRange(new object[] { "Nhật ký hệ thống (Audit Logs)", "Danh sách vi phạm (Violations)" });
+            this.cboReportType.Location = new System.Drawing.Point(20, 55);
+            this.cboReportType.Size = new System.Drawing.Size(250, 30);
+            this.cboReportType.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.cboReportType.SelectedIndex = 0;
+            this.cboReportType.Name = "cboReportType";
+
+            // Start Date
+            this.lblStartDate.Text = "Từ ngày:";
+            this.lblStartDate.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.lblStartDate.Location = new System.Drawing.Point(300, 30);
+            this.lblStartDate.AutoSize = true;
+            this.lblStartDate.Name = "lblStartDate";
+
+            this.dtpStartDate.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.dtpStartDate.Format = System.Windows.Forms.DateTimePickerFormat.Short;
+            this.dtpStartDate.Location = new System.Drawing.Point(300, 55);
+            this.dtpStartDate.Size = new System.Drawing.Size(150, 30);
+            this.dtpStartDate.Name = "dtpStartDate";
+
+            // End Date
+            this.lblEndDate.Text = "Đến ngày:";
+            this.lblEndDate.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.lblEndDate.Location = new System.Drawing.Point(470, 30);
+            this.lblEndDate.AutoSize = true;
+            this.lblEndDate.Name = "lblEndDate";
+
+            this.dtpEndDate.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.dtpEndDate.Format = System.Windows.Forms.DateTimePickerFormat.Short;
+            this.dtpEndDate.Location = new System.Drawing.Point(470, 55);
+            this.dtpEndDate.Size = new System.Drawing.Size(150, 30);
+            this.dtpEndDate.Name = "dtpEndDate";
+
+            // Filter Button
+            this.btnFilter.Text = "Xem Báo Cáo";
+            this.btnFilter.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(37)))), ((int)(((byte)(99)))), ((int)(((byte)(235)))));
+            this.btnFilter.ForeColor = System.Drawing.Color.White;
+            this.btnFilter.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnFilter.FlatAppearance.BorderSize = 0;
+            this.btnFilter.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.btnFilter.Location = new System.Drawing.Point(650, 50);
+            this.btnFilter.Size = new System.Drawing.Size(150, 35);
+            this.btnFilter.Name = "btnFilter";
+
+            this.grpFilter.Controls.Add(this.lblReportType);
+            this.grpFilter.Controls.Add(this.cboReportType);
+            this.grpFilter.Controls.Add(this.lblStartDate);
+            this.grpFilter.Controls.Add(this.dtpStartDate);
+            this.grpFilter.Controls.Add(this.lblEndDate);
+            this.grpFilter.Controls.Add(this.dtpEndDate);
+            this.grpFilter.Controls.Add(this.btnFilter);
+
+            // 
+            // grpExport
+            // 
+            this.grpExport.Text = "Xuất dữ liệu";
+            this.grpExport.Dock = System.Windows.Forms.DockStyle.Top;
+            this.grpExport.Height = 80;
+            this.grpExport.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.grpExport.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(58)))), ((int)(((byte)(138)))));
+            this.grpExport.BackColor = System.Drawing.Color.White;
+            this.grpExport.Padding = new System.Windows.Forms.Padding(10);
+            this.grpExport.Name = "grpExport";
+
+            // CSV
+            this.btnExportCSV.Text = "Xuất CSV";
+            this.btnExportCSV.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(185)))), ((int)(((byte)(129))))); // Green
+            this.btnExportCSV.ForeColor = System.Drawing.Color.White;
+            this.btnExportCSV.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnExportCSV.FlatAppearance.BorderSize = 0;
+            this.btnExportCSV.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.btnExportCSV.Location = new System.Drawing.Point(20, 30);
+            this.btnExportCSV.Size = new System.Drawing.Size(120, 35);
+            this.btnExportCSV.Name = "btnExportCSV";
+
+            // Excel
+            this.btnExportExcel.Text = "Xuất Excel";
+            this.btnExportExcel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(185)))), ((int)(((byte)(129))))); // Green
+            this.btnExportExcel.ForeColor = System.Drawing.Color.White;
+            this.btnExportExcel.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnExportExcel.FlatAppearance.BorderSize = 0;
+            this.btnExportExcel.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.btnExportExcel.Location = new System.Drawing.Point(160, 30);
+            this.btnExportExcel.Size = new System.Drawing.Size(120, 35);
+            this.btnExportExcel.Name = "btnExportExcel";
+
+            // PDF
+            this.btnExportPDF.Text = "Xuất PDF";
+            this.btnExportPDF.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(220)))), ((int)(((byte)(38)))), ((int)(((byte)(38))))); // Red
+            this.btnExportPDF.ForeColor = System.Drawing.Color.White;
+            this.btnExportPDF.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnExportPDF.FlatAppearance.BorderSize = 0;
+            this.btnExportPDF.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.btnExportPDF.Location = new System.Drawing.Point(300, 30);
+            this.btnExportPDF.Size = new System.Drawing.Size(120, 35);
+            this.btnExportPDF.Name = "btnExportPDF";
+
+            this.grpExport.Controls.Add(this.btnExportCSV);
+            this.grpExport.Controls.Add(this.btnExportExcel);
+            this.grpExport.Controls.Add(this.btnExportPDF);
+
             // 
             // dataGridView1
             // 
-            dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dataGridView1.Dock = DockStyle.Bottom;
-            dataGridView1.Location = new Point(0, 151);
-            dataGridView1.Name = "dataGridView1";
-            dataGridView1.RowHeadersWidth = 51;
-            dataGridView1.Size = new Size(976, 298);
-            dataGridView1.TabIndex = 0;
+            this.dataGridView1.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.dataGridView1.BackgroundColor = System.Drawing.Color.White;
+            this.dataGridView1.BorderStyle = System.Windows.Forms.BorderStyle.None;
+            this.dataGridView1.ColumnHeadersHeight = 35;
+            this.dataGridView1.ReadOnly = true;
+            this.dataGridView1.AllowUserToAddRows = false;
+            this.dataGridView1.AllowUserToDeleteRows = false;
+            this.dataGridView1.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
+            this.dataGridView1.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
+            this.dataGridView1.Name = "dataGridView1";
+
             // 
-            // panel1
+            // Control
             // 
-            panel1.Controls.Add(cb_roleID);
-            panel1.Controls.Add(textBox4);
-            panel1.Controls.Add(textBox3);
-            panel1.Controls.Add(textBox2);
-            panel1.Controls.Add(textBox1);
-            panel1.Controls.Add(btn_search);
-            panel1.Controls.Add(btn_delete);
-            panel1.Controls.Add(btn_insert);
-            panel1.Dock = DockStyle.Top;
-            panel1.Location = new Point(0, 0);
-            panel1.Name = "panel1";
-            panel1.Size = new Size(976, 145);
-            panel1.TabIndex = 1;
-            // 
-            // btn_insert
-            // 
-            btn_insert.Location = new Point(19, 14);
-            btn_insert.Name = "btn_insert";
-            btn_insert.Size = new Size(116, 29);
-            btn_insert.TabIndex = 0;
-            btn_insert.Text = "Nhập dữ liệu";
-            btn_insert.UseVisualStyleBackColor = true;
-            // 
-            // btn_delete
-            // 
-            btn_delete.Location = new Point(197, 14);
-            btn_delete.Name = "btn_delete";
-            btn_delete.Size = new Size(94, 29);
-            btn_delete.TabIndex = 1;
-            btn_delete.Text = "Xóa dữ liệu";
-            btn_delete.UseVisualStyleBackColor = true;
-            // 
-            // btn_search
-            // 
-            btn_search.Location = new Point(336, 14);
-            btn_search.Name = "btn_search";
-            btn_search.Size = new Size(131, 29);
-            btn_search.TabIndex = 2;
-            btn_search.Text = "Tìm đối tượng";
-            btn_search.UseVisualStyleBackColor = true;
-            // 
-            // textBox1
-            // 
-            textBox1.Location = new Point(234, 103);
-            textBox1.Name = "textBox1";
-            textBox1.Size = new Size(125, 27);
-            textBox1.TabIndex = 3;
-            textBox1.TextChanged += textBox1_TextChanged;
-            // 
-            // textBox2
-            // 
-            textBox2.Location = new Point(425, 103);
-            textBox2.Name = "textBox2";
-            textBox2.Size = new Size(125, 27);
-            textBox2.TabIndex = 4;
-            // 
-            // textBox3
-            // 
-            textBox3.Location = new Point(619, 103);
-            textBox3.Name = "textBox3";
-            textBox3.Size = new Size(125, 27);
-            textBox3.TabIndex = 5;
-            // 
-            // textBox4
-            // 
-            textBox4.Location = new Point(812, 103);
-            textBox4.Name = "textBox4";
-            textBox4.Size = new Size(125, 27);
-            textBox4.TabIndex = 6;
-            // 
-            // cb_roleID
-            // 
-            cb_roleID.FormattingEnabled = true;
-            cb_roleID.Location = new Point(19, 103);
-            cb_roleID.Name = "cb_roleID";
-            cb_roleID.Size = new Size(151, 28);
-            cb_roleID.TabIndex = 7;
-            // 
-            // UC_AdminReports
-            // 
-            AutoScaleDimensions = new SizeF(8F, 20F);
-            AutoScaleMode = AutoScaleMode.Font;
-            Controls.Add(panel1);
-            Controls.Add(dataGridView1);
-            Name = "UC_AdminReports";
-            Size = new Size(976, 449);
-            ((System.ComponentModel.ISupportInitialize)dataGridView1).EndInit();
-            panel1.ResumeLayout(false);
-            panel1.PerformLayout();
-            ResumeLayout(false);
+            this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 20F);
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.BackColor = System.Drawing.Color.White;
+            this.Controls.Add(this.dataGridView1);
+            this.Controls.Add(this.grpExport);
+            this.Controls.Add(this.grpFilter);
+            this.Controls.Add(this.panelHeader);
+            this.Size = new System.Drawing.Size(976, 550);
+            this.Name = "UC_AdminReports";
+
+            this.panelHeader.ResumeLayout(false);
+            this.panelHeader.PerformLayout();
+            this.grpFilter.ResumeLayout(false);
+            this.grpFilter.PerformLayout();
+            this.grpExport.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).EndInit();
+            this.ResumeLayout(false);
         }
 
         #endregion
 
-        private DataGridView dataGridView1;
-        private Panel panel1;
-        private TextBox textBox4;
-        private TextBox textBox3;
-        private TextBox textBox2;
-        private TextBox textBox1;
-        private Button btn_search;
-        private Button btn_delete;
-        private Button btn_insert;
-        private ComboBox cb_roleID;
+        private System.Windows.Forms.Panel panelHeader;
+        private System.Windows.Forms.Label lblTitle;
+        private System.Windows.Forms.GroupBox grpFilter;
+        private System.Windows.Forms.GroupBox grpExport;
+        private System.Windows.Forms.DataGridView dataGridView1;
+        
+        private System.Windows.Forms.Label lblReportType;
+        private System.Windows.Forms.ComboBox cboReportType;
+        private System.Windows.Forms.Label lblStartDate;
+        private System.Windows.Forms.DateTimePicker dtpStartDate;
+        private System.Windows.Forms.Label lblEndDate;
+        private System.Windows.Forms.DateTimePicker dtpEndDate;
+        private System.Windows.Forms.Button btnFilter;
+        
+        private System.Windows.Forms.Button btnExportCSV;
+        private System.Windows.Forms.Button btnExportExcel;
+        private System.Windows.Forms.Button btnExportPDF;
     }
 }
