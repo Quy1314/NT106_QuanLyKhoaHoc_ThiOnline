@@ -25,3 +25,8 @@ Sau khi đăng nhập thành công, giao diện Dashboard sẽ hiển thị. Adm
 ### 2.3. Xem Báo Cáo (Reports)
 - Truy cập vào mục **Reports** để xem thống kê hệ thống.
 - Xuất báo cáo ra các định dạng file (nếu có).
+
+## 3. Đăng Xuất (Logout)
+
+Để thoát khỏi hệ thống, nhấn vào nút **Logout** (hoặc biểu tượng đăng xuất) trên thanh điều hướng bên trái.
+
