@@ -59,5 +59,7 @@ namespace CourseGuard.Application.Interfaces
         /// Sử dụng: Gọi _userRepository.GetDashboardData().
         /// </summary>
         List<UserDashboardDto> GetDashboardData();
+        // Nhận mật khẩu mới từ UI, trả về thông báo kết quả
+        string ChangePassword(int userId, string newPassword);
     }
 }

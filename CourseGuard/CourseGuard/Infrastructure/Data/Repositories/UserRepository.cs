@@ -240,5 +240,71 @@ namespace CourseGuard.Infrastructure.Data.Repositories
             }
             return users;
         }
+
+        /// <summary>
+        /// Cập nhật thông tin thiết bị/IP khi đăng nhập.
+        /// Sử dụng: Kiểm tra tồn tại trong bảng DEVICES, nếu có thì UPDATE, chưa có thì INSERT.
+        /// </summary>
+        public bool UpdateDevice(int userId, string deviceName, string ipAddress)
+        {
+            try 
+            {
+                string queryCheck = "SELECT COUNT(*) FROM DEVICES WHERE USER_ID = @uid AND DEVICE_NAME = @dname";
+                var paramsCheck = new Dictionary<string, (SqlDbType, object)>
+                {
+                    { "@uid", (SqlDbType.Int, userId) },
+                    { "@dname", (SqlDbType.NVarChar, deviceName) }
+                };
+                
+                int count = Convert.ToInt32(DatabaseAction.ExecuteScalar(queryCheck, paramsCheck));
+
+                if (count > 0)
+                {
+                    // Update
+                    string queryUpdate = @"
+                        UPDATE DEVICES 
+                        SET IP_ADDRESS = @ip, LAST_ACTIVE = GETDATE(), STATUS = 'ACTIVE'
+                        WHERE USER_ID = @uid AND DEVICE_NAME = @dname";
+                    
+                    var paramsUpdate = new Dictionary<string, (SqlDbType, object)>
+                    {
+                        { "@ip", (SqlDbType.NVarChar, ipAddress) },
+                        { "@uid", (SqlDbType.Int, userId) },
+                        { "@dname", (SqlDbType.NVarChar, deviceName) }
+                    };
+                    return DatabaseAction.ExecuteNonQuery(queryUpdate, paramsUpdate) > 0;
+                }
+                else
+                {
+                    // Insert
+                    string queryInsert = @"
+                        INSERT INTO DEVICES (USER_ID, DEVICE_NAME, IP_ADDRESS, STATUS, LAST_ACTIVE)
+                        VALUES (@uid, @dname, @ip, 'ACTIVE', GETDATE())";
+                    
+                    var paramsInsert = new Dictionary<string, (SqlDbType, object)>
+                    {
+                        { "@uid", (SqlDbType.Int, userId) },
+                        { "@dname", (SqlDbType.NVarChar, deviceName) },
+                        { "@ip", (SqlDbType.NVarChar, ipAddress) }
+                    };
+                    return DatabaseAction.ExecuteNonQuery(queryInsert, paramsInsert) > 0;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+
+        }
+        public bool UpdatePassword(int userId, string newPasswordHash)
+        {
+            string query = "UPDATE USERS SET PASSWORD_HASH = @password_hash WHERE ID = @id";
+            var parameters = new Dictionary<string, (SqlDbType, object)>
+            {
+                { "@password_hash", (SqlDbType.NVarChar, newPasswordHash) },
+                { "@id", (SqlDbType.Int, userId) }
+            };
+            return DatabaseAction.ExecuteNonQuery(query, parameters) > 0;
+        }
     }
 }

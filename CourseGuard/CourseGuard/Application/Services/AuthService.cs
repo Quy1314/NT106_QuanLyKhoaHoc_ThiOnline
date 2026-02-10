@@ -62,5 +62,14 @@ namespace CourseGuard.Application.Services
 
             return null;
         }
+
+        /// <summary>
+        /// Cập nhật thông tin đăng nhập (IP, Device).
+        /// Sử dụng: Gọi _userRepository.UpdateDevice().
+        /// </summary>
+        public void UpdateLoginInfo(int userId, string deviceName, string ipAddress)
+        {
+            _userRepository.UpdateDevice(userId, deviceName, ipAddress);
+        }
     }
 }

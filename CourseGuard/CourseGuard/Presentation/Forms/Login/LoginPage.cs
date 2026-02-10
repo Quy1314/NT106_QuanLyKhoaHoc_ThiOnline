@@ -200,76 +200,11 @@ namespace CourseGuard.Presentation.Forms.Login
             // Login Success
             CurrentUser = user;
 
-            try
-            {
-                // Update DEVICES table
-                string ipAddress = GetLocalIPAddress();
-                string deviceName = user.Username; // As requested
 
-                // Check if device entry exists for this user and IP, or just insert new session?
-                // Request says: "update table Devices trong đó @DEVICE_NAME là username ... tự động lấy IP_ADDRESS để update"
-                // It implies we should Insert a new record or Update the latest one. 
-                // Let's Insert/Update based on UserID. 
-                // However, if a user logs in from multiple devices, we might want unexpected behavior if we just update.
-                // But typically for "tracking last login", we often just Insert or Update a "Current Session".
-                // Let's upsert: If UserID exists, update? No, a user can have multiple devices. 
-                // Let's Insert a new record for every login to track history? 
-                // Or Update the record where DEVICE_NAME = username?
-                // The prompt says "update table Devices".
-                // Let's try to UPDATE if exists (by UserID and maybe IP?), ELSE INSERT.
-                // Given the fields: ID, USER_ID, DEVICE_NAME, IP_ADDRESS, STATUS, LAST_ACTIVE
-                
-                // Strategy: Update the record for this UserID where DEVICE_NAME is the username (if we treat username as device name as requested).
-                // If not found, insert.
-                
-                string queryCheck = "SELECT COUNT(*) FROM DEVICES WHERE USER_ID = @uid AND DEVICE_NAME = @dname";
-                var paramsCheck = new System.Collections.Generic.Dictionary<string, (System.Data.SqlDbType, object)>
-                {
-                    { "@uid", (System.Data.SqlDbType.Int, user.Id) },
-                    { "@dname", (System.Data.SqlDbType.NVarChar, deviceName) }
-                };
-                
-                int count = (int)CourseGuard.Infrastructure.Data.DatabaseAction.ExecuteScalar(queryCheck, paramsCheck);
-
-                if (count > 0)
-                {
-                    // Update
-                    string queryUpdate = @"
-                        UPDATE DEVICES 
-                        SET IP_ADDRESS = @ip, LAST_ACTIVE = GETDATE(), STATUS = 'ACTIVE'
-                        WHERE USER_ID = @uid AND DEVICE_NAME = @dname";
-                    
-                    var paramsUpdate = new System.Collections.Generic.Dictionary<string, (System.Data.SqlDbType, object)>
-                    {
-                        { "@ip", (System.Data.SqlDbType.NVarChar, ipAddress) },
-                        { "@uid", (System.Data.SqlDbType.Int, user.Id) },
-                        { "@dname", (System.Data.SqlDbType.NVarChar, deviceName) }
-                    };
-                    CourseGuard.Infrastructure.Data.DatabaseAction.ExecuteNonQuery(queryUpdate, paramsUpdate);
-                }
-                else
-                {
-                    // Insert
-                    string queryInsert = @"
-                        INSERT INTO DEVICES (USER_ID, DEVICE_NAME, IP_ADDRESS, STATUS, LAST_ACTIVE)
-                        VALUES (@uid, @dname, @ip, 'ACTIVE', GETDATE())";
-                    
-                    var paramsInsert = new System.Collections.Generic.Dictionary<string, (System.Data.SqlDbType, object)>
-                    {
-                        { "@uid", (System.Data.SqlDbType.Int, user.Id) },
-                        { "@dname", (System.Data.SqlDbType.NVarChar, deviceName) },
-                        { "@ip", (System.Data.SqlDbType.NVarChar, ipAddress) }
-                    };
-                    CourseGuard.Infrastructure.Data.DatabaseAction.ExecuteNonQuery(queryInsert, paramsInsert);
-                }
-            }
-            catch (Exception ex)
-            {
-                // Log error but allow login? Or show message? 
-                // Let's show friendly error but proceed or just silent?
-                // Usually silent for logging features, but valid for debugging.
-                MessageBox.Show("Cảnh báo: Không thể cập nhật thông tin thiết bị. " + ex.Message);
-            }
+            // Update Device Info (IP)
+            string ipAddress = GetLocalIPAddress();
+            string deviceName = user.Username; // Using Username as DeviceName as per previous logic request
+            authService.UpdateLoginInfo(user.Id, deviceName, ipAddress);
 
             this.DialogResult = DialogResult.OK;
             this.Close();

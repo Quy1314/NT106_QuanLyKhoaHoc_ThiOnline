@@ -116,5 +116,20 @@ namespace CourseGuard.Application.Services
         {
             return _userRepository.GetDashboardData();
         }
+        public string ChangePassword(int userId, string newPassword)
+        {
+            if (string.IsNullOrWhiteSpace(newPassword))
+            {
+                return "New password cannot be empty.";
+            }
+            string newHashedPassword = PasswordHasher.HashPassword(newPassword);
+            var user = _userRepository.GetById(userId);
+            if (user == null)
+            {
+                return "User not found.";
+            }
+            bool updateResult = _userRepository.UpdatePassword(userId, newHashedPassword);
+            return updateResult ? "Password updated successfully." : "Failed to update password.";
+        }
     }
 }

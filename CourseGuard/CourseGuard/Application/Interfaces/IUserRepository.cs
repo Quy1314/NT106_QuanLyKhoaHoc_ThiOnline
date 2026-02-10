@@ -59,5 +59,15 @@ namespace CourseGuard.Application.Interfaces
         /// Sử dụng: Phức thợp query SELECT với subquery lấy từ bảng DEVICES.
         /// </summary>
         List<UserDashboardDto> GetDashboardData();
+
+        /// <summary>
+        /// Cập nhật thông tin thiết bị/IP khi đăng nhập.
+        /// Sử dụng: Kiểm tra tồn tại trong bảng DEVICES, nếu có thì UPDATE, chưa có thì INSERT.
+        /// </summary>
+        bool UpdateDevice(int userId, string deviceName, string ipAddress);
+        /// <summary>
+        /// Cập nhật mật khẩu người dùng.
+        /// </summary>
+        bool UpdatePassword(int userId, string newPasswordHash);
     }
 }
