@@ -60,24 +60,6 @@ namespace CourseGuard.Properties {
             }
         }
         
-        /// <summary>
-        ///   Looks up a localized resource of type System.Drawing.Bitmap.
-        /// </summary>
-        internal static System.Drawing.Bitmap Screenshot_2026_02_01_212733 {
-            get {
-                object obj = ResourceManager.GetObject("Screenshot 2026-02-01 212733", resourceCulture);
-                return ((System.Drawing.Bitmap)(obj));
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized resource of type System.Drawing.Bitmap.
-        /// </summary>
-        internal static System.Drawing.Bitmap Screenshot_2026_02_01_2127331 {
-            get {
-                object obj = ResourceManager.GetObject("Screenshot 2026-02-01 2127331", resourceCulture);
-                return ((System.Drawing.Bitmap)(obj));
-            }
-        }
+
     }
 }

@@ -6,7 +6,7 @@ using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
 
-namespace CourseGuard.UserControls.shareUC
+namespace CourseGuard.Presentation.UserControls.Shared
 {
     public partial class UC_Dashboard : UserControl
     {

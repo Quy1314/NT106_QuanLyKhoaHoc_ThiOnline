@@ -4,10 +4,10 @@ using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Windows.Forms;
-using CourseGuard.Models;
-using CourseGuard.Forms.Login;
+using CourseGuard.Core.Models;
+using CourseGuard.Presentation.Forms.Login;
 
-namespace CourseGuard.Forms.Admin
+namespace CourseGuard.Presentation.Forms.Admin
 {
     public partial class RedirectForm : Form
     {
@@ -33,7 +33,7 @@ namespace CourseGuard.Forms.Admin
                     if (user == null) return;
 
                     // 3. Route to Dashboard
-                    Form dashboard = null;
+                    Form? dashboard = null;
 
                     switch (user.Role)
                     {
@@ -62,7 +62,7 @@ namespace CourseGuard.Forms.Admin
             }
 
             // 5. Exit App
-            Application.Exit();
+            System.Windows.Forms.Application.Exit();
         }
     }
 }

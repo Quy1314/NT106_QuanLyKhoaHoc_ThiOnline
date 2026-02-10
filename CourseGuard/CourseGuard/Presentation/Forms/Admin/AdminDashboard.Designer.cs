@@ -1,4 +1,4 @@
-﻿namespace CourseGuard.Forms.Admin
+﻿namespace CourseGuard.Presentation.Forms.Admin
 {
     partial class AdminDashboard
     {

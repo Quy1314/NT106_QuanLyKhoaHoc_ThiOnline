@@ -2,16 +2,23 @@ using System;
 using System.Data;
 using System.Drawing;
 using System.Windows.Forms;
-using CourseGuard.Data;
-using CourseGuard.UserControls.shareUC;
+using CourseGuard.Infrastructure.Data;
+using CourseGuard.Presentation.UserControls.Shared;
 
-namespace CourseGuard.UserControls.Admin
+namespace CourseGuard.Presentation.UserControls.Admin
 {
     public partial class UC_AdminDashboard : UC_Dashboard
     {
+        private readonly CourseGuard.Application.Interfaces.IUserService _userService;
+
         public UC_AdminDashboard()
         {
             InitializeComponent();
+            
+            // Manual Injection
+            var userRepository = new CourseGuard.Infrastructure.Data.Repositories.UserRepository();
+            _userService = new CourseGuard.Application.Services.UserService(userRepository);
+
             LoadData(); // Load data on initialization
         }
 
@@ -19,32 +26,11 @@ namespace CourseGuard.UserControls.Admin
         {
             try
             {
-                // Query detailed user info and their last active device session
-                string query = @"
-                    SELECT 
-                        u.ID, 
-                        u.USERNAME, 
-                        u.FULL_NAME, 
-                        u.EMAIL, 
-                        r.NAME AS ROLE, 
-                        u.STATUS,
-                        (SELECT TOP 1 d.LAST_ACTIVE 
-                         FROM DEVICES d 
-                         WHERE d.USER_ID = u.ID 
-                         ORDER BY d.LAST_ACTIVE DESC) AS LAST_LOGIN,
-                         (SELECT TOP 1 d.IP_ADDRESS 
-                         FROM DEVICES d 
-                         WHERE d.USER_ID = u.ID 
-                         ORDER BY d.LAST_ACTIVE DESC) AS LAST_IP
-                    FROM USERS u
-                    JOIN ROLES r ON u.ROLE_ID = r.ID
-                    ORDER BY LAST_LOGIN DESC";
-
-                DataTable dt = DatabaseAction.ExecuteQuery(query);
+                var dashboardData = _userService.GetDashboardData();
                 
                 if (dataGridView1 != null)
                 {
-                    dataGridView1.DataSource = dt;
+                    dataGridView1.DataSource = dashboardData;
                 }
             }
             catch (Exception ex)

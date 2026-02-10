@@ -1,6 +1,13 @@
+/*
+ * ColorPalette.cs
+ * 
+ * Layer: Presentation (Theme)
+ * Vai trò: Chứa mã màu chuẩn của ứng dụng (Primary, Secondary, Background...) để đảm bảo đồng bộ giao diện.
+ * Sử dụng: Được gọi bởi các Form/UserControl để set màu nền/chữ.
+ */
 using System.Drawing;
 
-namespace CourseGuard.UI.Theme
+namespace CourseGuard.Presentation.Theme
 {
     public static class ColorPalette
     {

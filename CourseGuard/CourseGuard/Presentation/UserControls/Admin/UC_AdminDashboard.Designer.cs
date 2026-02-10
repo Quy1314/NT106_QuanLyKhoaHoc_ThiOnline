@@ -1,4 +1,4 @@
-namespace CourseGuard.UserControls.Admin
+namespace CourseGuard.Presentation.UserControls.Admin
 {
     partial class UC_AdminDashboard
     {

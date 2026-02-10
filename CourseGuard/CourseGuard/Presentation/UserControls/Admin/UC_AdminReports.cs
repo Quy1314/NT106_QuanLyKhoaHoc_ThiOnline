@@ -1,4 +1,11 @@
-﻿using System;
+﻿/*
+ * UC_AdminReports.cs
+ * 
+ * Layer: Presentation (UserControls)
+ * Vai trò: Màn hình báo cáo thống kê. Hiển thị các biểu đồ hoặc số liệu tổng hợp.
+ * Phụ thuộc: (Chưa implement logic sâu).
+ */
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
@@ -7,9 +14,9 @@ using System.Windows.Forms;
 using Microsoft.Data.SqlClient;
 using System.IO;
 using System.Drawing.Printing;
-using CourseGuard.Data;
+using CourseGuard.Infrastructure.Data;
 
-namespace CourseGuard.UserControls.Admin
+namespace CourseGuard.Presentation.UserControls.Admin
 {
     public partial class UC_AdminReports : UserControl
     {
@@ -39,14 +46,14 @@ namespace CourseGuard.UserControls.Admin
             LoadData(); 
         }
 
-        private void BtnFilter_Click(object sender, EventArgs e)
+        private void BtnFilter_Click(object? sender, EventArgs e)
         {
             LoadData();
         }
 
         private void LoadData()
         {
-            string reportType = cboReportType.SelectedItem?.ToString();
+            string? reportType = cboReportType.SelectedItem?.ToString();
             DateTime start = dtpStartDate.Value.Date;
             DateTime end = dtpEndDate.Value.Date.AddDays(1).AddTicks(-1); // End of day
 
@@ -102,13 +109,13 @@ namespace CourseGuard.UserControls.Admin
         }
 
         // Export to CSV
-        private void BtnExportCSV_Click(object sender, EventArgs e)
+        private void BtnExportCSV_Click(object? sender, EventArgs e)
         {
             ExportToTextFile(",", "CSV File (*.csv)|*.csv");
         }
 
         // Export to Excel (Using CSV format but opening as Excel)
-        private void BtnExportExcel_Click(object sender, EventArgs e)
+        private void BtnExportExcel_Click(object? sender, EventArgs e)
         {
             // Providing Tab-delimited or generic CSV usually works for Excel
             ExportToTextFile("\t", "Excel File (*.xls)|*.xls"); 
@@ -173,7 +180,7 @@ namespace CourseGuard.UserControls.Admin
         }
 
         // Export to PDF (Printing)
-        private void BtnExportPDF_Click(object sender, EventArgs e)
+        private void BtnExportPDF_Click(object? sender, EventArgs e)
         {
             if (dataGridView1.Rows.Count == 0)
             {
@@ -221,8 +228,8 @@ namespace CourseGuard.UserControls.Admin
             
             for (int i = 0; i < dataGridView1.Columns.Count; i++)
             {
-                e.Graphics.DrawRectangle(Pens.Black, startX + (i * cellWidth), currentY, cellWidth, rowHeight);
-                e.Graphics.DrawString(dataGridView1.Columns[i].HeaderText, headerFont, brush, 
+                e.Graphics?.DrawRectangle(Pens.Black, startX + (i * cellWidth), currentY, cellWidth, rowHeight);
+                e.Graphics?.DrawString(dataGridView1.Columns[i].HeaderText, headerFont, brush, 
                     new RectangleF(startX + (i * cellWidth) + 2, currentY + 5, cellWidth - 4, rowHeight - 4));
             }
             currentY += rowHeight;
@@ -241,8 +248,8 @@ namespace CourseGuard.UserControls.Admin
                 for (int i = 0; i < dataGridView1.Columns.Count; i++)
                 {
                     string val = row.Cells[i].Value?.ToString() ?? "";
-                    e.Graphics.DrawRectangle(Pens.Black, startX + (i * cellWidth), currentY, cellWidth, rowHeight);
-                    e.Graphics.DrawString(val, font, brush, 
+                    e.Graphics?.DrawRectangle(Pens.Black, startX + (i * cellWidth), currentY, cellWidth, rowHeight);
+                    e.Graphics?.DrawString(val, font, brush, 
                         new RectangleF(startX + (i * cellWidth) + 2, currentY + 5, cellWidth - 4, rowHeight - 4));
                 }
                 

@@ -1,10 +1,17 @@
+/*
+ * LoginPage.cs
+ * 
+ * Layer: Presentation (Forms)
+ * Vai trò: Form đăng nhập. Nhận User/Pass, gọi Service để kiểm tra, nếu đúng thì chuyển sang Dashboard.
+ * Phụ thuộc: AuthService.
+ */
 using System;
 using System.Drawing;
 using System.Windows.Forms;
-using CourseGuard.Services;
-using CourseGuard.Models;
+using CourseGuard.Application.Services;
+using CourseGuard.Core.Models;
 
-namespace CourseGuard.Forms.Login
+namespace CourseGuard.Presentation.Forms.Login
 {
     public partial class LoginPage : Form
     {
@@ -176,7 +183,7 @@ namespace CourseGuard.Forms.Login
                 MessageBox.Show("Vui lòng nhập đầy đủ thông tin!");
                 return;
             }
-            AuthService authService = new AuthService();
+            AuthService authService = new AuthService(new CourseGuard.Infrastructure.Data.Repositories.UserRepository());
             UserModel? user = authService.Login(username, password);
             if (user == null)
             {
@@ -222,7 +229,7 @@ namespace CourseGuard.Forms.Login
                     { "@dname", (System.Data.SqlDbType.NVarChar, deviceName) }
                 };
                 
-                int count = (int)CourseGuard.Data.DatabaseAction.ExecuteScalar(queryCheck, paramsCheck);
+                int count = (int)CourseGuard.Infrastructure.Data.DatabaseAction.ExecuteScalar(queryCheck, paramsCheck);
 
                 if (count > 0)
                 {
@@ -238,7 +245,7 @@ namespace CourseGuard.Forms.Login
                         { "@uid", (System.Data.SqlDbType.Int, user.Id) },
                         { "@dname", (System.Data.SqlDbType.NVarChar, deviceName) }
                     };
-                    CourseGuard.Data.DatabaseAction.ExecuteNonQuery(queryUpdate, paramsUpdate);
+                    CourseGuard.Infrastructure.Data.DatabaseAction.ExecuteNonQuery(queryUpdate, paramsUpdate);
                 }
                 else
                 {
@@ -253,7 +260,7 @@ namespace CourseGuard.Forms.Login
                         { "@dname", (System.Data.SqlDbType.NVarChar, deviceName) },
                         { "@ip", (System.Data.SqlDbType.NVarChar, ipAddress) }
                     };
-                    CourseGuard.Data.DatabaseAction.ExecuteNonQuery(queryInsert, paramsInsert);
+                    CourseGuard.Infrastructure.Data.DatabaseAction.ExecuteNonQuery(queryInsert, paramsInsert);
                 }
             }
             catch (Exception ex)

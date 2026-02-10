@@ -1,4 +1,4 @@
-﻿namespace CourseGuard.Forms.Login
+﻿namespace CourseGuard.Presentation.Forms.Login
 {
     partial class LoginPage
     {

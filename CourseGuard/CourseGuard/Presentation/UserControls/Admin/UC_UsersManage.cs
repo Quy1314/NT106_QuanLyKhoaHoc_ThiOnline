@@ -1,19 +1,32 @@
-﻿using System;
-using System.Data;
+﻿/*
+ * UC_UsersManage.cs
+ * 
+ * Layer: Presentation (UserControls)
+ * Vai trò: Màn hình quản lý người dùng (CRUD). Hiển thị danh sách, thêm/xóa/sửa user.
+ * Phụ thuộc: UserService.
+ */
+using System;
+using System.Data; // Keep for rare cases, but mostly replaced
 using System.Windows.Forms;
 using Microsoft.Data.SqlClient;
-using CourseGuard.Security;
-using CourseGuard.Data;
+using CourseGuard.Core.Models;
+using CourseGuard.Core.Security;
+using CourseGuard.Infrastructure.Data;
+using CourseGuard.Application.Services;
+using CourseGuard.Application.Interfaces;
+using CourseGuard.Infrastructure.Data.Repositories;
 
-namespace CourseGuard.UserControls.Admin
+namespace CourseGuard.Presentation.UserControls.Admin
 {
     public partial class UC_UsersManage : UserControl
     {
-
+        private readonly IUserService _userService;
 
         public UC_UsersManage()
         {
             InitializeComponent();
+            _userService = new UserService(new UserRepository());
+
             // Default: Empty grid, only load on search
             dataGridView1.ReadOnly = true;
             dataGridView1.AllowUserToAddRows = false;
@@ -29,25 +42,16 @@ namespace CourseGuard.UserControls.Admin
             string username = txt_Username.Text.Trim();
             string fullname = txt_FullName.Text.Trim();
 
-            string query = "SELECT * FROM USERS WHERE 1=1";
-            var parameters = new System.Collections.Generic.Dictionary<string, (SqlDbType, object)>();
-
-            if (!string.IsNullOrEmpty(username))
-            {
-                query += " AND USERNAME LIKE @username";
-                parameters.Add("@username", (SqlDbType.NVarChar, "%" + username + "%"));
-            }
-
-            if (!string.IsNullOrEmpty(fullname))
-            {
-                query += " AND FULL_NAME LIKE @fullname";
-                parameters.Add("@fullname", (SqlDbType.NVarChar, "%" + fullname + "%"));
-            }
-
             try
             {
-                DataTable dt = DatabaseAction.ExecuteQuery(query, parameters);
-                dataGridView1.DataSource = dt;
+                var users = _userService.SearchUsers(username, fullname);
+                dataGridView1.DataSource = users;
+                
+                // Hide Password Hash if present in grid?
+                if (dataGridView1.Columns.Contains("PasswordHash"))
+                {
+                    dataGridView1.Columns["PasswordHash"].Visible = false;
+                }
             }
             catch (Exception ex)
             {
@@ -68,36 +72,21 @@ namespace CourseGuard.UserControls.Admin
                 return;
             }
 
-            string username = txt_Username.Text.Trim();
-            string password = txt_Password.Text.Trim();
-            string fullName = txt_FullName.Text.Trim();
-            string email = txt_Email.Text.Trim();
-            int roleId = cb_roleID.Text == "Teacher" ? 2 : 3;
-            string status = "ACTIVE";
+            var user = new UserModel
+            {
+                Username = txt_Username.Text.Trim(),
+                FullName = txt_FullName.Text.Trim(),
+                Email = txt_Email.Text.Trim(),
+                Role = cb_roleID.Text, // "Teacher" or "Student"
+                Status = "ACTIVE"
+            };
 
-            string hashedPassword = Security.PasswordHasher.HashPassword(password);
+            string password = txt_Password.Text.Trim();
 
             try
             {
-                string query = @"
-                        INSERT INTO USERS 
-                        (USERNAME, PASSWORD_HASH, FULL_NAME, EMAIL, ROLE_ID, STATUS)
-                        VALUES
-                        (@username, @password_hash, @full_name, @email, @role_id, @status)";
-
-                var parameters = new System.Collections.Generic.Dictionary<string, (SqlDbType, object)>
-                {
-                    { "@username", (SqlDbType.NVarChar, username) },
-                    { "@password_hash", (SqlDbType.NVarChar, hashedPassword) },
-                    { "@full_name", (SqlDbType.NVarChar, fullName) },
-                    { "@email", (SqlDbType.NVarChar, email) },
-                    { "@role_id", (SqlDbType.Int, roleId) },
-                    { "@status", (SqlDbType.NVarChar, status) }
-                };
-
-                int rowsAffected = CourseGuard.Data.DatabaseAction.ExecuteNonQuery(query, parameters);
-
-                if (rowsAffected > 0)
+                string result = _userService.AddUser(user, password);
+                if (result == "Success")
                 {
                     MessageBox.Show("Thêm user thành công.");
                     ClearForm();
@@ -105,7 +94,7 @@ namespace CourseGuard.UserControls.Admin
                 }
                 else
                 {
-                    MessageBox.Show("Không thể thêm user.");
+                    MessageBox.Show("Thêm thất bại: " + result);
                 }
             }
             catch (Exception ex)
@@ -120,36 +109,27 @@ namespace CourseGuard.UserControls.Admin
             {
                 try 
                 {
-                    if (dataGridView1.Columns.Contains("ID")) // Kiem tra cột ID có tồn tại không
+                    var cell = dataGridView1.SelectedRows[0].Cells["Id"]; // UserModel property is "Id"
+                    if (cell != null && cell.Value != null)
                     {
-                        var cell = dataGridView1.SelectedRows[0].Cells["ID"]; // Chọn cột ID để lấy giá trị ID 
-                        if (cell != null && cell.Value != null)
+                        int userId = Convert.ToInt32(cell.Value);
+                        if (MessageBox.Show("Bạn có chắc chắn muốn xóa user này?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
                         {
-                            int userId = Convert.ToInt32(cell.Value);
-                            if (MessageBox.Show("Bạn có chắc chắn muốn xóa user này?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                            bool success = _userService.DeleteUser(userId);
+                            if (success)
                             {
-                                string query = "DELETE FROM USERS WHERE ID = @id";
-                                var parameters = new System.Collections.Generic.Dictionary<string, (SqlDbType, object)>
-                                {
-                                    { "@id", (SqlDbType.Int, userId) }
-                                };
-                                
-                                int result = DatabaseAction.ExecuteNonQuery(query, parameters);
-                                if (result > 0)
-                                {
-                                    MessageBox.Show("Xóa thành công!");
-                                    LoadData(); // Refresh list to remove deleted user
-                                }
-                                else
-                                {
-                                    MessageBox.Show("Xóa thất bại (ID: " + userId + ")");
-                                }
+                                MessageBox.Show("Xóa thành công!");
+                                LoadData(); 
+                            }
+                            else
+                            {
+                                MessageBox.Show("Xóa thất bại (ID: " + userId + ")");
                             }
                         }
                     }
                     else 
                     {
-                         MessageBox.Show("Không tìm thấy cột ID. Vui lòng kiểm tra lại cấu trúc bảng.");
+                         MessageBox.Show("Không chọn được ID.");
                     }
                 }
                 catch(Exception ex)

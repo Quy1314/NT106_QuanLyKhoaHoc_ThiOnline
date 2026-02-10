@@ -1,9 +1,16 @@
+/*
+ * DatabaseAction.cs
+ * 
+ * Layer: Infrastructure
+ * Vai trò: Lớp tiện ích cấp thấp (Helper), chứa chuỗi kết nối và các hàm thực thi SQL cơ bản.
+ * Sử dụng: Các Repository sẽ gọi class này để chạy lệnh SQL.
+ */
 using System;
 using System.Collections.Generic;
 using System.Data;
 using Microsoft.Data.SqlClient;
 
-namespace CourseGuard.Data
+namespace CourseGuard.Infrastructure.Data
 {
     public static class DatabaseAction
     {

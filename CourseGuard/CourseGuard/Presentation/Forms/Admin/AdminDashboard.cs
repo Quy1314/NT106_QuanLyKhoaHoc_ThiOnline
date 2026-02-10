@@ -1,14 +1,21 @@
-﻿using System;
+﻿/*
+ * AdminDashboard.cs
+ * 
+ * Layer: Presentation (Forms)
+ * Vai trò: Form chính quản lý (Container), chứa menu và các UserControl con (Quản lý User, Khóa học, Báo cáo).
+ * Phụ thuộc: Các UserControl con.
+ */
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
-using CourseGuard.Models;
-using CourseGuard.UserControls.Admin;
+using CourseGuard.Core.Models;
+using CourseGuard.Presentation.UserControls.Admin;
 
-namespace CourseGuard.Forms.Admin
+namespace CourseGuard.Presentation.Forms.Admin
 {
     public partial class AdminDashboard : Form
     {

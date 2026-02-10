@@ -1,4 +1,4 @@
-﻿namespace CourseGuard.UserControls.shareUC
+﻿namespace CourseGuard.Presentation.UserControls.Shared
 {
     partial class UC_Dashboard
     {
