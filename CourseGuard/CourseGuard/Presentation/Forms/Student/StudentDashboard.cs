@@ -13,9 +13,11 @@ namespace CourseGuard.Presentation.Forms.Student
         private Panel mainboard;
 
         private Dictionary<Button, Func<UserControl>> _nav;
+        private CourseGuard.Core.Models.UserModel currentUser;
 
-        public StudentDashboard()
+        public StudentDashboard(CourseGuard.Core.Models.UserModel user)
         {
+            currentUser = user;
             InitializeUI();
             InitializeNavigation();
 
