@@ -1,79 +1,84 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace Demo_Firebase
 {
-    public class Firebase_Service
+    /// <summary>
+    /// Service tương tác với Firebase Realtime Database qua REST API.
+    /// HttpClient được dùng chung (static) để tránh socket exhaustion.
+    /// </summary>
+    public class FirebaseService
     {
-        private readonly HttpClient _httpClient;
+        // ✅ Dùng static HttpClient để tránh socket exhaustion
+        private static readonly HttpClient _httpClient = new HttpClient();
+
         private readonly string _baseUrl;
 
-        public Firebase_Service(string baseUrl)
+        public FirebaseService(string baseUrl)
         {
-            _httpClient = new HttpClient();
             _baseUrl = baseUrl.TrimEnd('/');
         }
 
-        // ➕ 1. Đăng ký (POST → auto key)
+        // ─────────────────────────────────────────────────────────────
+        // 1. Đăng ký user (POST → Firebase tự tạo key)
+        // ─────────────────────────────────────────────────────────────
         public async Task<bool> RegisterUser(UserModel user)
         {
-            var jsonContent = JsonSerializer.Serialize(user);
-            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+            var content = new StringContent(
+                JsonSerializer.Serialize(user),
+                Encoding.UTF8, "application/json");
 
             var response = await _httpClient.PostAsync($"{_baseUrl}/users.json", content);
             return response.IsSuccessStatusCode;
         }
 
-        // 📥 2. Lấy tất cả user
-        public async Task<Dictionary<string, UserModel>> GetUsersWithId()
+        // ─────────────────────────────────────────────────────────────
+        // 2. Lấy tất cả users (dưới dạng Dictionary<firebaseKey, user>)
+        // ─────────────────────────────────────────────────────────────
+        public async Task<Dictionary<string, UserModel>> GetAllUsers()
         {
             var response = await _httpClient.GetAsync($"{_baseUrl}/users.json");
 
             if (!response.IsSuccessStatusCode)
-                return new Dictionary<string, UserModel>();
+                return [];
 
             var json = await response.Content.ReadAsStringAsync();
 
             if (json == "null")
-                return new Dictionary<string, UserModel>();
+                return [];
 
-            var result = JsonSerializer.Deserialize<Dictionary<string, UserModel>>(json);
-            return result ?? new Dictionary<string, UserModel>();
+            return JsonSerializer.Deserialize<Dictionary<string, UserModel>>(json) ?? [];
         }
 
-        // 🔍 3. Tìm user theo username
+        // ─────────────────────────────────────────────────────────────
+        // 3. Tìm user theo username
+        // ─────────────────────────────────────────────────────────────
         public async Task<(string? userId, UserModel? user)> FindUser(string username)
         {
-            var users = await GetUsersWithId();
+            var users = await GetAllUsers();
 
-            foreach (var item in users)
+            foreach (var (key, user) in users)
             {
-                if (item.Value.username == username)
-                {
-                    return (item.Key, item.Value);
-                }
+                if (user.Username == username)
+                    return (key, user);
             }
 
             return (null, null);
         }
 
-        // 🔐 4. Login
+        // ─────────────────────────────────────────────────────────────
+        // 4. Đăng nhập (kiểm tra username + password)
+        // ─────────────────────────────────────────────────────────────
         public async Task<bool> Login(string username, string password)
         {
-            var result = await FindUser(username);
-
-            if (result.user == null)
-                return false;
-
-            return result.user.password == password;
+            var (_, user) = await FindUser(username);
+            return user?.Password == password;
         }
 
-        // ❌ 5. Xóa user
+        // ─────────────────────────────────────────────────────────────
+        // 5. Xóa user theo Firebase key
+        // ─────────────────────────────────────────────────────────────
         public async Task<bool> DeleteUser(string userId)
         {
             var response = await _httpClient.DeleteAsync($"{_baseUrl}/users/{userId}.json");
