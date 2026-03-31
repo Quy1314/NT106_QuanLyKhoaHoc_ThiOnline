@@ -52,4 +52,20 @@ public class FirebaseService
 
         return (null, null);
     }
+
+    // ✏️ Cập nhật password (dùng PATCH để chỉ update field password)
+    public async Task<bool> UpdatePassword(string userId, string newPassword)
+    {
+        var patch = new { password = newPassword };
+        var jsonContent = JsonSerializer.Serialize(patch);
+        var content = new StringContent(jsonContent, System.Text.Encoding.UTF8, "application/json");
+
+        var request = new HttpRequestMessage(new HttpMethod("PATCH"), $"{_baseUrl}/users/{userId}.json")
+        {
+            Content = content
+        };
+
+        var response = await _http.SendAsync(request);
+        return response.IsSuccessStatusCode;
+    }
 }

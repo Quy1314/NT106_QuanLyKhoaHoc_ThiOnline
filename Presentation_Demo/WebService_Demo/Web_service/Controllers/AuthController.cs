@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -121,5 +122,52 @@ public class AuthController : ControllerBase
             message = "Đăng nhập thành công",
             token = tokenString
         });
+    }
+
+    [HttpPost("forgot-password")] // POST /api/auth/forgot-password
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        // 1. Kiểm tra rỗng
+        if (string.IsNullOrWhiteSpace(request.Email) ||
+            string.IsNullOrWhiteSpace(request.NewPassword) ||
+            string.IsNullOrWhiteSpace(request.ConfirmNewPassword))
+        {
+            return BadRequest(new { success = false, message = "Vui lòng không để trống các trường!" });
+        }
+
+        // 2. Kiểm tra NewPassword == ConfirmNewPassword
+        if (request.NewPassword != request.ConfirmNewPassword)
+        {
+            return BadRequest(new { success = false, message = "Mật khẩu mới và Xác nhận mật khẩu phải giống nhau!" });
+        }
+
+        // 3. Tìm user theo email
+        var result = await _firebase.FindUser(request.Email);
+        if (result.user == null)
+        {
+            return NotFound(new { success = false, message = "Email không tồn tại trong hệ thống!" });
+        }
+
+        // 4. Cập nhật mật khẩu mới trên Firebase
+        bool isUpdated = await _firebase.UpdatePassword(result.userId!, request.NewPassword);
+        if (isUpdated)
+        {
+            return Ok(new { success = true, message = "Đổi mật khẩu thành công!" });
+        }
+        else
+        {
+            return StatusCode(500, new { success = false, message = "Lỗi Firebase: Không thể cập nhật mật khẩu!" });
+        }
+    }
+
+    [Authorize] // ✅ Yêu cầu Bearer Token hợp lệ
+    [HttpPost("logout")] // POST /api/auth/logout
+    public IActionResult Logout()
+    {
+        // JWT là stateless — server không lưu session.
+        // Client chịu trách nhiệm xóa token. Endpoint này xác thực token trước khi cho phép đăng xuất.
+        var username = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                    ?? User.FindFirst("sub")?.Value;
+        return Ok(new { success = true, message = $"Đăng xuất thành công! (user: {username})" });
     }
 }

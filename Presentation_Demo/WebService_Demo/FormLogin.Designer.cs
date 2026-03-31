@@ -36,6 +36,7 @@ namespace WebService_Demo
             this.txtPassword = new System.Windows.Forms.TextBox();
             this.btnLogin = new System.Windows.Forms.Button();
             this.btnGoRegister = new System.Windows.Forms.Button();
+            this.btnForgotPassword = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // lblTitle
@@ -105,11 +106,24 @@ namespace WebService_Demo
             this.btnGoRegister.UseVisualStyleBackColor = true;
             this.btnGoRegister.Click += new System.EventHandler(this.BtnGoRegister_Click);
             // 
+            // btnForgotPassword
+            // 
+            this.btnForgotPassword.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnForgotPassword.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(122)))), ((int)(((byte)(204)))));
+            this.btnForgotPassword.Location = new System.Drawing.Point(90, 275);
+            this.btnForgotPassword.Name = "btnForgotPassword";
+            this.btnForgotPassword.Size = new System.Drawing.Size(200, 28);
+            this.btnForgotPassword.TabIndex = 7;
+            this.btnForgotPassword.Text = "Quên mật khẩu?";
+            this.btnForgotPassword.UseVisualStyleBackColor = true;
+            this.btnForgotPassword.Click += new System.EventHandler(this.BtnForgotPassword_Click);
+            // 
             // FormLogin
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 17F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(384, 311);
+            this.ClientSize = new System.Drawing.Size(384, 340);
+            this.Controls.Add(this.btnForgotPassword);
             this.Controls.Add(this.btnGoRegister);
             this.Controls.Add(this.btnLogin);
             this.Controls.Add(this.txtPassword);
@@ -136,6 +150,7 @@ namespace WebService_Demo
         private System.Windows.Forms.TextBox txtPassword;
         private System.Windows.Forms.Button btnLogin;
         private System.Windows.Forms.Button btnGoRegister;
+        private System.Windows.Forms.Button btnForgotPassword;
     }
 }
 
