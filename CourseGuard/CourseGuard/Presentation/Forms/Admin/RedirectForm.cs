@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -6,6 +6,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using CourseGuard.Core.Models;
 using CourseGuard.Presentation.Forms.Login;
+using CourseGuard.Presentation.Forms.Student;
 
 namespace CourseGuard.Presentation.Forms.Admin
 {
@@ -45,8 +46,7 @@ namespace CourseGuard.Presentation.Forms.Admin
                             MessageBox.Show("Teacher Dashboard chưa được cài đặt.");
                             break;
                         case "STUDENT":
-                            // dashboard = new StudentDashboard(user);
-                            MessageBox.Show("Student Dashboard chưa được cài đặt.");
+                            dashboard = new StudentDashboard(user);
                             break;
                         default:
                             MessageBox.Show($"Quyền không xác định: {user.Role}");
