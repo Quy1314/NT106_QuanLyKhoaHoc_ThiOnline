@@ -1,11 +1,12 @@
-﻿using System;
+﻿using CourseGuard.Core.Models;
+using CourseGuard.Presentation.Forms.Login;
+using CourseGuard.Presentation.Forms.Teacher;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Windows.Forms;
-using CourseGuard.Core.Models;
-using CourseGuard.Presentation.Forms.Login;
 
 namespace CourseGuard.Presentation.Forms.Admin
 {
@@ -41,8 +42,10 @@ namespace CourseGuard.Presentation.Forms.Admin
                             dashboard = new AdminDashboard(user);
                             break;
                         case "TEACHER":
-                            // dashboard = new TeacherDashboard(user);
-                            MessageBox.Show("Teacher Dashboard chưa được cài đặt.");
+                            var teacherForm = new TeacherDashboard(user);                       
+                            this.Hide();
+                            teacherForm.ShowDialog();
+                            this.Close();
                             break;
                         case "STUDENT":
                             // dashboard = new StudentDashboard(user);

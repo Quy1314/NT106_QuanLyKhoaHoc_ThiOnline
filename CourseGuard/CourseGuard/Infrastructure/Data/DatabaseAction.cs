@@ -5,6 +5,7 @@
  * Vai trò: Lớp tiện ích cấp thấp (Helper), chứa chuỗi kết nối và các hàm thực thi SQL cơ bản.
  * Sử dụng: Các Repository sẽ gọi class này để chạy lệnh SQL.
  */
+using System.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -14,8 +15,7 @@ namespace CourseGuard.Infrastructure.Data
 {
     public static class DatabaseAction
     {
-        private static readonly string connectionString =
-            "Server=localhost;Database=CourseGuardDB;Trusted_Connection=True;TrustServerCertificate=True";
+        private static readonly string connectionString = @"Server=ADMIN-PC\SQLEXPRESS;Database=CourseGuardDB1;Trusted_Connection=True;Encrypt=False;TrustServerCertificate=True;";
 
         public static int ExecuteNonQuery(
             string query,
