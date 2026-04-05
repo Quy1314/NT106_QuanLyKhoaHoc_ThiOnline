@@ -1,24 +1,33 @@
-using System.Drawing;
+using System.Data;
 using System.Windows.Forms;
 using CourseGuard.Presentation.Theme;
 
 namespace CourseGuard.Presentation.UserControls.Student
 {
-    public class UC_ExamReview : UserControl
+    public partial class UC_ExamReview : UserControl
     {
         public UC_ExamReview()
         {
-            this.BackColor = ColorPalette.LightMode.Base;
+            InitializeComponent();
+            LoadDummyData();
 
-            Label lbl = new Label
-            {
-                Text = "Exam Review",
-                Font = new Font("Segoe UI", 20, FontStyle.Bold),
-                AutoSize = true,
-                Location = new Point(50, 50)
-            };
+            // Bo góc buttons
+            RoundedButtonHelper.Apply(btnBack, 10);
+        }
 
-            this.Controls.Add(lbl);
+        private void LoadDummyData()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("Câu hỏi", typeof(string));
+            dt.Columns.Add("Đáp án của bạn", typeof(string));
+            dt.Columns.Add("Đáp án đúng", typeof(string));
+            dt.Columns.Add("Đánh giá", typeof(string));
+
+            dt.Rows.Add("Câu 1: Lớp trong C# là gì?", "A. Là bản thiết kế", "A. Là bản thiết kế", "Đúng");
+            dt.Rows.Add("Câu 2: Kiểu dữ liệu int chiếm bao nhiêu byte?", "B. 8 byte", "A. 4 byte", "Sai");
+
+            dgvReview.DataSource = dt;
+            dgvReview.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         }
     }
 }

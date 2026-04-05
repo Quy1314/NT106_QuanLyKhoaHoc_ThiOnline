@@ -1,6 +1,7 @@
+using System;
+using System.Data;
 using System.Drawing;
 using System.Windows.Forms;
-using CourseGuard.Presentation.Theme;
 
 namespace CourseGuard.Presentation.UserControls.Student
 {
@@ -8,17 +9,24 @@ namespace CourseGuard.Presentation.UserControls.Student
     {
         public UC_StudentDashboard()
         {
-            this.BackColor = ColorPalette.LightMode.Base;
+            InitializeComponent();
+            LoadDummyData();
+        }
 
-            Label lbl = new Label
-            {
-                Text = "Student Dashboard",
-                Font = new Font("Segoe UI", 20, FontStyle.Bold),
-                AutoSize = true,
-                Location = new Point(50, 50)
-            };
+        private void LoadDummyData()
+        {
+            // Dummy table for DataGridView
+            DataTable dt = new DataTable();
+            dt.Columns.Add("Thời gian", typeof(string));
+            dt.Columns.Add("Tiêu đề", typeof(string));
+            dt.Columns.Add("Khóa học", typeof(string));
 
-            this.Controls.Add(lbl);
+            dt.Rows.Add("02/04/2026", "Bài tập mới: OOP Cơ bản", "Lập trình C#");
+            dt.Rows.Add("01/04/2026", "Nhắc nhở: Lịch thi giữa kỳ", "Mạng máy tính");
+            dt.Rows.Add("28/03/2026", "Cập nhật tài liệu mới", "Lập trình C#");
+
+            dgvRecentNotices.DataSource = dt;
+            dgvRecentNotices.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         }
     }
 }
