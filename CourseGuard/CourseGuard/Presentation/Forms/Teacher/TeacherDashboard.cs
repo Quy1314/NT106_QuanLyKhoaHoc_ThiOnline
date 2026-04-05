@@ -145,11 +145,25 @@ namespace CourseGuard.Presentation.Forms.Teacher
         {
             HideAllSubMenus();
             UpdateTitle("Trung Tâm Thông Báo");
+            LoadUserControl(new UC_TeacherNotifications());
         }
 
         private void btnLogout_Click(object sender, EventArgs e)
         {
-            this.Close();
+            // Hiển thị hộp thoại xác nhận với icon Question
+            DialogResult result = MessageBox.Show(
+                "Bạn có chắc chắn muốn đăng xuất khỏi hệ thống không?", // Nội dung thông báo
+                "Xác nhận đăng xuất",                                  // Tiêu đề hộp thoại
+                MessageBoxButtons.YesNo,                               // Nút Yes và No
+                MessageBoxIcon.Question                                // Icon dấu chấm hỏi
+            );
+
+            // Kiểm tra lựa chọn của người dùng
+            if (result == DialogResult.Yes)
+            {
+                // Nếu chọn Yes, thực hiện đóng form
+                this.Close();
+            }
         }
     }
 }

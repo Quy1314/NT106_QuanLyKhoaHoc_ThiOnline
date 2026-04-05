@@ -28,7 +28,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Presentation\UserControls\Teacher\" />
     <Folder Include="Resources\" />
   </ItemGroup>
 
