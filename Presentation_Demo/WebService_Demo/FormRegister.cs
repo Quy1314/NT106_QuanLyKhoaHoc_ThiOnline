@@ -1,13 +1,7 @@
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Windows.Forms;
+using WebService_Demo.Services;
 
 namespace WebService_Demo
 {
@@ -18,12 +12,13 @@ namespace WebService_Demo
             InitializeComponent();
         }
 
-        private void BtnRegister_Click(object sender, EventArgs e)
+        private async void BtnRegister_Click(object sender, EventArgs e)
         {
             string email = txtEmail.Text.Trim();
             string pass = txtPassword.Text;
             string confirm = txtConfirm.Text;
 
+            // ── Validate cục bộ ──────────────────────────────
             if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass) || string.IsNullOrWhiteSpace(confirm))
             {
                 MessageBox.Show("Vui lòng không để trống các trường!", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -42,9 +37,24 @@ namespace WebService_Demo
                 return;
             }
 
-            // Dummy registration success
-            MessageBox.Show("Đăng ký thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            this.Close();
+            // ── Gọi API ──────────────────────────────────────
+            btnRegister.Enabled = false;
+            btnRegister.Text = "Đang đăng ký...";
+
+            var (success, message) = await ApiService.RegisterAsync(email, pass, confirm);
+
+            btnRegister.Enabled = true;
+            btnRegister.Text = "Đăng ký";
+
+            if (success)
+            {
+                MessageBox.Show(message, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                this.Close();
+            }
+            else
+            {
+                MessageBox.Show(message, "Lỗi đăng ký", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void BtnBackLogin_Click(object sender, EventArgs e)
@@ -53,4 +63,5 @@ namespace WebService_Demo
         }
     }
 }
+
 

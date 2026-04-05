@@ -1,11 +1,17 @@
 using System;
+using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
+using WebService_Demo.Services;
 
 namespace WebService_Demo
 {
     public partial class FormMain : Form
     {
+        // ApiService.CurrentToken chứa JWT token sau khi đăng nhập
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string? Username { get; set; }
+
         public FormMain()
         {
             InitializeComponent();
@@ -26,15 +32,28 @@ namespace WebService_Demo
             CenterControls();
         }
 
-        private void BtnLogout_Click(object sender, EventArgs e)
+        private async void BtnLogout_Click(object sender, EventArgs e)
         {
+            btnLogout.Enabled = false;
+            btnLogout.Text = "Đang đăng xuất...";
+
+            await ApiService.LogoutAsync();
+
             this.Close();
         }
 
         private void FormMain_Load(object sender, EventArgs e)
         {
+            // Hiển thị tên user và token (rút gọn) nếu có
+            if (!string.IsNullOrWhiteSpace(Username))
+            {
+                string tokenInfo = ApiService.CurrentToken != null
+                    ? $"\nToken: ...{ApiService.CurrentToken[^20..]}" // 20 ký tự cuối
+                    : "";
+                lblWelcome.Text = $"Xin chào, {Username}!{tokenInfo}";
+            }
+
             CenterControls();
         }
     }
 }
-

@@ -1,12 +1,6 @@
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
+using WebService_Demo.Services;
 
 namespace WebService_Demo
 {
@@ -17,20 +11,41 @@ namespace WebService_Demo
             InitializeComponent();
         }
 
-        private void BtnLogin_Click(object sender, EventArgs e)
+        private async void BtnLogin_Click(object sender, EventArgs e)
         {
             if (string.IsNullOrWhiteSpace(txtEmail.Text) || string.IsNullOrWhiteSpace(txtPassword.Text))
             {
-                MessageBox.Show("Vui lòng nhập đầy đủ Email/Username và Password!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Vui lòng nhập đầy đủ Email/Username và Password!",
+                    "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            // Dummy login transition
-            FormMain formMain = new FormMain();
+            // Disable nút khi đang gọi API
+            btnLogin.Enabled = false;
+            btnLogin.Text = "Đang đăng nhập...";
+
+            var (success, token, message) = await ApiService.LoginAsync(
+                txtEmail.Text.Trim(), txtPassword.Text);
+
+            btnLogin.Enabled = true;
+            btnLogin.Text = "Đăng nhập";
+
+            if (!success)
+            {
+                MessageBox.Show(message, "Lỗi đăng nhập", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            // Đăng nhập thành công → token đã được lưu tự động trong ApiService.CurrentToken
+            // Mở FormMain
+            FormMain formMain = new FormMain
+            {
+                Username = txtEmail.Text.Trim()
+            };
+
+            txtPassword.Clear();
             this.Hide();
             formMain.ShowDialog();
-            
-            txtPassword.Clear();
             this.Show();
         }
 
@@ -40,6 +55,12 @@ namespace WebService_Demo
             this.Hide();
             formRegister.ShowDialog();
             this.Show();
+        }
+
+        private void BtnForgotPassword_Click(object sender, EventArgs e)
+        {
+            FormForgotPassword formForgot = new FormForgotPassword();
+            formForgot.ShowDialog();
         }
     }
 }

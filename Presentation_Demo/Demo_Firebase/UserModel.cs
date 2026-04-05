@@ -1,14 +1,13 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Text.Json.Serialization;
 
 namespace Demo_Firebase
 {
     public class UserModel
     {
-        public required string username { get; set; }
-        public required string password { get; set; }
+        [JsonPropertyName("username")]
+        public required string Username { get; set; }
+
+        [JsonPropertyName("password")]
+        public required string Password { get; set; }
     }
 }
