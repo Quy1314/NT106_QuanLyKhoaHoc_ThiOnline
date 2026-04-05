@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using CourseGuard.Presentation.UserControls.Student;
 using CourseGuard.Presentation.Theme;
@@ -21,11 +22,12 @@ namespace CourseGuard.Presentation.Forms.Student
             InitializeUI();
             InitializeNavigation();
 
+            SetActiveButton(btnDashboard);
             LoadUI(_nav[btnDashboard]());
         }
 
         // ===== BUTTON =====
-        private Button btnDashboard, btnCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify;
+        private Button btnDashboard, btnCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile, btnLogout;
 
         private void InitializeUI()
         {
@@ -55,12 +57,29 @@ namespace CourseGuard.Presentation.Forms.Student
             btnSchedule = CreateButton("Schedule", 4);
             btnChat = CreateButton("Chat", 5);
             btnNotify = CreateButton("Notification", 6);
-            btnDashboard.BackColor = ColorPalette.DarkMode.Active;
+            btnProfile = CreateButton("Profile", 7);
+            
+            btnLogout = new Button
+            {
+                Text = "Logout",
+                Width = 200,
+                Height = 50,
+                Dock = DockStyle.Bottom,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(220, 53, 69), // Red
+                ForeColor = Color.White
+            };
+            btnLogout.FlatAppearance.BorderSize = 0;
+            btnLogout.Click += (s, e) => { this.DialogResult = DialogResult.OK; this.Close(); };
+
+            // Bo góc tất cả buttons
+            RoundedButtonHelper.Apply(12, btnDashboard, btnCourses, btnExam,
+                btnResult, btnSchedule, btnChat, btnNotify, btnProfile, btnLogout);
 
             sidebar.Controls.AddRange(new Control[]
             {
                 btnDashboard, btnCourses, btnExam,
-                btnResult, btnSchedule, btnChat, btnNotify
+                btnResult, btnSchedule, btnChat, btnNotify, btnProfile, btnLogout
             });
 
             this.Controls.Add(mainboard);
@@ -85,13 +104,15 @@ namespace CourseGuard.Presentation.Forms.Student
 
             btn.MouseEnter += (s, e) =>
             {
-                btn.BackColor = ColorPalette.DarkMode.Hover;
+                if (btn.BackColor != ColorPalette.DarkMode.Active)
+                    btn.BackColor = ColorPalette.DarkMode.Hover;
             };
 
             btn.MouseLeave += (s, e) =>
             {
-    btn.BackColor = Color.Transparent;
-};
+                if (btn.BackColor != ColorPalette.DarkMode.Active)
+                    btn.BackColor = Color.Transparent;
+            };
 
             return btn;
         }
@@ -106,7 +127,8 @@ namespace CourseGuard.Presentation.Forms.Student
                 { btnResult, () => new UC_Result() },
                 { btnSchedule, () => new UC_Schedule() },
                 { btnChat, () => new UC_Chat() },
-                { btnNotify, () => new UC_Notification() }
+                { btnNotify, () => new UC_Notification() },
+                { btnProfile, () => new UC_Profile() }
             };
         }
 
@@ -114,12 +136,35 @@ namespace CourseGuard.Presentation.Forms.Student
         {
             if (sender is Button btn && _nav.ContainsKey(btn))
             {
+                SetActiveButton(btn);
                 LoadUI(_nav[btn]());
+            }
+        }
+
+        private void SetActiveButton(Button activeBtn)
+        {
+            foreach (var key in _nav.Keys)
+            {
+                if (key == activeBtn)
+                {
+                    key.BackColor = ColorPalette.DarkMode.Active;
+                    key.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+                }
+                else
+                {
+                    key.BackColor = Color.Transparent;
+                    key.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+                }
             }
         }
 
         private void LoadUI(UserControl uc)
         {
+            // Dispose UC cũ để tránh memory leak
+            foreach (Control ctrl in mainboard.Controls)
+            {
+                ctrl.Dispose();
+            }
             mainboard.Controls.Clear();
             uc.Dock = DockStyle.Fill;
             mainboard.Controls.Add(uc);
