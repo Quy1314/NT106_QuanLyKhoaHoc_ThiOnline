@@ -218,5 +218,19 @@ namespace CourseGuard.Infrastructure.Data.Repositories
                 return false;
             }
         }
+
+        /// <summary>
+        /// Count how many courses a student is enrolled in.
+        /// </summary>
+        public int CountCoursesByStudent(int studentId)
+        {
+            string query = "SELECT COUNT(*) FROM ENROLLMENTS WHERE STUDENT_ID = @studentId";
+            var parameters = new Dictionary<string, (SqlDbType, object)>
+            {
+                { "@studentId", (SqlDbType.Int, studentId) }
+            };
+            object result = DatabaseAction.ExecuteScalar(query, parameters);
+            return result != DBNull.Value ? Convert.ToInt32(result) : 0;
+        }
     }
 }
