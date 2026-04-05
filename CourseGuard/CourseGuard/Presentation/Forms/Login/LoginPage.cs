@@ -178,13 +178,16 @@ namespace CourseGuard.Presentation.Forms.Login
         {
             string username = txtUsername.Text.Trim();
             string password = txtPassword.Text.Trim();
+
             if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
             {
                 MessageBox.Show("Vui lòng nhập đầy đủ thông tin!");
                 return;
             }
+
             AuthService authService = new AuthService(new CourseGuard.Infrastructure.Data.Repositories.UserRepository());
             UserModel? user = authService.Login(username, password);
+
             if (user == null)
             {
                 MessageBox.Show("Tên đăng nhập hoặc mật khẩu không đúng!");
