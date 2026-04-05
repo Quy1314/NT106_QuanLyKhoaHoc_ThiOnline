@@ -42,11 +42,12 @@ namespace CourseGuard.Presentation.Forms.Admin
                             dashboard = new AdminDashboard(user);
                             break;
                         case "TEACHER":
-                            var teacherForm = new TeacherDashboard(user);                       
+                            var teacherForm = new TeacherDashboard();
                             this.Hide();
                             teacherForm.ShowDialog();
                             this.Close();
                             break;
+                           
                         case "STUDENT":
                             // dashboard = new StudentDashboard(user);
                             MessageBox.Show("Student Dashboard chưa được cài đặt.");

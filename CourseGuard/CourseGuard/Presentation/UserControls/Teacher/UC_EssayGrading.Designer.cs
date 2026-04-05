@@ -1,167 +1,204 @@
-using CourseGuard.Presentation.Theme;
-using System.Drawing;
-using System.Windows.Forms;
-
 namespace CourseGuard.Presentation.UserControls.Teacher
 {
     partial class UC_EssayGrading
     {
         private System.ComponentModel.IContainer components = null;
+
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null)) components.Dispose();
+            if (disposing && (components != null))
+            {
+                components.Dispose();
+            }
             base.Dispose(disposing);
         }
 
+        #region Component Designer generated code
         private void InitializeComponent()
         {
-            this.splitMain = new System.Windows.Forms.SplitContainer();
+            this.pnlLeft = new System.Windows.Forms.Panel();
             this.dgvStudents = new System.Windows.Forms.DataGridView();
-            this.richTextBoxEssay = new System.Windows.Forms.RichTextBox();
-            this.panelGrading = new System.Windows.Forms.Panel();
+            this.lblStudentListTitle = new System.Windows.Forms.Label();
+            this.pnlRight = new System.Windows.Forms.Panel();
+            this.rtbEssayViewer = new System.Windows.Forms.RichTextBox();
+            this.pnlGradingControls = new System.Windows.Forms.Panel();
+            this.lblFeedback = new System.Windows.Forms.Label();
+            this.txtFeedback = new System.Windows.Forms.TextBox();
             this.lblScore = new System.Windows.Forms.Label();
-            this.txtScore = new System.Windows.Forms.TextBox();
-            this.lblComment = new System.Windows.Forms.Label();
-            this.txtComment = new System.Windows.Forms.TextBox();
-            this.btnSaveGrade = new System.Windows.Forms.Button();
-
-            ((System.ComponentModel.ISupportInitialize)(this.splitMain)).BeginInit();
-            this.splitMain.Panel1.SuspendLayout();
-            this.splitMain.Panel2.SuspendLayout();
-            this.splitMain.SuspendLayout();
+            this.nudScore = new System.Windows.Forms.NumericUpDown();
+            this.btnSave = new System.Windows.Forms.Button();
+            this.pnlLeft.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dgvStudents)).BeginInit();
-            this.panelGrading.SuspendLayout();
+            this.pnlRight.SuspendLayout();
+            this.pnlGradingControls.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.nudScore)).BeginInit();
             this.SuspendLayout();
             // 
-            // splitMain
+            // pnlLeft
             // 
-            this.splitMain.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.splitMain.Location = new System.Drawing.Point(0, 0);
-            this.splitMain.Name = "splitMain";
+            this.pnlLeft.BackColor = System.Drawing.Color.White;
+            this.pnlLeft.Controls.Add(this.dgvStudents);
+            this.pnlLeft.Controls.Add(this.lblStudentListTitle);
+            this.pnlLeft.Dock = System.Windows.Forms.DockStyle.Left;
+            this.pnlLeft.Location = new System.Drawing.Point(0, 0);
+            this.pnlLeft.Name = "pnlLeft";
+            this.pnlLeft.Padding = new System.Windows.Forms.Padding(10);
+            this.pnlLeft.Size = new System.Drawing.Size(300, 600);
+            this.pnlLeft.TabIndex = 0;
             // 
-            // splitMain.Panel1
+            // lblStudentListTitle
             // 
-            this.splitMain.Panel1.Controls.Add(this.dgvStudents);
-            this.splitMain.Panel1.Padding = new System.Windows.Forms.Padding(10);
-            // 
-            // splitMain.Panel2
-            // 
-            this.splitMain.Panel2.Controls.Add(this.richTextBoxEssay);
-            this.splitMain.Panel2.Controls.Add(this.panelGrading);
-            this.splitMain.Panel2.Padding = new System.Windows.Forms.Padding(10);
-            this.splitMain.Size = new System.Drawing.Size(950, 690);
-            this.splitMain.SplitterDistance = 350;
-            this.splitMain.TabIndex = 0;
+            this.lblStudentListTitle.Dock = System.Windows.Forms.DockStyle.Top;
+            this.lblStudentListTitle.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblStudentListTitle.Location = new System.Drawing.Point(10, 10);
+            this.lblStudentListTitle.Name = "lblStudentListTitle";
+            this.lblStudentListTitle.Size = new System.Drawing.Size(280, 40);
+            this.lblStudentListTitle.TabIndex = 0;
+            this.lblStudentListTitle.Text = "Danh sách bài nộp";
+            this.lblStudentListTitle.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
             // dgvStudents
             // 
-            this.dgvStudents.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
+            this.dgvStudents.AllowUserToAddRows = false;
+            this.dgvStudents.AllowUserToDeleteRows = false;
+            this.dgvStudents.BackgroundColor = System.Drawing.Color.White;
             this.dgvStudents.BorderStyle = System.Windows.Forms.BorderStyle.None;
-            this.dgvStudents.EnableHeadersVisualStyles = false;
+            this.dgvStudents.CellBorderStyle = System.Windows.Forms.DataGridViewCellBorderStyle.SingleHorizontal;
+            this.dgvStudents.ColumnHeadersBorderStyle = System.Windows.Forms.DataGridViewHeaderBorderStyle.None;
+            this.dgvStudents.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.dgvStudents.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.dgvStudents.Location = new System.Drawing.Point(10, 10);
+            this.dgvStudents.EnableHeadersVisualStyles = false;
+            this.dgvStudents.Location = new System.Drawing.Point(10, 50);
             this.dgvStudents.Name = "dgvStudents";
+            this.dgvStudents.ReadOnly = true;
             this.dgvStudents.RowHeadersVisible = false;
-            this.dgvStudents.Size = new System.Drawing.Size(330, 670);
-            this.dgvStudents.TabIndex = 0;
+            this.dgvStudents.RowTemplate.Height = 40;
+            this.dgvStudents.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
+            this.dgvStudents.Size = new System.Drawing.Size(280, 540);
+            this.dgvStudents.TabIndex = 1;
             // 
-            // richTextBoxEssay
+            // pnlRight
             // 
-            this.richTextBoxEssay.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.richTextBoxEssay.Font = new System.Drawing.Font("Segoe UI", 11F);
-            this.richTextBoxEssay.Location = new System.Drawing.Point(10, 10);
-            this.richTextBoxEssay.Name = "richTextBoxEssay";
-            this.richTextBoxEssay.ReadOnly = true;
-            this.richTextBoxEssay.Size = new System.Drawing.Size(576, 520);
-            this.richTextBoxEssay.TabIndex = 0;
-            this.richTextBoxEssay.Text = "";
+            this.pnlRight.BackColor = System.Drawing.Color.White;
+            this.pnlRight.Controls.Add(this.rtbEssayViewer);
+            this.pnlRight.Controls.Add(this.pnlGradingControls);
+            this.pnlRight.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.pnlRight.Location = new System.Drawing.Point(310, 0); // Giữ lề 10px với pnlLeft nếu cần
+            this.pnlRight.Name = "pnlRight";
+            this.pnlRight.Padding = new System.Windows.Forms.Padding(10);
+            this.pnlRight.Size = new System.Drawing.Size(580, 600);
+            this.pnlRight.TabIndex = 1;
             // 
-            // panelGrading
+            // rtbEssayViewer
             // 
-            this.panelGrading.Controls.Add(this.btnSaveGrade);
-            this.panelGrading.Controls.Add(this.txtComment);
-            this.panelGrading.Controls.Add(this.lblComment);
-            this.panelGrading.Controls.Add(this.txtScore);
-            this.panelGrading.Controls.Add(this.lblScore);
-            this.panelGrading.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.panelGrading.Location = new System.Drawing.Point(10, 530);
-            this.panelGrading.Name = "panelGrading";
-            this.panelGrading.Size = new System.Drawing.Size(576, 150);
-            this.panelGrading.TabIndex = 1;
+            this.rtbEssayViewer.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(250)))), ((int)(((byte)(250)))), ((int)(((byte)(250)))));
+            this.rtbEssayViewer.BorderStyle = System.Windows.Forms.BorderStyle.None;
+            this.rtbEssayViewer.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.rtbEssayViewer.Font = new System.Drawing.Font("Segoe UI", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.rtbEssayViewer.Location = new System.Drawing.Point(10, 10);
+            this.rtbEssayViewer.Name = "rtbEssayViewer";
+            this.rtbEssayViewer.ReadOnly = true;
+            this.rtbEssayViewer.Size = new System.Drawing.Size(560, 430);
+            this.rtbEssayViewer.TabIndex = 0;
+            this.rtbEssayViewer.Text = "Nội dung bài làm của sinh viên sẽ hiển thị ở đây...";
+            // 
+            // pnlGradingControls
+            // 
+            this.pnlGradingControls.Controls.Add(this.lblFeedback);
+            this.pnlGradingControls.Controls.Add(this.txtFeedback);
+            this.pnlGradingControls.Controls.Add(this.lblScore);
+            this.pnlGradingControls.Controls.Add(this.nudScore);
+            this.pnlGradingControls.Controls.Add(this.btnSave);
+            this.pnlGradingControls.Dock = System.Windows.Forms.DockStyle.Bottom;
+            this.pnlGradingControls.Location = new System.Drawing.Point(10, 440);
+            this.pnlGradingControls.Name = "pnlGradingControls";
+            this.pnlGradingControls.Size = new System.Drawing.Size(560, 150);
+            this.pnlGradingControls.TabIndex = 1;
+            // 
+            // lblFeedback
+            // 
+            this.lblFeedback.AutoSize = true;
+            this.lblFeedback.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblFeedback.Location = new System.Drawing.Point(0, 10);
+            this.lblFeedback.Name = "lblFeedback";
+            this.lblFeedback.Size = new System.Drawing.Size(73, 19);
+            this.lblFeedback.TabIndex = 0;
+            this.lblFeedback.Text = "Nhận xét:";
+            // 
+            // txtFeedback
+            // 
+            this.txtFeedback.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.txtFeedback.Font = new System.Drawing.Font("Segoe UI", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.txtFeedback.Location = new System.Drawing.Point(0, 35);
+            this.txtFeedback.Multiline = true;
+            this.txtFeedback.Name = "txtFeedback";
+            this.txtFeedback.Size = new System.Drawing.Size(380, 100);
+            this.txtFeedback.TabIndex = 1;
             // 
             // lblScore
             // 
             this.lblScore.AutoSize = true;
-            this.lblScore.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
-            this.lblScore.Location = new System.Drawing.Point(15, 20);
+            this.lblScore.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblScore.Location = new System.Drawing.Point(400, 10);
             this.lblScore.Name = "lblScore";
-            this.lblScore.Size = new System.Drawing.Size(89, 23);
-            this.lblScore.TabIndex = 0;
-            this.lblScore.Text = "Điểm số:";
+            this.lblScore.Size = new System.Drawing.Size(49, 19);
+            this.lblScore.TabIndex = 2;
+            this.lblScore.Text = "Điểm:";
             // 
-            // txtScore
+            // nudScore
             // 
-            this.txtScore.Font = new System.Drawing.Font("Segoe UI", 10F);
-            this.txtScore.Location = new System.Drawing.Point(110, 17);
-            this.txtScore.Name = "txtScore";
-            this.txtScore.Size = new System.Drawing.Size(100, 30);
-            this.txtScore.TabIndex = 1;
+            this.nudScore.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.nudScore.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.nudScore.Location = new System.Drawing.Point(400, 35);
+            this.nudScore.Name = "nudScore";
+            this.nudScore.Size = new System.Drawing.Size(100, 29);
+            this.nudScore.TabIndex = 3;
             // 
-            // lblComment
+            // btnSave
             // 
-            this.lblComment.AutoSize = true;
-            this.lblComment.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
-            this.lblComment.Location = new System.Drawing.Point(15, 65);
-            this.lblComment.Name = "lblComment";
-            this.lblComment.Size = new System.Drawing.Size(86, 23);
-            this.lblComment.TabIndex = 2;
-            this.lblComment.Text = "Nhận xét:";
-            // 
-            // txtComment
-            // 
-            this.txtComment.Font = new System.Drawing.Font("Segoe UI", 10F);
-            this.txtComment.Location = new System.Drawing.Point(110, 62);
-            this.txtComment.Multiline = true;
-            this.txtComment.Name = "txtComment";
-            this.txtComment.Size = new System.Drawing.Size(300, 60);
-            this.txtComment.TabIndex = 3;
-            // 
-            // btnSaveGrade
-            // 
-            this.btnSaveGrade.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnSaveGrade.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
-            this.btnSaveGrade.Location = new System.Drawing.Point(430, 82);
-            this.btnSaveGrade.Name = "btnSaveGrade";
-            this.btnSaveGrade.Size = new System.Drawing.Size(120, 40);
-            this.btnSaveGrade.TabIndex = 4;
-            this.btnSaveGrade.Text = "Lưu điểm";
-            this.btnSaveGrade.UseVisualStyleBackColor = true;
+            this.btnSave.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(37)))), ((int)(((byte)(99)))), ((int)(((byte)(235)))));
+            this.btnSave.FlatAppearance.BorderSize = 0;
+            this.btnSave.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnSave.Font = new System.Drawing.Font("Segoe UI", 11F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.btnSave.ForeColor = System.Drawing.Color.White;
+            this.btnSave.Location = new System.Drawing.Point(400, 85);
+            this.btnSave.Name = "btnSave";
+            this.btnSave.Size = new System.Drawing.Size(100, 50);
+            this.btnSave.TabIndex = 4;
+            this.btnSave.Text = "Lưu";
+            this.btnSave.UseVisualStyleBackColor = false;
             // 
             // UC_EssayGrading
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 20F);
+            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.Controls.Add(this.splitMain);
+            this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(244)))), ((int)(((byte)(246)))));
+            this.Controls.Add(this.pnlRight);
+            this.Controls.Add(this.pnlLeft);
             this.Name = "UC_EssayGrading";
-            this.Size = new System.Drawing.Size(950, 690);
-            this.splitMain.Panel1.ResumeLayout(false);
-            this.splitMain.Panel2.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)(this.splitMain)).EndInit();
-            this.splitMain.ResumeLayout(false);
+            this.Padding = new System.Windows.Forms.Padding(0, 0, 10, 0); // Lề phải nếu muốn
+            this.Size = new System.Drawing.Size(900, 600);
+            this.pnlLeft.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.dgvStudents)).EndInit();
-            this.panelGrading.ResumeLayout(false);
-            this.panelGrading.PerformLayout();
+            this.pnlRight.ResumeLayout(false);
+            this.pnlGradingControls.ResumeLayout(false);
+            this.pnlGradingControls.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.nudScore)).EndInit();
             this.ResumeLayout(false);
-        }
 
-        private System.Windows.Forms.SplitContainer splitMain;
+        }
+        #endregion
+
+        private System.Windows.Forms.Panel pnlLeft;
+        private System.Windows.Forms.Label lblStudentListTitle;
         private System.Windows.Forms.DataGridView dgvStudents;
-        private System.Windows.Forms.RichTextBox richTextBoxEssay;
-        private System.Windows.Forms.Panel panelGrading;
+        private System.Windows.Forms.Panel pnlRight;
+        private System.Windows.Forms.RichTextBox rtbEssayViewer;
+        private System.Windows.Forms.Panel pnlGradingControls;
+        private System.Windows.Forms.Label lblFeedback;
+        private System.Windows.Forms.TextBox txtFeedback;
         private System.Windows.Forms.Label lblScore;
-        private System.Windows.Forms.TextBox txtScore;
-        private System.Windows.Forms.Label lblComment;
-        private System.Windows.Forms.TextBox txtComment;
-        private System.Windows.Forms.Button btnSaveGrade;
+        private System.Windows.Forms.NumericUpDown nudScore;
+        private System.Windows.Forms.Button btnSave;
     }
 }

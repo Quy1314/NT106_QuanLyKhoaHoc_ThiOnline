@@ -1,90 +1,155 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
-using System;
-using System.Drawing;
-using System.Windows.Forms;
-using CourseGuard.Presentation.Theme;
+using CourseGuard.Presentation.UserControls.Teacher;
 
 namespace CourseGuard.Presentation.Forms.Teacher
 {
     public partial class TeacherDashboard : Form
     {
-        private Button currentBtn;
+        private UserControl activeUserControl = null;
 
         public TeacherDashboard()
         {
             InitializeComponent();
-            ApplyTheme();
-        }
-
-        private void ApplyTheme()
-        {
-            // Apply Colors via ColorPalette
-            Sidebar.BackColor = ColorPalette.DarkMode.Base;
-            LOGO.ForeColor = ColorPalette.DarkMode.TextPrimary;
-
-            Header.BackColor = ColorPalette.LightMode.Secondary;
-            lbl_Title.ForeColor = ColorPalette.LightMode.TextPrimary;
-
-            Mainboard.BackColor = ColorPalette.LightMode.Base;
-
-            // Apply styling to all buttons in sidebar
-            foreach (Control control in Sidebar.Controls)
-            {
-                if (control is Button btn)
-                {
-                    btn.BackColor = Color.Transparent;
-                    btn.ForeColor = ColorPalette.DarkMode.TextSecondary;
-                    btn.FlatAppearance.MouseOverBackColor = ColorPalette.DarkMode.Secondary;
-                    btn.FlatAppearance.MouseDownBackColor = ColorPalette.DarkMode.Active;
-                }
-            }
-
-            // Set default active button
-            if (btn_Dashboard != null)
-            {
-                ActivateButton(btn_Dashboard);
-            }
-        }
-
-        private void ActivateButton(Button senderBtn)
-        {
-            if (senderBtn != null)
-            {
-                DisableButton();
-                currentBtn = senderBtn;
-                currentBtn.BackColor = ColorPalette.DarkMode.Accent;
-                currentBtn.ForeColor = ColorPalette.DarkMode.TextPrimary;
-                lbl_Title.Text = currentBtn.Text.Substring(currentBtn.Text.IndexOf(" ") + 1).Trim(); // Extract title without emoji
-            }
-        }
-
-        private void DisableButton()
-        {
-            if (currentBtn != null)
-            {
-                currentBtn.BackColor = Color.Transparent;
-                currentBtn.ForeColor = ColorPalette.DarkMode.TextSecondary;
-            }
+            HideAllSubMenus();
+            
+            // To ensure hover styling applies manually without designer limitations
+            AttachHoverEvents();
         }
 
         public void LoadUserControl(UserControl uc)
         {
+            if (activeUserControl != null)
+            {
+                pnlMainboard.Controls.Remove(activeUserControl);
+                activeUserControl.Dispose();
+            }
+
+            activeUserControl = uc;
             uc.Dock = DockStyle.Fill;
-            Mainboard.Controls.Clear();
-            Mainboard.Controls.Add(uc);
+            pnlMainboard.Controls.Add(uc);
             uc.BringToFront();
         }
 
-        private void Sidebar_Btn_Click(object sender, EventArgs e)
+        private void AttachHoverEvents()
         {
-            Button btn = (Button)sender;
-            ActivateButton(btn);
+            Color colorSidebarHover = ColorTranslator.FromHtml("#1F2937");
+            Color colorLogoutHover = ColorTranslator.FromHtml("#EF4444");
 
-            // TODO: Load corresponding UserControl based on the clicked button
-            // Example:
-            // if (btn == btn_ExamConfig) { LoadUserControl(new UserControls.Teacher.UC_ExamConfig()); }
+            foreach (Control c in pnlSidebar.Controls)
+            {
+                if (c is Button btn && btn != btnLogout)
+                    btn.FlatAppearance.MouseOverBackColor = colorSidebarHover;
+                else if (c is Panel pnl)
+                {
+                    foreach (Control subC in pnl.Controls)
+                    {
+                        if (subC is Button subBtn)
+                            subBtn.FlatAppearance.MouseOverBackColor = colorSidebarHover;
+                    }
+                }
+            }
+            btnLogout.FlatAppearance.MouseOverBackColor = colorLogoutHover;
+        }
+
+        private void HideAllSubMenus()
+        {
+            pnlSubMenuCourseDocs.Visible = false;
+            pnlSubMenuTesting.Visible = false;
+            pnlSubMenuMonitoring.Visible = false;
+        }
+
+        private void ShowSubMenu(Panel subMenu)
+        {
+            if (subMenu.Visible == false)
+            {
+                HideAllSubMenus();
+                subMenu.Visible = true;
+            }
+            else
+            {
+                subMenu.Visible = false;
+            }
+        }
+
+        private void UpdateTitle(string title)
+        {
+            lblTitle.Text = title;
+        }
+
+        private void btnGroupCourseDocs_Click(object sender, EventArgs e)
+        {
+            ShowSubMenu(pnlSubMenuCourseDocs);
+        }
+
+        private void btnAssignedCourses_Click(object sender, EventArgs e)
+        {
+            UpdateTitle("Quản lý khóa học phân công");
+            LoadUserControl(new UC_AssignedCourses());
+        }
+
+        private void btnOnlineClasses_Click(object sender, EventArgs e)
+        {
+            UpdateTitle("Lớp học trực tuyến");
+        }
+
+        private void btnGroupTesting_Click(object sender, EventArgs e)
+        {
+            ShowSubMenu(pnlSubMenuTesting);
+        }
+
+        private void btnQuestionBank_Click(object sender, EventArgs e)
+        {
+            UpdateTitle("Ngân hàng câu hỏi");
+        }
+
+        private void btnExamConfig_Click(object sender, EventArgs e)
+        {
+            UpdateTitle("Cấu hình đề thi");
+        }
+
+        private void btnExamList_Click(object sender, EventArgs e)
+        {
+            UpdateTitle("Quản lý kỳ thi");
+        }
+
+        private void btnGroupMonitoring_Click(object sender, EventArgs e)
+        {
+            ShowSubMenu(pnlSubMenuMonitoring);
+        }
+
+        private void btnLiveMonitor_Click(object sender, EventArgs e)
+        {
+            UpdateTitle("Giám sát Live");
+        }
+
+        private void btnEssayGrading_Click(object sender, EventArgs e)
+        {
+            UpdateTitle("Chấm tự luận");
+            LoadUserControl(new UC_EssayGrading());
+        }
+
+        private void btnScoreManagement_Click(object sender, EventArgs e)
+        {
+            UpdateTitle("Quản lý điểm số");
+        }
+
+        private void btnOverview_Click(object sender, EventArgs e)
+        {
+            HideAllSubMenus();
+            UpdateTitle("Tổng Quan");
+        }
+
+        private void btnNotifications_Click(object sender, EventArgs e)
+        {
+            HideAllSubMenus();
+            UpdateTitle("Trung Tâm Thông Báo");
+        }
+
+        private void btnLogout_Click(object sender, EventArgs e)
+        {
+            this.Close();
         }
     }
 }
