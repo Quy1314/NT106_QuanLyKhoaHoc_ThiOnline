@@ -1,24 +1,33 @@
-using System.Drawing;
+using System.Data;
 using System.Windows.Forms;
 using CourseGuard.Presentation.Theme;
 
 namespace CourseGuard.Presentation.UserControls.Student
 {
-    public class UC_Notification : UserControl
+    public partial class UC_Notification : UserControl
     {
         public UC_Notification()
         {
-            this.BackColor = ColorPalette.LightMode.Base;
+            InitializeComponent();
+            LoadDummyData();
 
-            Label lbl = new Label
-            {
-                Text = "Notification",
-                Font = new Font("Segoe UI", 20, FontStyle.Bold),
-                AutoSize = true,
-                Location = new Point(50, 50)
-            };
+            // Bo góc buttons
+            RoundedButtonHelper.Apply(btnMarkAsRead, 10);
+        }
 
-            this.Controls.Add(lbl);
+        private void LoadDummyData()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("Thời gian", typeof(string));
+            dt.Columns.Add("Tiêu đề", typeof(string));
+            dt.Columns.Add("Nội dung", typeof(string));
+            dt.Columns.Add("Trạng thái", typeof(string));
+
+            dt.Rows.Add("02/04 - 08:00 AM", "Kỳ thi giữa kỳ", "Bài thi giữa kỳ môn Lập trình C# đã mở.", "Chưa đọc");
+            dt.Rows.Add("01/04 - 01:00 PM", "Báo nghỉ", "Cô giáo nghỉ buổi học chiều nay.", "Đã đọc");
+
+            dgvNotifications.DataSource = dt;
+            dgvNotifications.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         }
     }
 }
