@@ -30,7 +30,6 @@ namespace CourseGuard.Presentation.Forms.Login
             this.FormBorderStyle = FormBorderStyle.Sizable; // User requested Sizable
             this.AcceptButton = btnLogin;
 
-
             // Panel Style
             LoginPanel.BackColor = Color.White;
             LoginPanel.BorderStyle = BorderStyle.None;

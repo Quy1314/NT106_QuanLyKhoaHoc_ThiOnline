@@ -24,44 +24,65 @@ namespace CourseGuard.Presentation.Forms.Admin
         {
             base.OnLoad(e);
 
-            // 1. Show Login
-            using (LoginPage login = new LoginPage())
+            bool isRunning = true;
+            while (isRunning)
             {
-                if (login.ShowDialog() == DialogResult.OK)
+                using (LoginPage login = new LoginPage())
                 {
-                    // 2. Get User
-                    UserModel? user = login.CurrentUser;
-                    if (user == null) return;
-
-                    // 3. Route to Dashboard
-                    Form? dashboard = null;
-
-                    switch (user.Role)
+                    if (login.ShowDialog() == DialogResult.OK)
                     {
-                        case "ADMIN":
-                            dashboard = new AdminDashboard(user);
+                        UserModel? user = login.CurrentUser;
+                        if (user == null)
+                        {
+                            isRunning = false;
                             break;
-                        case "TEACHER":
-                            // dashboard = new TeacherDashboard(user);
-                            MessageBox.Show("Teacher Dashboard chưa được cài đặt.");
-                            break;
-                        case "STUDENT":
-                            dashboard = new StudentDashboard(user);
-                            break;
-                        default:
-                            MessageBox.Show($"Quyền không xác định: {user.Role}");
-                            break;
+                        }
+
+                        Form? dashboard = null;
+
+                        switch (user.Role)
+                        {
+                            case "ADMIN":
+                                dashboard = new AdminDashboard(user);
+                                break;
+                            case "TEACHER":
+                                MessageBox.Show("Teacher Dashboard chưa được cài đặt.");
+                                break;
+                            case "STUDENT":
+                                dashboard = new StudentDashboard(user);
+                                break;
+                            default:
+                                MessageBox.Show($"Quyền không xác định: {user.Role}");
+                                break;
+                        }
+
+                        if (dashboard != null)
+                        {
+                            if (dashboard.ShowDialog() == DialogResult.OK)
+                            {
+                                // Người dùng bấm đăng xuất (Logout) trả về DialogResult.OK
+                                // Tiếp tục vòng lặp để hiện lại Form Đăng nhập
+                                continue;
+                            }
+                            else
+                            {
+                                // Người dùng tắt bằng nút X hoặc cách khác
+                                isRunning = false;
+                            }
+                        }
+                        else
+                        {
+                            isRunning = false;
+                        }
                     }
-
-                    // 4. Show Dashboard if valid
-                    if (dashboard != null)
+                    else
                     {
-                        dashboard.ShowDialog(); // Blocks until Dashboard closes
+                        // Người dùng tắt Form đăng nhập chữ không đăng nhập
+                        isRunning = false;
                     }
                 }
             }
 
-            // 5. Exit App
             System.Windows.Forms.Application.Exit();
         }
     }
