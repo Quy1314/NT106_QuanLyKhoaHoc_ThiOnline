@@ -23,6 +23,7 @@ namespace CourseGuard.Presentation.Theme
         {
             btn.FlatStyle = FlatStyle.Flat;
             btn.FlatAppearance.BorderSize = 0;
+            btn.Cursor = Cursors.Hand;
             
             // Bỏ Region cũ nếu có
             btn.Region = null;
