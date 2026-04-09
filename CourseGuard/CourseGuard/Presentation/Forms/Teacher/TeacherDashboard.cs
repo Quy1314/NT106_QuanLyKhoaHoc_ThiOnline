@@ -140,7 +140,16 @@ namespace CourseGuard.Presentation.Forms.Teacher
 
         private void btnScoreManagement_Click(object sender, EventArgs e)
         {
-            UpdateTitle("Quản lý điểm số");
+            pnlMainboard.Controls.Clear();
+
+            // 2. Khởi tạo UserControl Quản lý điểm số (hoặc Đề thi) mà bạn vừa tạo
+            UC_ScoreManagement ucScore = new UC_ScoreManagement();
+
+            // 3. Thiết lập để UC này tự động tràn đầy diện tích của Panel chính
+            ucScore.Dock = DockStyle.Fill;
+
+            // 4. Thêm UC vào Panel để hiển thị lên màn hình
+            pnlMainboard.Controls.Add(ucScore);
         }
 
         private void btnOverview_Click(object sender, EventArgs e)
