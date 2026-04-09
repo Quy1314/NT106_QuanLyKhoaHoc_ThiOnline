@@ -7,6 +7,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Models;
 using CourseGuard.Frontend.Forms.Login;
 using CourseGuard.Frontend.Forms.Student;
+using CourseGuard.Frontend.Forms.Teacher;
 
 namespace CourseGuard.Frontend.Forms.Admin
 {
@@ -46,7 +47,7 @@ namespace CourseGuard.Frontend.Forms.Admin
                                 dashboard = new AdminDashboard(user);
                                 break;
                             case "TEACHER":
-                                MessageBox.Show("Teacher Dashboard chưa được cài đặt.");
+                                dashboard = new TeacherDashboard(user);
                                 break;
                             case "STUDENT":
                                 dashboard = new StudentDashboard(user);
