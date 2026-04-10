@@ -28,418 +28,441 @@
         /// </summary>
         private void InitializeComponent()
         {
-            this.pnlSidebar = new System.Windows.Forms.Panel();
-            this.pnlLogo = new System.Windows.Forms.Panel();
-            this.lblLogoIcon = new System.Windows.Forms.Label();
-            this.lblLogoText = new System.Windows.Forms.Label();
-            this.btnOverview = new System.Windows.Forms.Button();
-            this.btnGroupCourseDocs = new System.Windows.Forms.Button();
-            this.pnlSubMenuCourseDocs = new System.Windows.Forms.Panel();
-            this.btnAssignedCourses = new System.Windows.Forms.Button();
-            this.btnOnlineClasses = new System.Windows.Forms.Button();
-            this.btnGroupTesting = new System.Windows.Forms.Button();
-            this.pnlSubMenuTesting = new System.Windows.Forms.Panel();
-            this.btnQuestionBank = new System.Windows.Forms.Button();
-            this.btnExamConfig = new System.Windows.Forms.Button();
-            this.btnExamList = new System.Windows.Forms.Button();
-            this.btnGroupMonitoring = new System.Windows.Forms.Button();
-            this.pnlSubMenuMonitoring = new System.Windows.Forms.Panel();
-            this.btnLiveMonitor = new System.Windows.Forms.Button();
-            this.btnEssayGrading = new System.Windows.Forms.Button();
-            this.btnScoreManagement = new System.Windows.Forms.Button();
-            this.btnNotifications = new System.Windows.Forms.Button();
-            this.pnlSidebarBottom = new System.Windows.Forms.Panel();
-            this.pnlDivider = new System.Windows.Forms.Panel();
-            this.btnLogout = new System.Windows.Forms.Button();
-            this.pnlMainboard = new System.Windows.Forms.Panel();
-
-            this.pnlSidebar.SuspendLayout();
-            this.pnlLogo.SuspendLayout();
-            this.pnlSubMenuCourseDocs.SuspendLayout();
-            this.pnlSubMenuTesting.SuspendLayout();
-            this.pnlSubMenuMonitoring.SuspendLayout();
-            this.pnlSidebarBottom.SuspendLayout();
-            this.SuspendLayout();
-
-            // =========================================================
-            // pnlSidebar  (toàn bộ sidebar bên trái)
-            // =========================================================
-            this.pnlSidebar.BackColor = System.Drawing.Color.FromArgb(17, 24, 39);
-            this.pnlSidebar.Controls.Add(this.pnlSidebarBottom);   // đáy (logout)
-            this.pnlSidebar.Controls.Add(this.btnNotifications);
-            this.pnlSidebar.Controls.Add(this.pnlSubMenuMonitoring);
-            this.pnlSidebar.Controls.Add(this.btnGroupMonitoring);
-            this.pnlSidebar.Controls.Add(this.pnlSubMenuTesting);
-            this.pnlSidebar.Controls.Add(this.btnGroupTesting);
-            this.pnlSidebar.Controls.Add(this.pnlSubMenuCourseDocs);
-            this.pnlSidebar.Controls.Add(this.btnGroupCourseDocs);
-            this.pnlSidebar.Controls.Add(this.btnOverview);
-            this.pnlSidebar.Controls.Add(this.pnlLogo);
-            this.pnlSidebar.Dock = System.Windows.Forms.DockStyle.Left;
-            this.pnlSidebar.Name = "pnlSidebar";
-            this.pnlSidebar.Size = new System.Drawing.Size(260, 900);
-            this.pnlSidebar.TabIndex = 0;
-
-            // =========================================================
-            // pnlLogo  (logo phần trên cùng sidebar)
-            // =========================================================
-            this.pnlLogo.BackColor = System.Drawing.Color.FromArgb(11, 17, 28);
-            this.pnlLogo.Controls.Add(this.lblLogoIcon);
-            this.pnlLogo.Controls.Add(this.lblLogoText);
-            this.pnlLogo.Dock = System.Windows.Forms.DockStyle.Top;
-            this.pnlLogo.Name = "pnlLogo";
-            this.pnlLogo.Size = new System.Drawing.Size(260, 85);
-            this.pnlLogo.TabIndex = 0;
-
-            // lblLogoIcon  (biểu tượng khiên 🛡️)
-            this.lblLogoIcon.AutoSize = false;
-            this.lblLogoIcon.Dock = System.Windows.Forms.DockStyle.Left;
-            this.lblLogoIcon.Font = new System.Drawing.Font("Segoe UI Emoji", 20F);
-            this.lblLogoIcon.ForeColor = System.Drawing.Color.FromArgb(99, 179, 237);
-            this.lblLogoIcon.Name = "lblLogoIcon";
-            this.lblLogoIcon.Size = new System.Drawing.Size(50, 85);
-            this.lblLogoIcon.Text = "🛡";
-            this.lblLogoIcon.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            this.lblLogoIcon.TabIndex = 0;
-
-            // lblLogoText  (tên ứng dụng)
-            this.lblLogoText.AutoSize = true;
-            this.lblLogoText.Font = new System.Drawing.Font("Segoe UI", 14F, System.Drawing.FontStyle.Bold);
-            this.lblLogoText.ForeColor = System.Drawing.Color.White;
-            this.lblLogoText.Location = new System.Drawing.Point(55, 28);
-            this.lblLogoText.Name = "lblLogoText";
-            this.lblLogoText.Text = "CourseGuard";
-            this.lblLogoText.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.lblLogoText.TabIndex = 1;
-
-            // =========================================================
-            // btnOverview  — Tổng Quan
-            // =========================================================
-            this.btnOverview.BackColor = System.Drawing.Color.Transparent;
-            this.btnOverview.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnOverview.Dock = System.Windows.Forms.DockStyle.Top;
-            this.btnOverview.FlatAppearance.BorderSize = 0;
-            this.btnOverview.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnOverview.Font = new System.Drawing.Font("Segoe UI", 10.5F);
-            this.btnOverview.ForeColor = System.Drawing.Color.FromArgb(209, 213, 219);
-            this.btnOverview.Name = "btnOverview";
-            this.btnOverview.Padding = new System.Windows.Forms.Padding(16, 0, 0, 0);
-            this.btnOverview.Size = new System.Drawing.Size(260, 48);
-            this.btnOverview.TabIndex = 1;
-            this.btnOverview.Text = "🏠  Tổng Quan";
-            this.btnOverview.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnOverview.UseVisualStyleBackColor = false;
-            this.btnOverview.Click += new System.EventHandler(this.btnOverview_Click);
-
-            // =========================================================
-            // btnGroupCourseDocs  — Học Liệu & Lớp Học  (nhóm cha)
-            // =========================================================
-            this.btnGroupCourseDocs.BackColor = System.Drawing.Color.Transparent;
-            this.btnGroupCourseDocs.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnGroupCourseDocs.Dock = System.Windows.Forms.DockStyle.Top;
-            this.btnGroupCourseDocs.FlatAppearance.BorderSize = 0;
-            this.btnGroupCourseDocs.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnGroupCourseDocs.Font = new System.Drawing.Font("Segoe UI", 10.5F, System.Drawing.FontStyle.Bold);
-            this.btnGroupCourseDocs.ForeColor = System.Drawing.Color.White;
-            this.btnGroupCourseDocs.Name = "btnGroupCourseDocs";
-            this.btnGroupCourseDocs.Padding = new System.Windows.Forms.Padding(16, 0, 0, 0);
-            this.btnGroupCourseDocs.Size = new System.Drawing.Size(260, 48);
-            this.btnGroupCourseDocs.TabIndex = 2;
-            this.btnGroupCourseDocs.Text = "📚  Học Liệu && Lớp Học  ›";
-            this.btnGroupCourseDocs.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnGroupCourseDocs.UseVisualStyleBackColor = false;
-            this.btnGroupCourseDocs.Click += new System.EventHandler(this.btnGroupCourseDocs_Click);
-
-            // =========================================================
-            // pnlSubMenuCourseDocs  (sub-menu ẩn, accordion)
-            // =========================================================
-            this.pnlSubMenuCourseDocs.AutoSize = true;
-            this.pnlSubMenuCourseDocs.BackColor = System.Drawing.Color.FromArgb(31, 41, 55);
-            this.pnlSubMenuCourseDocs.Controls.Add(this.btnOnlineClasses);
-            this.pnlSubMenuCourseDocs.Controls.Add(this.btnAssignedCourses);
-            this.pnlSubMenuCourseDocs.Dock = System.Windows.Forms.DockStyle.Top;
-            this.pnlSubMenuCourseDocs.Name = "pnlSubMenuCourseDocs";
-            this.pnlSubMenuCourseDocs.Size = new System.Drawing.Size(260, 80);
-            this.pnlSubMenuCourseDocs.TabIndex = 3;
-            this.pnlSubMenuCourseDocs.Visible = false;   // ẩn lúc thiết kế; runtime HideAllSubMenus() xử lý
-
-            // btnAssignedCourses
-            this.btnAssignedCourses.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnAssignedCourses.Dock = System.Windows.Forms.DockStyle.Top;
-            this.btnAssignedCourses.FlatAppearance.BorderSize = 0;
-            this.btnAssignedCourses.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnAssignedCourses.Font = new System.Drawing.Font("Segoe UI", 10F);
-            this.btnAssignedCourses.ForeColor = System.Drawing.Color.FromArgb(147, 210, 255);
-            this.btnAssignedCourses.Name = "btnAssignedCourses";
-            this.btnAssignedCourses.Padding = new System.Windows.Forms.Padding(40, 0, 0, 0);
-            this.btnAssignedCourses.Size = new System.Drawing.Size(260, 40);
-            this.btnAssignedCourses.TabIndex = 0;
-            this.btnAssignedCourses.Text = "   📖  Khóa học phân công";
-            this.btnAssignedCourses.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnAssignedCourses.UseVisualStyleBackColor = true;
-            this.btnAssignedCourses.Click += new System.EventHandler(this.btnAssignedCourses_Click);
-
-            // btnOnlineClasses
-            this.btnOnlineClasses.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnOnlineClasses.Dock = System.Windows.Forms.DockStyle.Top;
-            this.btnOnlineClasses.FlatAppearance.BorderSize = 0;
-            this.btnOnlineClasses.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnOnlineClasses.Font = new System.Drawing.Font("Segoe UI", 10F);
-            this.btnOnlineClasses.ForeColor = System.Drawing.Color.FromArgb(147, 210, 255);
-            this.btnOnlineClasses.Name = "btnOnlineClasses";
-            this.btnOnlineClasses.Padding = new System.Windows.Forms.Padding(40, 0, 0, 0);
-            this.btnOnlineClasses.Size = new System.Drawing.Size(260, 40);
-            this.btnOnlineClasses.TabIndex = 1;
-            this.btnOnlineClasses.Text = "   🌐  Lớp học trực tuyến";
-            this.btnOnlineClasses.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnOnlineClasses.UseVisualStyleBackColor = true;
-            this.btnOnlineClasses.Click += new System.EventHandler(this.btnOnlineClasses_Click);
-
-            // =========================================================
-            // btnGroupTesting  — Khảo Thí & Đề Thi  (nhóm cha)
-            // =========================================================
-            this.btnGroupTesting.BackColor = System.Drawing.Color.Transparent;
-            this.btnGroupTesting.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnGroupTesting.Dock = System.Windows.Forms.DockStyle.Top;
-            this.btnGroupTesting.FlatAppearance.BorderSize = 0;
-            this.btnGroupTesting.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnGroupTesting.Font = new System.Drawing.Font("Segoe UI", 10.5F, System.Drawing.FontStyle.Bold);
-            this.btnGroupTesting.ForeColor = System.Drawing.Color.White;
-            this.btnGroupTesting.Name = "btnGroupTesting";
-            this.btnGroupTesting.Padding = new System.Windows.Forms.Padding(16, 0, 0, 0);
-            this.btnGroupTesting.Size = new System.Drawing.Size(260, 48);
-            this.btnGroupTesting.TabIndex = 4;
-            this.btnGroupTesting.Text = "📝  Khảo Thí && Đề Thi  ›";
-            this.btnGroupTesting.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnGroupTesting.UseVisualStyleBackColor = false;
-            this.btnGroupTesting.Click += new System.EventHandler(this.btnGroupTesting_Click);
-
-            // =========================================================
-            // pnlSubMenuTesting
-            // =========================================================
-            this.pnlSubMenuTesting.AutoSize = true;
-            this.pnlSubMenuTesting.BackColor = System.Drawing.Color.FromArgb(31, 41, 55);
-            this.pnlSubMenuTesting.Controls.Add(this.btnExamList);
-            this.pnlSubMenuTesting.Controls.Add(this.btnExamConfig);
-            this.pnlSubMenuTesting.Controls.Add(this.btnQuestionBank);
-            this.pnlSubMenuTesting.Dock = System.Windows.Forms.DockStyle.Top;
-            this.pnlSubMenuTesting.Name = "pnlSubMenuTesting";
-            this.pnlSubMenuTesting.Size = new System.Drawing.Size(260, 120);
-            this.pnlSubMenuTesting.TabIndex = 5;
-            this.pnlSubMenuTesting.Visible = false;
-
-            // btnQuestionBank
-            this.btnQuestionBank.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnQuestionBank.Dock = System.Windows.Forms.DockStyle.Top;
-            this.btnQuestionBank.FlatAppearance.BorderSize = 0;
-            this.btnQuestionBank.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnQuestionBank.Font = new System.Drawing.Font("Segoe UI", 10F);
-            this.btnQuestionBank.ForeColor = System.Drawing.Color.FromArgb(147, 210, 255);
-            this.btnQuestionBank.Name = "btnQuestionBank";
-            this.btnQuestionBank.Padding = new System.Windows.Forms.Padding(40, 0, 0, 0);
-            this.btnQuestionBank.Size = new System.Drawing.Size(260, 40);
-            this.btnQuestionBank.TabIndex = 0;
-            this.btnQuestionBank.Text = "   📂  Ngân hàng câu hỏi";
-            this.btnQuestionBank.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnQuestionBank.UseVisualStyleBackColor = true;
-            this.btnQuestionBank.Click += new System.EventHandler(this.btnQuestionBank_Click);
-
-            // btnExamConfig
-            this.btnExamConfig.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnExamConfig.Dock = System.Windows.Forms.DockStyle.Top;
-            this.btnExamConfig.FlatAppearance.BorderSize = 0;
-            this.btnExamConfig.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnExamConfig.Font = new System.Drawing.Font("Segoe UI", 10F);
-            this.btnExamConfig.ForeColor = System.Drawing.Color.FromArgb(147, 210, 255);
-            this.btnExamConfig.Name = "btnExamConfig";
-            this.btnExamConfig.Padding = new System.Windows.Forms.Padding(40, 0, 0, 0);
-            this.btnExamConfig.Size = new System.Drawing.Size(260, 40);
-            this.btnExamConfig.TabIndex = 1;
-            this.btnExamConfig.Text = "   ⚙️  Cấu hình đề thi";
-            this.btnExamConfig.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnExamConfig.UseVisualStyleBackColor = true;
-            this.btnExamConfig.Click += new System.EventHandler(this.btnExamConfig_Click);
-
-            // btnExamList
-            this.btnExamList.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnExamList.Dock = System.Windows.Forms.DockStyle.Top;
-            this.btnExamList.FlatAppearance.BorderSize = 0;
-            this.btnExamList.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnExamList.Font = new System.Drawing.Font("Segoe UI", 10F);
-            this.btnExamList.ForeColor = System.Drawing.Color.FromArgb(147, 210, 255);
-            this.btnExamList.Name = "btnExamList";
-            this.btnExamList.Padding = new System.Windows.Forms.Padding(40, 0, 0, 0);
-            this.btnExamList.Size = new System.Drawing.Size(260, 40);
-            this.btnExamList.TabIndex = 2;
-            this.btnExamList.Text = "   📋  Quản lý kỳ thi";
-            this.btnExamList.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnExamList.UseVisualStyleBackColor = true;
-            this.btnExamList.Click += new System.EventHandler(this.btnExamList_Click);
-
-            // =========================================================
-            // btnGroupMonitoring  — Giám Sát & Chấm Điểm  (nhóm cha)
-            // =========================================================
-            this.btnGroupMonitoring.BackColor = System.Drawing.Color.Transparent;
-            this.btnGroupMonitoring.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnGroupMonitoring.Dock = System.Windows.Forms.DockStyle.Top;
-            this.btnGroupMonitoring.FlatAppearance.BorderSize = 0;
-            this.btnGroupMonitoring.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnGroupMonitoring.Font = new System.Drawing.Font("Segoe UI", 10.5F, System.Drawing.FontStyle.Bold);
-            this.btnGroupMonitoring.ForeColor = System.Drawing.Color.White;
-            this.btnGroupMonitoring.Name = "btnGroupMonitoring";
-            this.btnGroupMonitoring.Padding = new System.Windows.Forms.Padding(16, 0, 0, 0);
-            this.btnGroupMonitoring.Size = new System.Drawing.Size(260, 48);
-            this.btnGroupMonitoring.TabIndex = 6;
-            this.btnGroupMonitoring.Text = "⏱️  Giám Sát && Chấm Điểm  ›";
-            this.btnGroupMonitoring.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnGroupMonitoring.UseVisualStyleBackColor = false;
-            this.btnGroupMonitoring.Click += new System.EventHandler(this.btnGroupMonitoring_Click);
-
-            // =========================================================
-            // pnlSubMenuMonitoring
-            // =========================================================
-            this.pnlSubMenuMonitoring.AutoSize = true;
-            this.pnlSubMenuMonitoring.BackColor = System.Drawing.Color.FromArgb(31, 41, 55);
-            this.pnlSubMenuMonitoring.Controls.Add(this.btnScoreManagement);
-            this.pnlSubMenuMonitoring.Controls.Add(this.btnEssayGrading);
-            this.pnlSubMenuMonitoring.Controls.Add(this.btnLiveMonitor);
-            this.pnlSubMenuMonitoring.Dock = System.Windows.Forms.DockStyle.Top;
-            this.pnlSubMenuMonitoring.Name = "pnlSubMenuMonitoring";
-            this.pnlSubMenuMonitoring.Size = new System.Drawing.Size(260, 120);
-            this.pnlSubMenuMonitoring.TabIndex = 7;
-            this.pnlSubMenuMonitoring.Visible = false;
-
-            // btnLiveMonitor
-            this.btnLiveMonitor.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnLiveMonitor.Dock = System.Windows.Forms.DockStyle.Top;
-            this.btnLiveMonitor.FlatAppearance.BorderSize = 0;
-            this.btnLiveMonitor.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnLiveMonitor.Font = new System.Drawing.Font("Segoe UI", 10F);
-            this.btnLiveMonitor.ForeColor = System.Drawing.Color.FromArgb(147, 210, 255);
-            this.btnLiveMonitor.Name = "btnLiveMonitor";
-            this.btnLiveMonitor.Padding = new System.Windows.Forms.Padding(40, 0, 0, 0);
-            this.btnLiveMonitor.Size = new System.Drawing.Size(260, 40);
-            this.btnLiveMonitor.TabIndex = 0;
-            this.btnLiveMonitor.Text = "   📹  Giám sát Live";
-            this.btnLiveMonitor.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnLiveMonitor.UseVisualStyleBackColor = true;
-            this.btnLiveMonitor.Click += new System.EventHandler(this.btnLiveMonitor_Click);
-
-            // btnEssayGrading
-            this.btnEssayGrading.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnEssayGrading.Dock = System.Windows.Forms.DockStyle.Top;
-            this.btnEssayGrading.FlatAppearance.BorderSize = 0;
-            this.btnEssayGrading.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnEssayGrading.Font = new System.Drawing.Font("Segoe UI", 10F);
-            this.btnEssayGrading.ForeColor = System.Drawing.Color.FromArgb(147, 210, 255);
-            this.btnEssayGrading.Name = "btnEssayGrading";
-            this.btnEssayGrading.Padding = new System.Windows.Forms.Padding(40, 0, 0, 0);
-            this.btnEssayGrading.Size = new System.Drawing.Size(260, 40);
-            this.btnEssayGrading.TabIndex = 1;
-            this.btnEssayGrading.Text = "   ✍️  Chấm tự luận";
-            this.btnEssayGrading.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnEssayGrading.UseVisualStyleBackColor = true;
-            this.btnEssayGrading.Click += new System.EventHandler(this.btnEssayGrading_Click);
-
-            // btnScoreManagement
-            this.btnScoreManagement.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnScoreManagement.Dock = System.Windows.Forms.DockStyle.Top;
-            this.btnScoreManagement.FlatAppearance.BorderSize = 0;
-            this.btnScoreManagement.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnScoreManagement.Font = new System.Drawing.Font("Segoe UI", 10F);
-            this.btnScoreManagement.ForeColor = System.Drawing.Color.FromArgb(147, 210, 255);
-            this.btnScoreManagement.Name = "btnScoreManagement";
-            this.btnScoreManagement.Padding = new System.Windows.Forms.Padding(40, 0, 0, 0);
-            this.btnScoreManagement.Size = new System.Drawing.Size(260, 40);
-            this.btnScoreManagement.TabIndex = 2;
-            this.btnScoreManagement.Text = "   📊  Quản lý điểm số";
-            this.btnScoreManagement.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnScoreManagement.UseVisualStyleBackColor = true;
-            this.btnScoreManagement.Click += new System.EventHandler(this.btnScoreManagement_Click);
-
-            // =========================================================
-            // btnNotifications  — Thông Báo
-            // =========================================================
-            this.btnNotifications.BackColor = System.Drawing.Color.Transparent;
-            this.btnNotifications.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnNotifications.Dock = System.Windows.Forms.DockStyle.Top;
-            this.btnNotifications.FlatAppearance.BorderSize = 0;
-            this.btnNotifications.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnNotifications.Font = new System.Drawing.Font("Segoe UI", 10.5F);
-            this.btnNotifications.ForeColor = System.Drawing.Color.FromArgb(209, 213, 219);
-            this.btnNotifications.Name = "btnNotifications";
-            this.btnNotifications.Padding = new System.Windows.Forms.Padding(16, 0, 0, 0);
-            this.btnNotifications.Size = new System.Drawing.Size(260, 48);
-            this.btnNotifications.TabIndex = 8;
-            this.btnNotifications.Text = "🔔  Trung Tâm Thông Báo";
-            this.btnNotifications.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnNotifications.UseVisualStyleBackColor = false;
-            this.btnNotifications.Click += new System.EventHandler(this.btnNotifications_Click);
-
-            // =========================================================
-            // pnlSidebarBottom  — chứa đường kẻ phân cách + nút Đăng xuất
-            // =========================================================
-            this.pnlSidebarBottom.BackColor = System.Drawing.Color.FromArgb(17, 24, 39);
-            this.pnlSidebarBottom.Controls.Add(this.btnLogout);
-            this.pnlSidebarBottom.Controls.Add(this.pnlDivider);
-            this.pnlSidebarBottom.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.pnlSidebarBottom.Name = "pnlSidebarBottom";
-            this.pnlSidebarBottom.Size = new System.Drawing.Size(260, 65);
-            this.pnlSidebarBottom.TabIndex = 9;
-
-            // pnlDivider  (đường kẻ ngang mỏng)
-            this.pnlDivider.BackColor = System.Drawing.Color.FromArgb(55, 65, 81);
-            this.pnlDivider.Dock = System.Windows.Forms.DockStyle.Top;
-            this.pnlDivider.Height = 1;
-            this.pnlDivider.Name = "pnlDivider";
-            this.pnlDivider.TabIndex = 0;
-
+            pnlSidebar = new Panel();
+            pnlSidebarBottom = new Panel();
+            btnLogout = new Button();
+            pnlDivider = new Panel();
+            btnNotifications = new Button();
+            pnlSubMenuMonitoring = new Panel();
+            btnScoreManagement = new Button();
+            btnEssayGrading = new Button();
+            btnLiveMonitor = new Button();
+            btnGroupMonitoring = new Button();
+            pnlSubMenuTesting = new Panel();
+            btnExamList = new Button();
+            btnExamConfig = new Button();
+            btnQuestionBank = new Button();
+            btnGroupTesting = new Button();
+            pnlSubMenuCourseDocs = new Panel();
+            btnOnlineClasses = new Button();
+            btnAssignedCourses = new Button();
+            btnGroupCourseDocs = new Button();
+            btnOverview = new Button();
+            pnlLogo = new Panel();
+            lblLogoIcon = new Label();
+            lblLogoText = new Label();
+            pnlMainboard = new Panel();
+            pnlSidebar.SuspendLayout();
+            pnlSidebarBottom.SuspendLayout();
+            pnlSubMenuMonitoring.SuspendLayout();
+            pnlSubMenuTesting.SuspendLayout();
+            pnlSubMenuCourseDocs.SuspendLayout();
+            pnlLogo.SuspendLayout();
+            SuspendLayout();
+            // 
+            // pnlSidebar
+            // 
+            pnlSidebar.BackColor = Color.FromArgb(17, 24, 39);
+            pnlSidebar.Controls.Add(pnlSidebarBottom);
+            pnlSidebar.Controls.Add(btnNotifications);
+            pnlSidebar.Controls.Add(pnlSubMenuMonitoring);
+            pnlSidebar.Controls.Add(btnGroupMonitoring);
+            pnlSidebar.Controls.Add(pnlSubMenuTesting);
+            pnlSidebar.Controls.Add(btnGroupTesting);
+            pnlSidebar.Controls.Add(pnlSubMenuCourseDocs);
+            pnlSidebar.Controls.Add(btnGroupCourseDocs);
+            pnlSidebar.Controls.Add(btnOverview);
+            pnlSidebar.Controls.Add(pnlLogo);
+            pnlSidebar.Dock = DockStyle.Left;
+            pnlSidebar.Location = new Point(0, 0);
+            pnlSidebar.Name = "pnlSidebar";
+            pnlSidebar.Size = new Size(260, 860);
+            pnlSidebar.TabIndex = 0;
+            // 
+            // pnlSidebarBottom
+            // 
+            pnlSidebarBottom.BackColor = Color.FromArgb(17, 24, 39);
+            pnlSidebarBottom.Controls.Add(btnLogout);
+            pnlSidebarBottom.Controls.Add(pnlDivider);
+            pnlSidebarBottom.Dock = DockStyle.Bottom;
+            pnlSidebarBottom.Location = new Point(0, 795);
+            pnlSidebarBottom.Name = "pnlSidebarBottom";
+            pnlSidebarBottom.Size = new Size(260, 65);
+            pnlSidebarBottom.TabIndex = 9;
+            // 
             // btnLogout
-            this.btnLogout.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnLogout.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnLogout.FlatAppearance.BorderSize = 0;
-            this.btnLogout.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnLogout.Font = new System.Drawing.Font("Segoe UI", 10.5F);
-            this.btnLogout.ForeColor = System.Drawing.Color.FromArgb(252, 165, 165);
-            this.btnLogout.Name = "btnLogout";
-            this.btnLogout.Padding = new System.Windows.Forms.Padding(16, 0, 0, 0);
-            this.btnLogout.Size = new System.Drawing.Size(260, 64);
-            this.btnLogout.TabIndex = 1;
-            this.btnLogout.Text = "🚪  Đăng Xuất";
-            this.btnLogout.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnLogout.UseVisualStyleBackColor = true;
-            this.btnLogout.Click += new System.EventHandler(this.btnLogout_Click);
-
-            // =========================================================
-            // pnlMainboard  — vùng nội dung chính (bên phải sidebar)
-            // =========================================================
-            this.pnlMainboard.BackColor = System.Drawing.Color.FromArgb(243, 244, 246);
-            this.pnlMainboard.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.pnlMainboard.Name = "pnlMainboard";
-            this.pnlMainboard.TabIndex = 1;
-
-            // =========================================================
-            // TeacherDashboard  (Form chính)
-            // =========================================================
-            this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 20F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.BackColor = System.Drawing.Color.FromArgb(17, 24, 39);
-            this.ClientSize = new System.Drawing.Size(1380, 860);
-            this.Controls.Add(this.pnlMainboard);   // Fill — thêm trước
-            this.Controls.Add(this.pnlSidebar);     // Left — thêm sau để đẩy mainboard sang phải
-            this.Font = new System.Drawing.Font("Segoe UI", 9F);
-            this.MinimumSize = new System.Drawing.Size(1000, 650);
-            this.Name = "TeacherDashboard";
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "Teacher Dashboard — CourseGuard";
-
-            this.pnlSidebar.ResumeLayout(false);
-            this.pnlLogo.ResumeLayout(false);
-            this.pnlSubMenuCourseDocs.ResumeLayout(false);
-            this.pnlSubMenuTesting.ResumeLayout(false);
-            this.pnlSubMenuMonitoring.ResumeLayout(false);
-            this.pnlSidebarBottom.ResumeLayout(false);
-            this.ResumeLayout(false);
+            // 
+            btnLogout.Cursor = Cursors.Hand;
+            btnLogout.Dock = DockStyle.Fill;
+            btnLogout.FlatAppearance.BorderSize = 0;
+            btnLogout.FlatStyle = FlatStyle.Flat;
+            btnLogout.Font = new Font("Segoe UI", 10.5F);
+            btnLogout.ForeColor = Color.FromArgb(252, 165, 165);
+            btnLogout.Location = new Point(0, 1);
+            btnLogout.Name = "btnLogout";
+            btnLogout.Padding = new Padding(16, 0, 0, 0);
+            btnLogout.Size = new Size(260, 64);
+            btnLogout.TabIndex = 1;
+            btnLogout.Text = "🚪  Đăng Xuất";
+            btnLogout.TextAlign = ContentAlignment.MiddleLeft;
+            btnLogout.UseVisualStyleBackColor = true;
+            btnLogout.Click += btnLogout_Click;
+            // 
+            // pnlDivider
+            // 
+            pnlDivider.BackColor = Color.FromArgb(55, 65, 81);
+            pnlDivider.Dock = DockStyle.Top;
+            pnlDivider.Location = new Point(0, 0);
+            pnlDivider.Name = "pnlDivider";
+            pnlDivider.Size = new Size(260, 1);
+            pnlDivider.TabIndex = 0;
+            // 
+            // btnNotifications
+            // 
+            btnNotifications.BackColor = Color.Transparent;
+            btnNotifications.Cursor = Cursors.Hand;
+            btnNotifications.Dock = DockStyle.Top;
+            btnNotifications.FlatAppearance.BorderSize = 0;
+            btnNotifications.FlatStyle = FlatStyle.Flat;
+            btnNotifications.Font = new Font("Segoe UI", 10.5F);
+            btnNotifications.ForeColor = Color.FromArgb(209, 213, 219);
+            btnNotifications.Location = new Point(0, 597);
+            btnNotifications.Name = "btnNotifications";
+            btnNotifications.Padding = new Padding(16, 0, 0, 0);
+            btnNotifications.Size = new Size(260, 48);
+            btnNotifications.TabIndex = 8;
+            btnNotifications.Text = "🔔  Trung Tâm Thông Báo";
+            btnNotifications.TextAlign = ContentAlignment.MiddleLeft;
+            btnNotifications.UseVisualStyleBackColor = false;
+            btnNotifications.Click += btnNotifications_Click;
+            // 
+            // pnlSubMenuMonitoring
+            // 
+            pnlSubMenuMonitoring.AutoSize = true;
+            pnlSubMenuMonitoring.BackColor = Color.FromArgb(31, 41, 55);
+            pnlSubMenuMonitoring.Controls.Add(btnScoreManagement);
+            pnlSubMenuMonitoring.Controls.Add(btnEssayGrading);
+            pnlSubMenuMonitoring.Controls.Add(btnLiveMonitor);
+            pnlSubMenuMonitoring.Dock = DockStyle.Top;
+            pnlSubMenuMonitoring.Location = new Point(0, 477);
+            pnlSubMenuMonitoring.Name = "pnlSubMenuMonitoring";
+            pnlSubMenuMonitoring.Size = new Size(260, 120);
+            pnlSubMenuMonitoring.TabIndex = 7;
+            pnlSubMenuMonitoring.Visible = false;
+            // 
+            // btnScoreManagement
+            // 
+            btnScoreManagement.Cursor = Cursors.Hand;
+            btnScoreManagement.Dock = DockStyle.Top;
+            btnScoreManagement.FlatAppearance.BorderSize = 0;
+            btnScoreManagement.FlatStyle = FlatStyle.Flat;
+            btnScoreManagement.Font = new Font("Segoe UI", 10F);
+            btnScoreManagement.ForeColor = Color.FromArgb(147, 210, 255);
+            btnScoreManagement.Location = new Point(0, 80);
+            btnScoreManagement.Name = "btnScoreManagement";
+            btnScoreManagement.Padding = new Padding(40, 0, 0, 0);
+            btnScoreManagement.Size = new Size(260, 40);
+            btnScoreManagement.TabIndex = 2;
+            btnScoreManagement.Text = "   📊  Quản lý điểm số";
+            btnScoreManagement.TextAlign = ContentAlignment.MiddleLeft;
+            btnScoreManagement.UseVisualStyleBackColor = true;
+            btnScoreManagement.Click += btnScoreManagement_Click;
+            // 
+            // btnEssayGrading
+            // 
+            btnEssayGrading.Cursor = Cursors.Hand;
+            btnEssayGrading.Dock = DockStyle.Top;
+            btnEssayGrading.FlatAppearance.BorderSize = 0;
+            btnEssayGrading.FlatStyle = FlatStyle.Flat;
+            btnEssayGrading.Font = new Font("Segoe UI", 10F);
+            btnEssayGrading.ForeColor = Color.FromArgb(147, 210, 255);
+            btnEssayGrading.Location = new Point(0, 40);
+            btnEssayGrading.Name = "btnEssayGrading";
+            btnEssayGrading.Padding = new Padding(40, 0, 0, 0);
+            btnEssayGrading.Size = new Size(260, 40);
+            btnEssayGrading.TabIndex = 1;
+            btnEssayGrading.Text = "   ✍️  Chấm tự luận";
+            btnEssayGrading.TextAlign = ContentAlignment.MiddleLeft;
+            btnEssayGrading.UseVisualStyleBackColor = true;
+            btnEssayGrading.Click += btnEssayGrading_Click;
+            // 
+            // btnLiveMonitor
+            // 
+            btnLiveMonitor.Cursor = Cursors.Hand;
+            btnLiveMonitor.Dock = DockStyle.Top;
+            btnLiveMonitor.FlatAppearance.BorderSize = 0;
+            btnLiveMonitor.FlatStyle = FlatStyle.Flat;
+            btnLiveMonitor.Font = new Font("Segoe UI", 10F);
+            btnLiveMonitor.ForeColor = Color.FromArgb(147, 210, 255);
+            btnLiveMonitor.Location = new Point(0, 0);
+            btnLiveMonitor.Name = "btnLiveMonitor";
+            btnLiveMonitor.Padding = new Padding(40, 0, 0, 0);
+            btnLiveMonitor.Size = new Size(260, 40);
+            btnLiveMonitor.TabIndex = 0;
+            btnLiveMonitor.Text = "   📹  Giám sát Live";
+            btnLiveMonitor.TextAlign = ContentAlignment.MiddleLeft;
+            btnLiveMonitor.UseVisualStyleBackColor = true;
+            btnLiveMonitor.Click += btnLiveMonitor_Click;
+            // 
+            // btnGroupMonitoring
+            // 
+            btnGroupMonitoring.BackColor = Color.Transparent;
+            btnGroupMonitoring.Cursor = Cursors.Hand;
+            btnGroupMonitoring.Dock = DockStyle.Top;
+            btnGroupMonitoring.FlatAppearance.BorderSize = 0;
+            btnGroupMonitoring.FlatStyle = FlatStyle.Flat;
+            btnGroupMonitoring.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
+            btnGroupMonitoring.ForeColor = Color.White;
+            btnGroupMonitoring.Location = new Point(0, 429);
+            btnGroupMonitoring.Name = "btnGroupMonitoring";
+            btnGroupMonitoring.Padding = new Padding(16, 0, 0, 0);
+            btnGroupMonitoring.Size = new Size(260, 48);
+            btnGroupMonitoring.TabIndex = 6;
+            btnGroupMonitoring.Text = "⏱️  Giám Sát && Chấm Điểm  ›";
+            btnGroupMonitoring.TextAlign = ContentAlignment.MiddleLeft;
+            btnGroupMonitoring.UseVisualStyleBackColor = false;
+            btnGroupMonitoring.Click += btnGroupMonitoring_Click;
+            // 
+            // pnlSubMenuTesting
+            // 
+            pnlSubMenuTesting.AutoSize = true;
+            pnlSubMenuTesting.BackColor = Color.FromArgb(31, 41, 55);
+            pnlSubMenuTesting.Controls.Add(btnExamList);
+            pnlSubMenuTesting.Controls.Add(btnExamConfig);
+            pnlSubMenuTesting.Controls.Add(btnQuestionBank);
+            pnlSubMenuTesting.Dock = DockStyle.Top;
+            pnlSubMenuTesting.Location = new Point(0, 309);
+            pnlSubMenuTesting.Name = "pnlSubMenuTesting";
+            pnlSubMenuTesting.Size = new Size(260, 120);
+            pnlSubMenuTesting.TabIndex = 5;
+            pnlSubMenuTesting.Visible = false;
+            // 
+            // btnExamList
+            // 
+            btnExamList.Cursor = Cursors.Hand;
+            btnExamList.Dock = DockStyle.Top;
+            btnExamList.FlatAppearance.BorderSize = 0;
+            btnExamList.FlatStyle = FlatStyle.Flat;
+            btnExamList.Font = new Font("Segoe UI", 10F);
+            btnExamList.ForeColor = Color.FromArgb(147, 210, 255);
+            btnExamList.Location = new Point(0, 80);
+            btnExamList.Name = "btnExamList";
+            btnExamList.Padding = new Padding(40, 0, 0, 0);
+            btnExamList.Size = new Size(260, 40);
+            btnExamList.TabIndex = 2;
+            btnExamList.Text = "   📋  Quản lý kỳ thi";
+            btnExamList.TextAlign = ContentAlignment.MiddleLeft;
+            btnExamList.UseVisualStyleBackColor = true;
+            btnExamList.Click += btnExamList_Click;
+            // 
+            // btnExamConfig
+            // 
+            btnExamConfig.Cursor = Cursors.Hand;
+            btnExamConfig.Dock = DockStyle.Top;
+            btnExamConfig.FlatAppearance.BorderSize = 0;
+            btnExamConfig.FlatStyle = FlatStyle.Flat;
+            btnExamConfig.Font = new Font("Segoe UI", 10F);
+            btnExamConfig.ForeColor = Color.FromArgb(147, 210, 255);
+            btnExamConfig.Location = new Point(0, 40);
+            btnExamConfig.Name = "btnExamConfig";
+            btnExamConfig.Padding = new Padding(40, 0, 0, 0);
+            btnExamConfig.Size = new Size(260, 40);
+            btnExamConfig.TabIndex = 1;
+            btnExamConfig.Text = "   ⚙️  Cấu hình đề thi";
+            btnExamConfig.TextAlign = ContentAlignment.MiddleLeft;
+            btnExamConfig.UseVisualStyleBackColor = true;
+            btnExamConfig.Click += btnExamConfig_Click;
+            // 
+            // btnQuestionBank
+            // 
+            btnQuestionBank.Cursor = Cursors.Hand;
+            btnQuestionBank.Dock = DockStyle.Top;
+            btnQuestionBank.FlatAppearance.BorderSize = 0;
+            btnQuestionBank.FlatStyle = FlatStyle.Flat;
+            btnQuestionBank.Font = new Font("Segoe UI", 10F);
+            btnQuestionBank.ForeColor = Color.FromArgb(147, 210, 255);
+            btnQuestionBank.Location = new Point(0, 0);
+            btnQuestionBank.Name = "btnQuestionBank";
+            btnQuestionBank.Padding = new Padding(40, 0, 0, 0);
+            btnQuestionBank.Size = new Size(260, 40);
+            btnQuestionBank.TabIndex = 0;
+            btnQuestionBank.Text = "   📂  Ngân hàng câu hỏi";
+            btnQuestionBank.TextAlign = ContentAlignment.MiddleLeft;
+            btnQuestionBank.UseVisualStyleBackColor = true;
+            btnQuestionBank.Click += btnQuestionBank_Click;
+            // 
+            // btnGroupTesting
+            // 
+            btnGroupTesting.BackColor = Color.Transparent;
+            btnGroupTesting.Cursor = Cursors.Hand;
+            btnGroupTesting.Dock = DockStyle.Top;
+            btnGroupTesting.FlatAppearance.BorderSize = 0;
+            btnGroupTesting.FlatStyle = FlatStyle.Flat;
+            btnGroupTesting.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
+            btnGroupTesting.ForeColor = Color.White;
+            btnGroupTesting.Location = new Point(0, 261);
+            btnGroupTesting.Name = "btnGroupTesting";
+            btnGroupTesting.Padding = new Padding(16, 0, 0, 0);
+            btnGroupTesting.Size = new Size(260, 48);
+            btnGroupTesting.TabIndex = 4;
+            btnGroupTesting.Text = "📝  Khảo Thí && Đề Thi  ›";
+            btnGroupTesting.TextAlign = ContentAlignment.MiddleLeft;
+            btnGroupTesting.UseVisualStyleBackColor = false;
+            btnGroupTesting.Click += btnGroupTesting_Click;
+            // 
+            // pnlSubMenuCourseDocs
+            // 
+            pnlSubMenuCourseDocs.AutoSize = true;
+            pnlSubMenuCourseDocs.BackColor = Color.FromArgb(31, 41, 55);
+            pnlSubMenuCourseDocs.Controls.Add(btnOnlineClasses);
+            pnlSubMenuCourseDocs.Controls.Add(btnAssignedCourses);
+            pnlSubMenuCourseDocs.Dock = DockStyle.Top;
+            pnlSubMenuCourseDocs.Location = new Point(0, 181);
+            pnlSubMenuCourseDocs.Name = "pnlSubMenuCourseDocs";
+            pnlSubMenuCourseDocs.Size = new Size(260, 80);
+            pnlSubMenuCourseDocs.TabIndex = 3;
+            pnlSubMenuCourseDocs.Visible = false;
+            // 
+            // btnOnlineClasses
+            // 
+            btnOnlineClasses.Cursor = Cursors.Hand;
+            btnOnlineClasses.Dock = DockStyle.Top;
+            btnOnlineClasses.FlatAppearance.BorderSize = 0;
+            btnOnlineClasses.FlatStyle = FlatStyle.Flat;
+            btnOnlineClasses.Font = new Font("Segoe UI", 10F);
+            btnOnlineClasses.ForeColor = Color.FromArgb(147, 210, 255);
+            btnOnlineClasses.Location = new Point(0, 40);
+            btnOnlineClasses.Name = "btnOnlineClasses";
+            btnOnlineClasses.Padding = new Padding(40, 0, 0, 0);
+            btnOnlineClasses.Size = new Size(260, 40);
+            btnOnlineClasses.TabIndex = 1;
+            btnOnlineClasses.Text = "   🌐  Lớp học trực tuyến";
+            btnOnlineClasses.TextAlign = ContentAlignment.MiddleLeft;
+            btnOnlineClasses.UseVisualStyleBackColor = true;
+            btnOnlineClasses.Click += btnOnlineClasses_Click;
+            // 
+            // btnAssignedCourses
+            // 
+            btnAssignedCourses.Cursor = Cursors.Hand;
+            btnAssignedCourses.Dock = DockStyle.Top;
+            btnAssignedCourses.FlatAppearance.BorderSize = 0;
+            btnAssignedCourses.FlatStyle = FlatStyle.Flat;
+            btnAssignedCourses.Font = new Font("Segoe UI", 10F);
+            btnAssignedCourses.ForeColor = Color.FromArgb(147, 210, 255);
+            btnAssignedCourses.Location = new Point(0, 0);
+            btnAssignedCourses.Name = "btnAssignedCourses";
+            btnAssignedCourses.Padding = new Padding(40, 0, 0, 0);
+            btnAssignedCourses.Size = new Size(260, 40);
+            btnAssignedCourses.TabIndex = 0;
+            btnAssignedCourses.Text = "   📖  Phân công lớp";
+            btnAssignedCourses.TextAlign = ContentAlignment.MiddleLeft;
+            btnAssignedCourses.UseVisualStyleBackColor = true;
+            btnAssignedCourses.Click += btnAssignedCourses_Click;
+            // 
+            // btnGroupCourseDocs
+            // 
+            btnGroupCourseDocs.BackColor = Color.Transparent;
+            btnGroupCourseDocs.Cursor = Cursors.Hand;
+            btnGroupCourseDocs.Dock = DockStyle.Top;
+            btnGroupCourseDocs.FlatAppearance.BorderSize = 0;
+            btnGroupCourseDocs.FlatStyle = FlatStyle.Flat;
+            btnGroupCourseDocs.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
+            btnGroupCourseDocs.ForeColor = Color.White;
+            btnGroupCourseDocs.Location = new Point(0, 133);
+            btnGroupCourseDocs.Name = "btnGroupCourseDocs";
+            btnGroupCourseDocs.Padding = new Padding(16, 0, 0, 0);
+            btnGroupCourseDocs.Size = new Size(260, 48);
+            btnGroupCourseDocs.TabIndex = 2;
+            btnGroupCourseDocs.Text = "📚  Học Liệu && Lớp Học  ›";
+            btnGroupCourseDocs.TextAlign = ContentAlignment.MiddleLeft;
+            btnGroupCourseDocs.UseVisualStyleBackColor = false;
+            btnGroupCourseDocs.Click += btnGroupCourseDocs_Click;
+            // 
+            // btnOverview
+            // 
+            btnOverview.BackColor = Color.Transparent;
+            btnOverview.Cursor = Cursors.Hand;
+            btnOverview.Dock = DockStyle.Top;
+            btnOverview.FlatAppearance.BorderSize = 0;
+            btnOverview.FlatStyle = FlatStyle.Flat;
+            btnOverview.Font = new Font("Segoe UI", 10.5F);
+            btnOverview.ForeColor = Color.FromArgb(209, 213, 219);
+            btnOverview.Location = new Point(0, 85);
+            btnOverview.Name = "btnOverview";
+            btnOverview.Padding = new Padding(16, 0, 0, 0);
+            btnOverview.Size = new Size(260, 48);
+            btnOverview.TabIndex = 1;
+            btnOverview.Text = "🏠  Tổng Quan";
+            btnOverview.TextAlign = ContentAlignment.MiddleLeft;
+            btnOverview.UseVisualStyleBackColor = false;
+            btnOverview.Click += btnOverview_Click;
+            // 
+            // pnlLogo
+            // 
+            pnlLogo.BackColor = Color.FromArgb(11, 17, 28);
+            pnlLogo.Controls.Add(lblLogoIcon);
+            pnlLogo.Controls.Add(lblLogoText);
+            pnlLogo.Dock = DockStyle.Top;
+            pnlLogo.Location = new Point(0, 0);
+            pnlLogo.Name = "pnlLogo";
+            pnlLogo.Size = new Size(260, 85);
+            pnlLogo.TabIndex = 0;
+            // 
+            // lblLogoIcon
+            // 
+            lblLogoIcon.Dock = DockStyle.Left;
+            lblLogoIcon.Font = new Font("Segoe UI Emoji", 20F);
+            lblLogoIcon.ForeColor = Color.FromArgb(99, 179, 237);
+            lblLogoIcon.Location = new Point(0, 0);
+            lblLogoIcon.Name = "lblLogoIcon";
+            lblLogoIcon.Size = new Size(50, 85);
+            lblLogoIcon.TabIndex = 0;
+            lblLogoIcon.Text = "🛡";
+            lblLogoIcon.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // lblLogoText
+            // 
+            lblLogoText.AutoSize = true;
+            lblLogoText.Font = new Font("Segoe UI", 14F, FontStyle.Bold);
+            lblLogoText.ForeColor = Color.White;
+            lblLogoText.Location = new Point(55, 28);
+            lblLogoText.Name = "lblLogoText";
+            lblLogoText.Size = new Size(163, 32);
+            lblLogoText.TabIndex = 1;
+            lblLogoText.Text = "CourseGuard";
+            lblLogoText.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // pnlMainboard
+            // 
+            pnlMainboard.BackColor = Color.FromArgb(243, 244, 246);
+            pnlMainboard.Dock = DockStyle.Fill;
+            pnlMainboard.Location = new Point(260, 0);
+            pnlMainboard.Name = "pnlMainboard";
+            pnlMainboard.Size = new Size(1120, 860);
+            pnlMainboard.TabIndex = 1;
+            // 
+            // TeacherDashboard
+            // 
+            AutoScaleDimensions = new SizeF(8F, 20F);
+            AutoScaleMode = AutoScaleMode.Font;
+            BackColor = Color.FromArgb(17, 24, 39);
+            ClientSize = new Size(1380, 860);
+            Controls.Add(pnlMainboard);
+            Controls.Add(pnlSidebar);
+            Font = new Font("Segoe UI", 9F);
+            MinimumSize = new Size(1000, 650);
+            Name = "TeacherDashboard";
+            StartPosition = FormStartPosition.CenterScreen;
+            Text = "Teacher Dashboard — CourseGuard";
+            pnlSidebar.ResumeLayout(false);
+            pnlSidebar.PerformLayout();
+            pnlSidebarBottom.ResumeLayout(false);
+            pnlSubMenuMonitoring.ResumeLayout(false);
+            pnlSubMenuTesting.ResumeLayout(false);
+            pnlSubMenuCourseDocs.ResumeLayout(false);
+            pnlLogo.ResumeLayout(false);
+            pnlLogo.PerformLayout();
+            ResumeLayout(false);
         }
 
         #endregion
