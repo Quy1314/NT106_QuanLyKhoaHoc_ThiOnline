@@ -10,66 +10,21 @@ namespace CourseGuard.Frontend.Forms.Student
 {
     public partial class StudentDashboard : Form
     {
-        private Panel sidebar;
-        private Panel mainboard;
-
         private Dictionary<Button, Func<UserControl>> _nav;
         private CourseGuard.Backend.Models.UserModel currentUser;
 
         public StudentDashboard(CourseGuard.Backend.Models.UserModel user)
         {
             currentUser = user;
-            InitializeUI();
+            InitializeComponent();
+            SetupButtonEvents();
             InitializeNavigation();
 
-            SetActiveButton(btnDashboard);
-            LoadUI(_nav[btnDashboard]());
-        }
+            // Bo góc tất cả buttons
+            RoundedButtonHelper.Apply(12, btnDashboard, btnCourses, btnExam,
+                btnResult, btnSchedule, btnChat, btnNotify, btnProfile, btnLogout);
 
-        // ===== BUTTON =====
-        private Button btnDashboard, btnCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile, btnLogout;
-
-        private void InitializeUI()
-        {
-            this.Text = "Student Dashboard";
-            this.WindowState = FormWindowState.Maximized;
-
-            // ===== SIDEBAR =====
-            sidebar = new Panel
-            {
-                Width = 200,
-                Dock = DockStyle.Left,
-                BackColor = ColorPalette.DarkMode.Secondary
-            };
-
-            // ===== MAINBOARD =====
-            mainboard = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = ColorPalette.LightMode.Base
-            };
-
-            // ===== BUTTONS =====
-            btnDashboard = CreateButton("Dashboard", 0);
-            btnCourses = CreateButton("Courses", 1);
-            btnExam = CreateButton("Take Exam", 2);
-            btnResult = CreateButton("Result", 3);
-            btnSchedule = CreateButton("Schedule", 4);
-            btnChat = CreateButton("Chat", 5);
-            btnNotify = CreateButton("Notification", 6);
-            btnProfile = CreateButton("Profile", 7);
-            
-            btnLogout = new Button
-            {
-                Text = "Logout",
-                Width = 200,
-                Height = 50,
-                Dock = DockStyle.Bottom,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(220, 53, 69), // Red
-                ForeColor = Color.White
-            };
-            btnLogout.FlatAppearance.BorderSize = 0;
+            // Logout handler
             btnLogout.Click += (s, e) => 
             { 
                 var authService = new CourseGuard.Backend.Controllers.AuthController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
@@ -78,49 +33,31 @@ namespace CourseGuard.Frontend.Forms.Student
                 this.Close(); 
             };
 
-            // Bo góc tất cả buttons
-            RoundedButtonHelper.Apply(12, btnDashboard, btnCourses, btnExam,
-                btnResult, btnSchedule, btnChat, btnNotify, btnProfile, btnLogout);
-
-            sidebar.Controls.AddRange(new Control[]
-            {
-                btnDashboard, btnCourses, btnExam,
-                btnResult, btnSchedule, btnChat, btnNotify, btnProfile, btnLogout
-            });
-
-            this.Controls.Add(mainboard);
-            this.Controls.Add(sidebar);
+            SetActiveButton(btnDashboard);
+            LoadUI(_nav[btnDashboard]());
         }
 
-        private Button CreateButton(string text, int index)
+        private void SetupButtonEvents()
         {
-            Button btn = new Button
+            // Gán sự kiện click và hover cho tất cả sidebar buttons (trừ Logout)
+            Button[] sidebarButtons = { btnDashboard, btnCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile };
+
+            foreach (var btn in sidebarButtons)
             {
-                Text = text,
-                Width = 200,
-                Height = 50,
-                Location = new Point(0, index * 50),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.Transparent,
-                ForeColor = ColorPalette.DarkMode.TextPrimary
-            };
+                btn.Click += Sidebar_Click;
 
-            btn.FlatAppearance.BorderSize = 0;
-            btn.Click += Sidebar_Click;
+                btn.MouseEnter += (s, e) =>
+                {
+                    if (btn.BackColor != ColorPalette.DarkMode.Active)
+                        btn.BackColor = ColorPalette.DarkMode.Hover;
+                };
 
-            btn.MouseEnter += (s, e) =>
-            {
-                if (btn.BackColor != ColorPalette.DarkMode.Active)
-                    btn.BackColor = ColorPalette.DarkMode.Hover;
-            };
-
-            btn.MouseLeave += (s, e) =>
-            {
-                if (btn.BackColor != ColorPalette.DarkMode.Active)
-                    btn.BackColor = Color.Transparent;
-            };
-
-            return btn;
+                btn.MouseLeave += (s, e) =>
+                {
+                    if (btn.BackColor != ColorPalette.DarkMode.Active)
+                        btn.BackColor = Color.Transparent;
+                };
+            }
         }
 
         private void InitializeNavigation()
