@@ -1,4 +1,4 @@
-﻿namespace CourseGuard.Frontend.Forms.Teacher
+namespace CourseGuard.Frontend.Forms.Teacher
 {
     partial class TeacherDashboard
     {
@@ -52,12 +52,19 @@
             lblLogoIcon = new Label();
             lblLogoText = new Label();
             pnlMainboard = new Panel();
+            pnlTopHeader = new Panel();
+            btnMail = new Button();
+            pnlEmailDropdown = new Panel();
+            lblEmailHeader = new Label();
+            flpEmails = new FlowLayoutPanel();
             pnlSidebar.SuspendLayout();
             pnlSidebarBottom.SuspendLayout();
             pnlSubMenuMonitoring.SuspendLayout();
             pnlSubMenuTesting.SuspendLayout();
             pnlSubMenuCourseDocs.SuspendLayout();
             pnlLogo.SuspendLayout();
+            pnlTopHeader.SuspendLayout();
+            pnlEmailDropdown.SuspendLayout();
             SuspendLayout();
             // 
             // pnlSidebar
@@ -432,13 +439,78 @@
             lblLogoText.Text = "CourseGuard";
             lblLogoText.TextAlign = ContentAlignment.MiddleLeft;
             // 
+            // pnlTopHeader
+            // 
+            pnlTopHeader.BackColor = Color.White;
+            pnlTopHeader.Controls.Add(btnMail);
+            pnlTopHeader.Dock = DockStyle.Top;
+            pnlTopHeader.Location = new Point(260, 0);
+            pnlTopHeader.Name = "pnlTopHeader";
+            pnlTopHeader.Size = new Size(1120, 70);
+            pnlTopHeader.TabIndex = 2;
+            // 
+            // btnMail
+            // 
+            btnMail.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnMail.Cursor = Cursors.Hand;
+            btnMail.FlatAppearance.BorderSize = 0;
+            btnMail.FlatStyle = FlatStyle.Flat;
+            btnMail.Font = new Font("Segoe UI Emoji", 14F);
+            btnMail.ForeColor = Color.FromArgb(107, 114, 128);
+            btnMail.Location = new Point(1060, 15);
+            btnMail.Name = "btnMail";
+            btnMail.Size = new Size(40, 40);
+            btnMail.TabIndex = 0;
+            btnMail.Text = "✉️";
+            btnMail.UseVisualStyleBackColor = true;
+            btnMail.Click += btnMail_Click;
+            btnMail.MouseEnter += btnMail_MouseEnter;
+            btnMail.MouseLeave += btnMail_MouseLeave;
+            // 
+            // pnlEmailDropdown
+            // 
+            pnlEmailDropdown.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            pnlEmailDropdown.BackColor = Color.White;
+            pnlEmailDropdown.Controls.Add(flpEmails);
+            pnlEmailDropdown.Controls.Add(lblEmailHeader);
+            pnlEmailDropdown.Location = new Point(1020, 70);
+            pnlEmailDropdown.Name = "pnlEmailDropdown";
+            pnlEmailDropdown.Padding = new Padding(10);
+            pnlEmailDropdown.Size = new Size(350, 420);
+            pnlEmailDropdown.TabIndex = 3;
+            pnlEmailDropdown.Visible = false;
+            // 
+            // lblEmailHeader
+            // 
+            lblEmailHeader.Dock = DockStyle.Top;
+            lblEmailHeader.Font = new Font("Segoe UI", 13.5F, FontStyle.Bold);
+            lblEmailHeader.ForeColor = Color.FromArgb(37, 99, 235);
+            lblEmailHeader.Location = new Point(10, 10);
+            lblEmailHeader.Name = "lblEmailHeader";
+            lblEmailHeader.Padding = new Padding(5, 5, 5, 10);
+            lblEmailHeader.Size = new Size(330, 40);
+            lblEmailHeader.TabIndex = 0;
+            lblEmailHeader.Text = "Personal Inbox";
+            lblEmailHeader.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // flpEmails
+            // 
+            flpEmails.AutoScroll = true;
+            flpEmails.Dock = DockStyle.Fill;
+            flpEmails.FlowDirection = FlowDirection.TopDown;
+            flpEmails.Location = new Point(10, 50);
+            flpEmails.Name = "flpEmails";
+            flpEmails.Size = new Size(330, 360);
+            flpEmails.TabIndex = 1;
+            flpEmails.WrapContents = false;
+            // 
             // pnlMainboard
             // 
             pnlMainboard.BackColor = Color.FromArgb(243, 244, 246);
             pnlMainboard.Dock = DockStyle.Fill;
-            pnlMainboard.Location = new Point(260, 0);
+            pnlMainboard.Location = new Point(260, 70);
             pnlMainboard.Name = "pnlMainboard";
-            pnlMainboard.Size = new Size(1120, 860);
+            pnlMainboard.Size = new Size(1120, 790);
             pnlMainboard.TabIndex = 1;
             // 
             // TeacherDashboard
@@ -447,7 +519,9 @@
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(17, 24, 39);
             ClientSize = new Size(1380, 860);
+            Controls.Add(pnlEmailDropdown);
             Controls.Add(pnlMainboard);
+            Controls.Add(pnlTopHeader);
             Controls.Add(pnlSidebar);
             Font = new Font("Segoe UI", 9F);
             MinimumSize = new Size(1000, 650);
@@ -462,6 +536,8 @@
             pnlSubMenuCourseDocs.ResumeLayout(false);
             pnlLogo.ResumeLayout(false);
             pnlLogo.PerformLayout();
+            pnlTopHeader.ResumeLayout(false);
+            pnlEmailDropdown.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -494,5 +570,10 @@
         private System.Windows.Forms.Panel pnlDivider;
         private System.Windows.Forms.Button btnLogout;
         private System.Windows.Forms.Panel pnlMainboard;
+        private System.Windows.Forms.Panel pnlTopHeader;
+        private System.Windows.Forms.Button btnMail;
+        private System.Windows.Forms.Panel pnlEmailDropdown;
+        private System.Windows.Forms.Label lblEmailHeader;
+        private System.Windows.Forms.FlowLayoutPanel flpEmails;
     }
 }

@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Windows.Forms;
 using CourseGuard.Backend.Models;
+using CourseGuard.Frontend.Theme;
 using CourseGuard.Frontend.UserControls.Teacher;
-
 namespace CourseGuard.Frontend.Forms.Teacher
 {
     public partial class TeacherDashboard : Form
@@ -16,6 +16,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             InitializeComponent();
             HideAllSubMenus();
             AttachHoverEvents();
+            InitializeEmailDropdown();
         }
 
         public TeacherDashboard(UserModel user) : this()
@@ -176,9 +177,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         // --- Thông Báo ---
         private void btnNotifications_Click(object sender, EventArgs e)
         {
-            HideAllSubMenus();
             UpdateTitle("Trung Tâm Thông Báo");
-            // TODO: LoadUserControl(new UC_TeacherNotifications());
             LoadUserControl(new UC_Notification());
         }
 
@@ -196,6 +195,113 @@ namespace CourseGuard.Frontend.Forms.Teacher
             {
                 this.Close();
             }
+        }
+        // ===============================================================
+        //  MAIL DROPDOWN SỰ KIỆN VÀ LOGIC
+        // ===============================================================
+
+        private void InitializeEmailDropdown()
+        {
+            // Add custom paint to pnlEmailDropdown to mimic slightly rounded corners since it's a panel
+            pnlEmailDropdown.Paint += (s, e) =>
+            {
+                Panel pnl = (Panel)s;
+                int radius = 15;
+                System.Drawing.Drawing2D.GraphicsPath path = new System.Drawing.Drawing2D.GraphicsPath();
+                path.AddArc(0, 0, radius, radius, 180, 90);
+                path.AddArc(pnl.Width - radius - 1, 0, radius, radius, 270, 90);
+                path.AddArc(pnl.Width - radius - 1, pnl.Height - radius - 1, radius, radius, 0, 90);
+                path.AddArc(0, pnl.Height - radius - 1, radius, radius, 90, 90);
+                path.CloseFigure();
+                pnl.Region = new System.Drawing.Region(path);
+
+                // Draw a subtle border
+                using (Pen pen = new Pen(ColorPalette.LightMode.Border, 1.5f))
+                {
+                    e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    e.Graphics.DrawPath(pen, path);
+                }
+            };
+
+            // Call async method to load emails without blocking the UI
+            _ = LoadEmailsAsync();
+        }
+
+        private async System.Threading.Tasks.Task LoadEmailsAsync()
+        {
+            try
+            {
+                var gmailHelper = new CourseGuard.Backend.Services.GmailServiceHelper();
+                var emails = await gmailHelper.GetLatestEmailsAsync(10);
+                
+                // Ensure we update UI on the UI thread
+                if (this.InvokeRequired)
+                {
+                    this.Invoke(new Action(() => PopulateEmails(emails)));
+                }
+                else
+                {
+                    PopulateEmails(emails);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (this.InvokeRequired)
+                {
+                    this.Invoke(new Action(() => ShowEmailError(ex.Message)));
+                }
+                else
+                {
+                    ShowEmailError(ex.Message);
+                }
+            }
+        }
+
+        private void PopulateEmails(System.Collections.Generic.List<CourseGuard.Backend.Services.EmailItem> emails)
+        {
+            flpEmails.SuspendLayout();
+            flpEmails.Controls.Clear();
+            foreach (var email in emails)
+            {
+                flpEmails.Controls.Add(new UC_EmailCard(email.Sender, email.Subject, email.Snippet, email.Date));
+            }
+            flpEmails.ResumeLayout();
+        }
+
+        private void ShowEmailError(string errorMsg)
+        {
+            flpEmails.Controls.Clear();
+            var errorLabel = new Label 
+            { 
+                Text = "Could not load emails: " + errorMsg, 
+                AutoSize = true, 
+                ForeColor = Color.Red, 
+                Padding = new Padding(10) 
+            };
+            flpEmails.Controls.Add(errorLabel);
+        }
+
+        private void btnMail_Click(object sender, EventArgs e)
+        {
+            /// <summary>
+            /// Toggle the visibility of the email dropdown panel. 
+            /// Ensure it sits on the absolute top of the Z-index by using BringToFront.
+            /// </summary>
+            pnlEmailDropdown.Visible = !pnlEmailDropdown.Visible;
+            if (pnlEmailDropdown.Visible)
+            {
+                pnlEmailDropdown.BringToFront();
+            }
+        }
+
+        private void btnMail_MouseEnter(object sender, EventArgs e)
+        {
+            btnMail.ForeColor = ColorPalette.LightMode.Hover; // Highlight on hover
+        }
+
+        private void btnMail_MouseLeave(object sender, EventArgs e)
+        {
+            btnMail.ForeColor = ColorPalette.LightMode.TextSecondary; // Revert original color
         }
     }
 }
