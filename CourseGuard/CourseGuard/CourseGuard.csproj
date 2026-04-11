@@ -24,6 +24,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Google.Apis.Gmail.v1" Version="1.73.0.4029" />
+    <PackageReference Include="MailKit" Version="4.15.1" />
     <PackageReference Include="Npgsql" Version="10.0.2" />
     <PackageReference Include="CsvHelper" Version="33.0.1" />
   </ItemGroup>
