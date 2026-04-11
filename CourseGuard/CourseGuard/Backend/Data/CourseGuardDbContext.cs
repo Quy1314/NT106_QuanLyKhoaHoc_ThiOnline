@@ -16,7 +16,7 @@ namespace CourseGuard.Backend.Data
         {
             if (string.IsNullOrWhiteSpace(connectionString))
             {
-                _connectionString = "Host=db.crtiwzjkcmpvyoqgdowv.supabase.co;Port=6543;Database=postgres;Username=postgres;Password=testdatabseuit;SSL Mode=Require;Trust Server Certificate=true;Timeout=15;";
+                _connectionString = "Host=aws-1-ap-northeast-1.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.crtiwzjkcmpvyoqgdowv;Password=testdatabseuit;SSL Mode=Require;Trust Server Certificate=true;Timeout=15;Pooling=false;";
             }
             else
             {

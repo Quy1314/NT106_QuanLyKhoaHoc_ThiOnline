@@ -370,7 +370,7 @@ namespace CourseGuard.Frontend.Forms.Login
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi kết nối bộ máy chủ Database: " + ex.Message, "Lỗi Hệ Thống", MessageBoxButtons.OK, MessageBoxIcon.Stop);
+                MessageBox.Show("Lỗi kết nối bộ máy chủ Database!\n\nChi tiết kỹ thuật:\n" + ex.ToString(), "Lỗi Hệ Thống", MessageBoxButtons.OK, MessageBoxIcon.Stop);
             }
         }
 
