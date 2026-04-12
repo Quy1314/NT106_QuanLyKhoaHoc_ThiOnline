@@ -176,7 +176,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             if (_isFilteringUnread)
             {
                 btnFilterUnread.Text = "✕ Bỏ lọc";
-                btnFilterUnread.BackColor = ColorPalette.Status.WarningLight;
+                btnFilterUnread.BackColor = ColorPalette.Status.ErrorLight;
                 btnFilterUnread.ForeColor = ColorPalette.LightMode.Secondary;
             }
             else
