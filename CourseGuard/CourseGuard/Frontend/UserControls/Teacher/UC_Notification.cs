@@ -114,6 +114,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             // Nút lọc
             StyleSecondaryButton(btnFilterUnread);
             btnFilterUnread.Text = "⚑ Chưa đọc";
+            btnFilterUnread.BackColor = ColorPalette.LightMode.Secondary;
+            btnFilterUnread.ForeColor = ColorPalette.LightMode.Accent;
 
             // ── SplitContainer UI ───────────────────────────────────
             splitContainer.BackColor = ColorPalette.LightMode.Border; // Màu viền ngăn cách
@@ -174,14 +176,14 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             if (_isFilteringUnread)
             {
                 btnFilterUnread.Text = "✕ Bỏ lọc";
-                btnFilterUnread.BackColor = ColorPalette.Status.InfoLight;
-                btnFilterUnread.ForeColor = Color.White;
+                btnFilterUnread.BackColor = ColorPalette.Status.WarningLight;
+                btnFilterUnread.ForeColor = ColorPalette.LightMode.Secondary;
             }
             else
             {
                 btnFilterUnread.Text = "⚑ Chưa đọc";
                 btnFilterUnread.BackColor = ColorPalette.LightMode.Secondary;
-                btnFilterUnread.ForeColor = ColorPalette.LightMode.TextPrimary;
+                btnFilterUnread.ForeColor = ColorPalette.LightMode.Accent;
             }
 
             ApplyFilters();
