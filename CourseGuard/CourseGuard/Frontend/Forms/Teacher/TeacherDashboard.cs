@@ -147,7 +147,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private void btnExamList_Click(object sender, EventArgs e)
         {
             UpdateTitle("Quản lý kỳ thi");
-            // TODO: LoadUserControl(new UC_ExamList());
+            LoadUserControl(new UC_ExamManagement());
         }
 
         // --- Nhóm: Giám Sát & Chấm Điểm ---
