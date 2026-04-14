@@ -40,8 +40,9 @@ namespace CourseGuard.Frontend.Forms.Admin
                         }
 
                         Form? dashboard = null;
+                        string normalizedRole = (user.Role ?? string.Empty).Trim().ToUpperInvariant();
 
-                        switch (user.Role)
+                        switch (normalizedRole)
                         {
                             case "ADMIN":
                                 dashboard = new AdminDashboard(user);

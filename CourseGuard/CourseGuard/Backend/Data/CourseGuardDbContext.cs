@@ -1,4 +1,6 @@
 using System.Data;
+using System.Threading;
+using System.Threading.Tasks;
 using Npgsql;
 using CourseGuard.Backend.Models;
 
@@ -44,6 +46,36 @@ namespace CourseGuard.Backend.Data
 
             using var reader = command.ExecuteReader();
             if (reader.Read())
+            {
+                return new UserModel
+                {
+                    Id = reader.GetInt32(0),
+                    Username = reader.GetString(1),
+                    PasswordHash = reader.GetString(2),
+                    FullName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                    Email = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                    Role = reader.GetString(5),
+                    Status = reader.GetString(6)
+                };
+            }
+
+            return null;
+        }
+
+        public async Task<UserModel?> GetUserByUsernameAsync(string username, CancellationToken cancellationToken = default)
+        {
+            using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            const string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status
+                            FROM USERS u
+                            JOIN ROLES r ON u.role_id = r.id
+                            WHERE LOWER(u.username) = LOWER(@username)";
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@username", username);
+
+            using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
             {
                 return new UserModel
                 {
@@ -303,6 +335,137 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@ip_address", ipAddress ?? "Unknown IP");
 
             command.ExecuteNonQuery();
+        }
+
+        private static void EnsureAuditLogSchema(NpgsqlConnection connection)
+        {
+            const string sql = @"
+                CREATE TABLE IF NOT EXISTS AUDIT_LOGS (
+                    ID SERIAL PRIMARY KEY,
+                    USER_ID INT NULL,
+                    ACTION VARCHAR(200),
+                    TARGET_TABLE VARCHAR(100),
+                    TARGET_ID INT NULL,
+                    CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                ALTER TABLE AUDIT_LOGS ADD COLUMN IF NOT EXISTS DETAILS TEXT;
+                ALTER TABLE AUDIT_LOGS ADD COLUMN IF NOT EXISTS IP_ADDRESS VARCHAR(50);";
+
+            using var cmd = new NpgsqlCommand(sql, connection);
+            cmd.ExecuteNonQuery();
+        }
+
+        public void LogUserActivity(int? userId, string action, string details, string ipAddress)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureAuditLogSchema(connection);
+
+            const string query = @"
+                INSERT INTO AUDIT_LOGS (USER_ID, ACTION, TARGET_TABLE, TARGET_ID, DETAILS, IP_ADDRESS, CREATED_AT)
+                VALUES (@user_id, @action, 'USERS', @target_id, @details, @ip_address, CURRENT_TIMESTAMP)";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId.HasValue ? (object)userId.Value : DBNull.Value);
+            command.Parameters.AddWithValue("@action", action ?? "UNKNOWN");
+            command.Parameters.AddWithValue("@target_id", userId.HasValue ? (object)userId.Value : DBNull.Value);
+            command.Parameters.AddWithValue("@details", details ?? string.Empty);
+            command.Parameters.AddWithValue("@ip_address", ipAddress ?? string.Empty);
+            command.ExecuteNonQuery();
+        }
+
+        public async Task LogUserActivityAsync(int? userId, string action, string details, string ipAddress, CancellationToken cancellationToken = default)
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsureAuditLogSchema(connection);
+
+            const string query = @"
+                INSERT INTO AUDIT_LOGS (USER_ID, ACTION, TARGET_TABLE, TARGET_ID, DETAILS, IP_ADDRESS, CREATED_AT)
+                VALUES (@user_id, @action, 'USERS', @target_id, @details, @ip_address, CURRENT_TIMESTAMP)";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId.HasValue ? (object)userId.Value : DBNull.Value);
+            command.Parameters.AddWithValue("@action", action ?? "UNKNOWN");
+            command.Parameters.AddWithValue("@target_id", userId.HasValue ? (object)userId.Value : DBNull.Value);
+            command.Parameters.AddWithValue("@details", details ?? string.Empty);
+            command.Parameters.AddWithValue("@ip_address", ipAddress ?? string.Empty);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        public AdminDashboardMetricsModel GetAdminDashboardMetrics()
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureAuditLogSchema(connection);
+
+            int ScalarInt(string sql)
+            {
+                using var cmd = new NpgsqlCommand(sql, connection);
+                object? value = cmd.ExecuteScalar();
+                return value == null || value == DBNull.Value ? 0 : Convert.ToInt32(value);
+            }
+
+            return new AdminDashboardMetricsModel
+            {
+                TotalUsers = ScalarInt("SELECT COUNT(*) FROM USERS"),
+                ActiveCourses = ScalarInt("SELECT COUNT(*) FROM COURSES WHERE UPPER(COALESCE(STATUS, '')) = 'ACTIVE'"),
+                PendingRequests = ScalarInt("SELECT COUNT(*) FROM USERS WHERE UPPER(COALESCE(STATUS, '')) = 'PENDING'"),
+                TodayLogins = ScalarInt("SELECT COUNT(*) FROM AUDIT_LOGS WHERE ACTION = 'LOGIN' AND CREATED_AT::date = CURRENT_DATE")
+            };
+        }
+
+        public List<RecentUserActivityModel> GetRecentUserActivities(int limit = 20)
+        {
+            var result = new List<RecentUserActivityModel>();
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureAuditLogSchema(connection);
+
+            const string query = @"
+                SELECT a.CREATED_AT,
+                       COALESCE(u.USERNAME, 'SYSTEM') AS USERNAME,
+                       COALESCE(a.ACTION, '') AS ACTION,
+                       COALESCE(a.IP_ADDRESS, '') AS IP_ADDRESS,
+                       COALESCE(a.DETAILS, '') AS DETAILS
+                FROM AUDIT_LOGS a
+                LEFT JOIN USERS u ON u.ID = a.USER_ID
+                WHERE a.ACTION IN ('LOGIN', 'LOGOUT', 'SIGNUP', 'FORGOT_PASSWORD')
+                ORDER BY a.CREATED_AT DESC
+                LIMIT @limit";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@limit", limit);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(new RecentUserActivityModel
+                {
+                    CreatedAt = reader.GetDateTime(0),
+                    Username = reader.GetString(1),
+                    Action = reader.GetString(2),
+                    IpAddress = reader.GetString(3),
+                    Details = reader.GetString(4)
+                });
+            }
+
+            return result;
+        }
+
+        public async Task LogDeviceActivityAsync(int userId, string deviceName, string ipAddress, CancellationToken cancellationToken = default)
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            const string query = @"INSERT INTO DEVICES (user_id, device_name, ip_address, status, last_active)
+                            VALUES (@user_id, @device_name, @ip_address, 'ACTIVE', CURRENT_TIMESTAMP)
+                            ON CONFLICT (id) DO UPDATE SET last_active = CURRENT_TIMESTAMP, ip_address = @ip_address";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            command.Parameters.AddWithValue("@device_name", deviceName ?? "Unknown Device");
+            command.Parameters.AddWithValue("@ip_address", ipAddress ?? "Unknown IP");
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
         public List<UserModel> SearchUsers(string status, string role)

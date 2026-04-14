@@ -17,6 +17,7 @@ namespace CourseGuard.Frontend.Forms.Student
         {
             currentUser = user;
             InitializeComponent();
+            ApplyAdminLikeTheme();
             SetupButtonEvents();
             InitializeNavigation();
 
@@ -28,13 +29,36 @@ namespace CourseGuard.Frontend.Forms.Student
             btnLogout.Click += (s, e) => 
             { 
                 var authService = new CourseGuard.Backend.Controllers.AuthController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
-                authService.Logout();
+                authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty);
                 this.DialogResult = DialogResult.OK; // Assuming Parent form handles return to Login
                 this.Close(); 
             };
 
             SetActiveButton(btnDashboard);
             LoadUI(_nav[btnDashboard]());
+        }
+
+        private void ApplyAdminLikeTheme()
+        {
+            BackColor = Color.FromArgb(248, 250, 252);
+            sidebar.BackColor = Color.White;
+            mainboard.BackColor = Color.FromArgb(248, 250, 252);
+
+            Button[] menuButtons = { btnDashboard, btnCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile };
+            foreach (var btn in menuButtons)
+            {
+                btn.FlatStyle = FlatStyle.Flat;
+                btn.FlatAppearance.BorderSize = 0;
+                btn.BackColor = Color.Transparent;
+                btn.ForeColor = Color.FromArgb(100, 116, 139);
+                btn.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
+                btn.TextAlign = ContentAlignment.MiddleLeft;
+                btn.Padding = new Padding(16, 0, 0, 0);
+            }
+
+            btnLogout.BackColor = Color.FromArgb(239, 68, 68);
+            btnLogout.ForeColor = Color.White;
+            btnLogout.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
         }
 
         private void SetupButtonEvents()
@@ -90,12 +114,14 @@ namespace CourseGuard.Frontend.Forms.Student
             {
                 if (key == activeBtn)
                 {
-                    key.BackColor = ColorPalette.DarkMode.Active;
+                    key.BackColor = Color.FromArgb(37, 99, 235);
+                    key.ForeColor = Color.White;
                     key.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
                 }
                 else
                 {
                     key.BackColor = Color.Transparent;
+                    key.ForeColor = Color.FromArgb(100, 116, 139);
                     key.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
                 }
             }

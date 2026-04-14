@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
@@ -37,6 +39,24 @@ namespace CourseGuard.Backend.Controllers
             return null;
         }
 
+        public async Task<UserModel?> LoginAsync(string username, string password, CancellationToken cancellationToken = default)
+        {
+            var user = await _dbContext.GetUserByUsernameAsync(username, cancellationToken);
+
+            if (user == null)
+            {
+                return null;
+            }
+
+            string inputHash = PasswordHasher.HashPassword(password);
+            return user.PasswordHash == inputHash ? user : null;
+        }
+
+        public Task<UserModel?> GetUserProfileAsync(string username, CancellationToken cancellationToken = default)
+        {
+            return _dbContext.GetUserByUsernameAsync(username, cancellationToken);
+        }
+
         public void UpdateLoginInfo(int userId, string deviceName, string ipAddress)
         {
             try
@@ -47,6 +67,28 @@ namespace CourseGuard.Backend.Controllers
             {
                 Console.WriteLine($"Logging error: {ex.Message}");
             }
+        }
+
+        public async Task UpdateLoginInfoAsync(int userId, string deviceName, string ipAddress, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await _dbContext.LogDeviceActivityAsync(userId, deviceName, ipAddress, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Logging error: {ex.Message}");
+            }
+        }
+
+        public void LogUserActivity(int? userId, string action, string details, string ipAddress)
+        {
+            _dbContext.LogUserActivity(userId, action, details, ipAddress);
+        }
+
+        public Task LogUserActivityAsync(int? userId, string action, string details, string ipAddress, CancellationToken cancellationToken = default)
+        {
+            return _dbContext.LogUserActivityAsync(userId, action, details, ipAddress, cancellationToken);
         }
 
         public bool RegisterRequest(UserModel user, string password)
@@ -72,6 +114,8 @@ namespace CourseGuard.Backend.Controllers
             try
             {
                 _dbContext.InsertUser(user, passwordHash);
+                var createdUser = _dbContext.GetUserByUsername(user.Username);
+                _dbContext.LogUserActivity(createdUser?.Id, "SIGNUP", $"New signup request: {user.Username}", string.Empty);
                 return true;
             }
             catch (Exception ex)
@@ -88,16 +132,18 @@ namespace CourseGuard.Backend.Controllers
             {
                 // Update status to RESET_REQUEST as requested
                 _dbContext.UpdateUserStatus(user.Id, "RESET_REQUEST");
+                _dbContext.LogUserActivity(user.Id, "FORGOT_PASSWORD", $"Forgot password request: {user.Username}", string.Empty);
                 return true;
             }
             return false;
         }
 
-        public void Logout()
+        public void Logout(int? userId = null, string username = "", string ipAddress = "")
         {
             // In a production app, we would clear JWT tokens or Session state.
             // For this local WinForms app, we log the event and navigate back.
             Console.WriteLine("Auth: User session cleared.");
+            _dbContext.LogUserActivity(userId, "LOGOUT", $"Logout: {username}", ipAddress);
         }
     }
 }

@@ -48,6 +48,16 @@ namespace CourseGuard.Backend.Controllers
             return _dbContext.GetUsersByStatus("PENDING", "RESET_REQUEST");
         }
 
+        public AdminDashboardMetricsModel GetAdminDashboardMetrics()
+        {
+            return _dbContext.GetAdminDashboardMetrics();
+        }
+
+        public List<RecentUserActivityModel> GetRecentAuthActivities(int limit = 20)
+        {
+            return _dbContext.GetRecentUserActivities(limit);
+        }
+
         public bool ApproveUserRequest(int userId, string action)
         {
             // Simplified approval logic

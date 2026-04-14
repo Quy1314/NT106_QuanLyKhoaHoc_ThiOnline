@@ -19,6 +19,8 @@ namespace CourseGuard.Frontend.UserControls.Admin
 {
     public partial class UC_AdminReports : UserControl
     {
+        private bool _hasLoaded;
+
         public UC_AdminReports()
         {
             InitializeComponent();
@@ -32,6 +34,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btnExportCSV.Click += BtnExportCSV_Click;
             btnExportExcel.Click += BtnExportExcel_Click;
             btnExportPDF.Click += BtnExportPDF_Click;
+            this.VisibleChanged += UC_AdminReports_VisibleChanged;
 
             // Initial Load
             cboReportType.Items.Clear();
@@ -42,7 +45,21 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // cboReportType.Items.Add("Danh sách đăng nhập");
 
             cboReportType.SelectedIndex = 0; 
-            LoadData(); 
+        }
+
+        private void UC_AdminReports_VisibleChanged(object? sender, EventArgs e)
+        {
+            if (!Visible || _hasLoaded) return;
+
+            try
+            {
+                LoadData();
+                _hasLoaded = true;
+            }
+            catch (ObjectDisposedException)
+            {
+                // Ignore when control is being disposed during view switching.
+            }
         }
 
         private void BtnFilter_Click(object? sender, EventArgs e)

@@ -10,18 +10,68 @@ namespace CourseGuard.Frontend.Forms.Teacher
     {
         private UserControl activeUserControl = null;
         private int _currentTeacherId = 0;
+        private string _currentTeacherUsername = string.Empty;
 
         public TeacherDashboard()
         {
             InitializeComponent();
+            ApplyAdminLikeTheme();
             HideAllSubMenus();
             AttachHoverEvents();
             InitializeEmailDropdown();
         }
 
+        private void ApplyAdminLikeTheme()
+        {
+            BackColor = Color.FromArgb(248, 250, 252);
+            pnlSidebar.BackColor = Color.White;
+            pnlLogo.BackColor = Color.White;
+            pnlSidebarBottom.BackColor = Color.White;
+            pnlDivider.BackColor = Color.FromArgb(226, 232, 240);
+            pnlTopHeader.BackColor = Color.White;
+            pnlMainboard.BackColor = Color.FromArgb(248, 250, 252);
+            pnlSubMenuCourseDocs.BackColor = Color.FromArgb(248, 250, 252);
+            pnlSubMenuTesting.BackColor = Color.FromArgb(248, 250, 252);
+            pnlSubMenuMonitoring.BackColor = Color.FromArgb(248, 250, 252);
+
+            lblLogoText.ForeColor = Color.FromArgb(15, 23, 42);
+            lblLogoIcon.ForeColor = Color.FromArgb(37, 99, 235);
+            lblEmailHeader.ForeColor = Color.FromArgb(37, 99, 235);
+            btnMail.ForeColor = Color.FromArgb(100, 116, 139);
+
+            StyleButtonTree(pnlSidebar);
+            btnLogout.BackColor = Color.FromArgb(239, 68, 68);
+            btnLogout.ForeColor = Color.White;
+            btnLogout.FlatStyle = FlatStyle.Flat;
+            btnLogout.FlatAppearance.BorderSize = 0;
+        }
+
+        private static void StyleButtonTree(Control root)
+        {
+            foreach (Control c in root.Controls)
+            {
+                if (c is Button b)
+                {
+                    b.FlatStyle = FlatStyle.Flat;
+                    b.FlatAppearance.BorderSize = 0;
+                    if (b.Name != "btnLogout")
+                    {
+                        b.BackColor = Color.Transparent;
+                        b.ForeColor = Color.FromArgb(100, 116, 139);
+                    }
+                }
+
+                if (c.HasChildren)
+                {
+                    StyleButtonTree(c);
+                }
+            }
+        }
+
         public TeacherDashboard(UserModel user) : this()
         {
             _currentTeacherId = user?.Id ?? 0;
+            _currentTeacherUsername = user?.Username ?? string.Empty;
             // Load màn hình Tổng quan mặc định khi vừa mở
             // TODO: LoadUserControl(new UC_TeacherOverview(_currentTeacherId));
             UpdateTitle("Tổng Quan");
@@ -49,7 +99,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         // ---------------------------------------------------------------
         private void AttachHoverEvents()
         {
-            Color colorSidebarHover = ColorTranslator.FromHtml("#1F2937");
+            Color colorSidebarHover = Color.FromArgb(241, 245, 249);
             Color colorLogoutHover  = ColorTranslator.FromHtml("#EF4444");
 
             foreach (Control c in pnlSidebar.Controls)
@@ -105,6 +155,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         {
             HideAllSubMenus();
             UpdateTitle("Tổng Quan");
+            SetActiveMainButton(btnOverview);
             // TODO: LoadUserControl(new UC_TeacherOverview(_currentTeacherId));
         }
 
@@ -178,7 +229,26 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private void btnNotifications_Click(object sender, EventArgs e)
         {
             UpdateTitle("Trung Tâm Thông Báo");
+            SetActiveMainButton(btnNotifications);
             LoadUserControl(new UC_Notification());
+        }
+
+        private void SetActiveMainButton(Button activeButton)
+        {
+            Button[] mainButtons = { btnOverview, btnGroupCourseDocs, btnGroupTesting, btnGroupMonitoring, btnNotifications };
+            foreach (var btn in mainButtons)
+            {
+                if (btn == activeButton)
+                {
+                    btn.BackColor = Color.FromArgb(37, 99, 235);
+                    btn.ForeColor = Color.White;
+                }
+                else
+                {
+                    btn.BackColor = Color.Transparent;
+                    btn.ForeColor = Color.FromArgb(100, 116, 139);
+                }
+            }
         }
 
         // --- Đăng Xuất ---
@@ -193,6 +263,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             if (result == DialogResult.Yes)
             {
+                var authService = new CourseGuard.Backend.Controllers.AuthController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
+                authService.Logout(_currentTeacherId, _currentTeacherUsername);
                 this.Close();
             }
         }
