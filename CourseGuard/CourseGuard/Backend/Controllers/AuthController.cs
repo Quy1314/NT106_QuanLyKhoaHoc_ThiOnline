@@ -14,6 +14,7 @@ namespace CourseGuard.Backend.Controllers
     public class AuthController
     {
         private readonly CourseGuardDbContext _dbContext;
+        public string LastErrorMessage { get; private set; } = string.Empty;
 
         public AuthController(CourseGuardDbContext dbContext)
         {
@@ -93,14 +94,26 @@ namespace CourseGuard.Backend.Controllers
 
         public bool RegisterRequest(UserModel user, string password)
         {
+            LastErrorMessage = string.Empty;
+
             // Simple validation
-            if (string.IsNullOrWhiteSpace(user.Username) || string.IsNullOrWhiteSpace(password))
+            if (string.IsNullOrWhiteSpace(user.Username) || string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(user.Email))
+            {
+                LastErrorMessage = "Thiếu username/email/password.";
                 return false;
+            }
+
+            if (password.Length < 6)
+            {
+                LastErrorMessage = "Mật khẩu phải có ít nhất 6 ký tự.";
+                return false;
+            }
 
             // 1. Manually check for existing username to provide better UX
             if (_dbContext.UserExists(user.Username))
             {
                 Console.WriteLine("User registration failed: Username already exists.");
+                LastErrorMessage = "Tên đăng nhập đã tồn tại trong hệ thống.";
                 return false; 
             }
 
@@ -121,6 +134,7 @@ namespace CourseGuard.Backend.Controllers
             catch (Exception ex)
             {
                 Console.WriteLine($"Registration error: {ex.Message}");
+                LastErrorMessage = $"Lỗi lưu user vào database: {ex.Message}";
                 return false;
             }
         }

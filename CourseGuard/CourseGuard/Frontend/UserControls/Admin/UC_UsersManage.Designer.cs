@@ -140,7 +140,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // 
             cb_StatusFilter.Font = new Font("Segoe UI", 10F);
             cb_StatusFilter.FormattingEnabled = true;
-            cb_StatusFilter.Items.AddRange(new object[] { "ALL", "ACTIVE", "PENDING", "RESET_PASSWORD" });
+            cb_StatusFilter.Items.AddRange(new object[] { "ALL", "ACTIVE", "PENDING", "RESET_REQUEST" });
             cb_StatusFilter.Location = new Point(500, 155);
             cb_StatusFilter.Name = "cb_StatusFilter";
             cb_StatusFilter.Size = new Size(180, 31);

@@ -16,6 +16,63 @@ Runbook này dùng để setup, chạy, và troubleshoot nhanh project `CourseGu
 - Entry point: `CourseGuard/CourseGuard/Frontend/Program.cs`
 - Form điều hướng sau login: `CourseGuard/CourseGuard/Frontend/Forms/Admin/RedirectForm.cs`
 
+## 2.1) Danh sách API (business APIs nội bộ)
+
+Project là WinForms nên không expose HTTP controller; "API" ở đây là các hàm controller/service nội bộ:
+
+- `AuthController`
+  - `Login`, `LoginAsync`
+  - `RegisterRequest`
+  - `ForgotPasswordRequest` (đưa user sang trạng thái `RESET_REQUEST`)
+  - `UpdateLoginInfo`, `LogUserActivity`, `Logout`
+- `UserController`
+  - `SearchUsers`, `GetPendingRequests`
+  - `ApproveUserRequest` (`APPROVE`, `REJECT`, `RESET`)
+  - `ApproveRegistration`
+- `CourseGuardDbContext` (data APIs)
+  - `GetUserByUsername`, `GetUserByUsernameAndEmail`, `GetUserById`
+  - `InsertUser`, `UpdateUserStatus`, `UpdateUserPassword`
+  - `SearchUsers`, `GetUsersByStatus`
+  - `GetAdminDashboardMetrics`, `GetRecentUserActivities`
+- `SupabaseAuthService` (new)
+  - `SendPasswordRecoveryEmail(email)` gọi Supabase Auth endpoint `/auth/v1/recover` để gửi mail reset password.
+
+## 2.2) Database schema (Supabase PostgreSQL)
+
+Schema đầy đủ nằm tại:
+
+- `CourseGuard/CourseGuard/Backend/Database/Scripts/SupabaseSchema.sql`
+
+Các bảng chính:
+
+- Nhóm user/auth: `USERS`, `ROLES`, `PERMISSIONS`, `ROLE_PERMISSIONS`, `DEVICES`, `AUDIT_LOGS`, `NOTIFICATIONS`
+- Nhóm khóa học: `COURSES`, `ENROLLMENTS`, `ONLINE_SESSIONS`, `MATERIALS`, `MESSAGES`
+- Nhóm thi cử: `EXAMS`, `QUESTIONS`, `EXAM_QUESTIONS`, `EXAM_ATTEMPTS`, `ANSWERS`, `VIOLATIONS`
+
+Index đáng chú ý:
+
+- `IDX_USERS_STATUS`
+- `IDX_COURSES_STATUS`
+- `IDX_AUDIT_LOGS_ACTION_CREATED_AT`
+- `IDX_AUDIT_LOGS_USER_ID`
+
+## 2.3) Nơi kết nối database
+
+Connection string hiện đang hardcode trong:
+
+- `CourseGuard/CourseGuard/Backend/Data/CourseGuardDbContext.cs`
+- `CourseGuard/CourseGuard/Backend/Data/DatabaseAction.cs`
+- `CourseGuard/CourseGuard/Backend/Data/ScoreRepository.cs`
+- `CourseGuard/CourseGuard/Backend/Data/NotificationRepository.cs`
+
+## 2.4) Database đặt ở đâu
+
+- Database chạy trên Supabase PostgreSQL (cloud), project ref: `crtiwzjkcmpvyoqgdowv`
+- Endpoint DB đang dùng gồm:
+  - `aws-1-ap-northeast-1.pooler.supabase.com:5432` (pooler)
+  - `db.crtiwzjkcmpvyoqgdowv.supabase.co:6543` (DB host)
+- Dữ liệu không nằm local, app WinForms chỉ kết nối từ client lên Supabase qua internet.
+
 ## 3) Cách chạy nhanh
 
 ### Cách 1 - Dùng Visual Studio / Rider
@@ -51,6 +108,22 @@ dotnet run --project "CourseGuard/CourseGuard/CourseGuard.csproj"
 5. Mở `Reports` và kiểm tra lọc dữ liệu theo ngày
 6. Login role `teacher` và `student`, kiểm tra layout dashboard đồng bộ style admin
 7. Logout và xác nhận quay về màn login
+
+### 5.1) Flow Forgot Password qua Supabase (admin duyệt)
+
+1. User ở màn `Login` chọn `Forgot Password`, nhập `Username + Email`
+2. Hệ thống kiểm tra đúng cặp thông tin và đổi `USERS.STATUS = RESET_REQUEST`
+3. Admin vào `User Management`, lọc theo `RESET_REQUEST`, chọn user và bấm `Phê duyệt`
+4. App gọi Supabase Auth API `/auth/v1/recover` để gửi mail reset password đến Gmail của user
+5. Gửi mail thành công thì hệ thống đổi trạng thái user về `ACTIVE`
+
+Lưu ý cấu hình gửi email:
+
+- App đã có sẵn default `SUPABASE_URL` và `SUPABASE_ANON_KEY` trong `Backend/Services/SupabaseAuthService.cs`, nên chạy local mặc định vẫn dùng được.
+- Nếu muốn đổi project Supabase hoặc xoay key, set biến môi trường:
+  - `SUPABASE_ANON_KEY`
+  - `SUPABASE_URL`
+- Khi có biến môi trường, app sẽ ưu tiên dùng env thay vì default hardcoded.
 
 ## 6) Lưu ý vận hành hiện tại
 
@@ -99,6 +172,16 @@ Kiểm tra:
   - `Backend/Data/CourseGuardDbContext.cs`
   - `Backend/Data/DatabaseAction.cs`
 - Không bị firewall/antivirus chặn outbound
+
+### D. Admin duyệt forgot password nhưng không gửi được mail
+
+Kiểm tra:
+
+- User có email hợp lệ trong cột `USERS.EMAIL`
+- Trạng thái user đúng là `RESET_REQUEST`
+- Nếu có set env thì kiểm tra `SUPABASE_ANON_KEY` còn đúng và chưa hết hiệu lực
+- Nếu không set env, kiểm tra default key/url trong `Backend/Services/SupabaseAuthService.cs`
+- Supabase Auth email template đã bật trong dashboard Supabase
 
 ## 8) Ghi chú bảo mật
 

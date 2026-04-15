@@ -122,7 +122,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
                             }
                             else
                             {
-                                MessageBox.Show("Xóa thất bại (ID: " + userId + ")");
+                                string detail = string.IsNullOrWhiteSpace(_userService.LastErrorMessage)
+                                    ? $"Xóa thất bại (ID: {userId})"
+                                    : _userService.LastErrorMessage;
+                                MessageBox.Show(detail);
                             }
                         }
                     }
@@ -170,18 +173,28 @@ namespace CourseGuard.Frontend.UserControls.Admin
                         int userId = Convert.ToInt32(userIdCell.Value);
                         string currentStatus = statusCell?.Value?.ToString() ?? "";
 
-                        string action = currentStatus == "RESET_PASSWORD" ? "RESET" : "APPROVE";
-                        string confirmMsg = currentStatus == "RESET_PASSWORD" ? 
-                            "Bạn muốn đặt lại mật khẩu mặc định cho user này?" : 
-                            "Bạn muốn kích hoạt tài khoản này?";
+                        bool isResetRequest = currentStatus.Equals("RESET_REQUEST", StringComparison.OrdinalIgnoreCase);
+                        string action = isResetRequest ? "RESET" : "APPROVE";
+                        string confirmMsg = isResetRequest
+                            ? "Bạn muốn gửi email cấp lại mật khẩu cho user này?"
+                            : "Bạn muốn kích hoạt tài khoản này?";
 
                         if (MessageBox.Show(confirmMsg, "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                         {
                             bool success = _userService.ApproveUserRequest(userId, action);
                             if (success)
                             {
-                                MessageBox.Show("Thực hiện thành công!");
+                                MessageBox.Show(action == "RESET"
+                                    ? "Đã gửi mật khẩu tạm thời qua email cho user."
+                                    : "Thực hiện thành công!");
                                 LoadData();
+                            }
+                            else
+                            {
+                                string detail = string.IsNullOrWhiteSpace(_userService.LastErrorMessage)
+                                    ? "Kiểm tra email user hoặc cấu hình SMTP_USER/SMTP_PASS."
+                                    : _userService.LastErrorMessage;
+                                MessageBox.Show($"Thao tác thất bại.\nChi tiết: {detail}");
                             }
                         }
                     }

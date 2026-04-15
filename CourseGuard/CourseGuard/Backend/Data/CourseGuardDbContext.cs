@@ -214,6 +214,65 @@ namespace CourseGuard.Backend.Data
             return null;
         }
 
+        public UserModel? GetUserById(int userId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status
+                                   FROM USERS u
+                                   JOIN ROLES r ON u.role_id = r.id
+                                   WHERE u.id = @id";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@id", userId);
+
+            using var reader = command.ExecuteReader();
+            if (reader.Read())
+            {
+                return new UserModel
+                {
+                    Id = reader.GetInt32(0),
+                    Username = reader.GetString(1),
+                    PasswordHash = reader.GetString(2),
+                    FullName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                    Email = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                    Role = reader.GetString(5),
+                    Status = reader.GetString(6)
+                };
+            }
+
+            return null;
+        }
+
+        public bool DeleteUser(int userId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            // Avoid deleting admin account to keep system operable.
+            const string roleCheckQuery = @"
+                SELECT COALESCE(r.NAME, '')
+                FROM USERS u
+                JOIN ROLES r ON u.ROLE_ID = r.ID
+                WHERE u.ID = @id";
+            using (var roleCmd = new NpgsqlCommand(roleCheckQuery, connection))
+            {
+                roleCmd.Parameters.AddWithValue("@id", userId);
+                string roleName = (roleCmd.ExecuteScalar()?.ToString() ?? string.Empty).ToUpperInvariant();
+                if (roleName == "ADMIN")
+                {
+                    return false;
+                }
+            }
+
+            const string deleteQuery = "DELETE FROM USERS WHERE id = @id";
+            using var command = new NpgsqlCommand(deleteQuery, connection);
+            command.Parameters.AddWithValue("@id", userId);
+            int affectedRows = command.ExecuteNonQuery();
+            return affectedRows > 0;
+        }
+
         public List<CourseModel> GetAllCourses()
         {
             var courses = new List<CourseModel>();

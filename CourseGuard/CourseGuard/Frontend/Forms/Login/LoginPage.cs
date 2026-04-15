@@ -146,6 +146,7 @@ namespace CourseGuard.Frontend.Forms.Login
             lblForgotEmail.Text = "Email";
             lnkBackToLoginFromForgot.Text = "Back to Login";
             lnkBackToLoginFromForgot.LinkColor = Color.FromArgb(37, 99, 235);
+            btnForgotSubmit.Text = "Xác nhận quên mật khẩu";
             btnForgotSubmit.BackColor = Color.FromArgb(37, 99, 235);
             btnForgotSubmit.FlatStyle = FlatStyle.Flat;
             btnForgotSubmit.FlatAppearance.BorderSize = 0;
@@ -437,7 +438,10 @@ namespace CourseGuard.Frontend.Forms.Login
             }
             else
             {
-                MessageBox.Show("Đăng ký thất bại. Tên đăng nhập có thể đã tồn tại.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                string detail = string.IsNullOrWhiteSpace(AuthService.LastErrorMessage)
+                    ? "Đăng ký thất bại. Tên đăng nhập có thể đã tồn tại."
+                    : AuthService.LastErrorMessage;
+                MessageBox.Show(detail, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
