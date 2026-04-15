@@ -34,8 +34,8 @@ Project là WinForms nên không expose HTTP controller; "API" ở đây là cá
   - `InsertUser`, `UpdateUserStatus`, `UpdateUserPassword`
   - `SearchUsers`, `GetUsersByStatus`
   - `GetAdminDashboardMetrics`, `GetRecentUserActivities`
-- `SupabaseAuthService` (new)
-  - `SendPasswordRecoveryEmail(email)` gọi Supabase Auth endpoint `/auth/v1/recover` để gửi mail reset password.
+- `SmtpEmailService`
+  - `SendEmail(toEmail, subject, body)` gửi mail trực tiếp qua SMTP (MailKit).
 
 ## 2.2) Database schema (Supabase PostgreSQL)
 
@@ -109,20 +109,24 @@ dotnet run --project "CourseGuard/CourseGuard/CourseGuard.csproj"
 6. Login role `teacher` và `student`, kiểm tra layout dashboard đồng bộ style admin
 7. Logout và xác nhận quay về màn login
 
-### 5.1) Flow Forgot Password qua Supabase (admin duyệt)
+### 5.1) Flow Forgot Password qua SMTP (admin duyệt)
 
 1. User ở màn `Login` chọn `Forgot Password`, nhập `Username + Email`
 2. Hệ thống kiểm tra đúng cặp thông tin và đổi `USERS.STATUS = RESET_REQUEST`
 3. Admin vào `User Management`, lọc theo `RESET_REQUEST`, chọn user và bấm `Phê duyệt`
-4. App gọi Supabase Auth API `/auth/v1/recover` để gửi mail reset password đến Gmail của user
-5. Gửi mail thành công thì hệ thống đổi trạng thái user về `ACTIVE`
+4. Hệ thống tạo mật khẩu tạm thời, gửi mail trực tiếp qua SMTP đến email user
+5. Gửi mail thành công thì hệ thống hash mật khẩu tạm, cập nhật DB và đổi trạng thái user về `ACTIVE`
 
 Lưu ý cấu hình gửi email:
 
-- App đã có sẵn default `SUPABASE_URL` và `SUPABASE_ANON_KEY` trong `Backend/Services/SupabaseAuthService.cs`, nên chạy local mặc định vẫn dùng được.
-- Nếu muốn đổi project Supabase hoặc xoay key, set biến môi trường:
-  - `SUPABASE_ANON_KEY`
-  - `SUPABASE_URL`
+- App đã có sẵn default SMTP trong `Backend/Services/SmtpEmailService.cs` để chạy local nhanh.
+- Có thể override bằng biến môi trường:
+  - `SMTP_HOST`
+  - `SMTP_PORT`
+  - `SMTP_USER`
+  - `SMTP_PASS`
+  - `SMTP_FROM_EMAIL`
+  - `SMTP_FROM_NAME`
 - Khi có biến môi trường, app sẽ ưu tiên dùng env thay vì default hardcoded.
 
 ## 6) Lưu ý vận hành hiện tại
@@ -179,9 +183,9 @@ Kiểm tra:
 
 - User có email hợp lệ trong cột `USERS.EMAIL`
 - Trạng thái user đúng là `RESET_REQUEST`
-- Nếu có set env thì kiểm tra `SUPABASE_ANON_KEY` còn đúng và chưa hết hiệu lực
-- Nếu không set env, kiểm tra default key/url trong `Backend/Services/SupabaseAuthService.cs`
-- Supabase Auth email template đã bật trong dashboard Supabase
+- Nếu có set env thì kiểm tra `SMTP_USER/SMTP_PASS` còn đúng
+- Nếu không set env, kiểm tra default SMTP trong `Backend/Services/SmtpEmailService.cs`
+- Gmail App Password còn hiệu lực và tài khoản gửi không bị chặn đăng nhập SMTP
 
 ## 8) Ghi chú bảo mật
 
