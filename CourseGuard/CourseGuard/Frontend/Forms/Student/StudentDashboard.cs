@@ -65,6 +65,7 @@ namespace CourseGuard.Frontend.Forms.Student
         {
             // Gán sự kiện click và hover cho tất cả sidebar buttons (trừ Logout)
             Button[] sidebarButtons = { btnDashboard, btnCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile };
+            Color activeColor = Color.FromArgb(37, 99, 235);
 
             foreach (var btn in sidebarButtons)
             {
@@ -72,13 +73,13 @@ namespace CourseGuard.Frontend.Forms.Student
 
                 btn.MouseEnter += (s, e) =>
                 {
-                    if (btn.BackColor != ColorPalette.DarkMode.Active)
-                        btn.BackColor = ColorPalette.DarkMode.Hover;
+                    if (btn.BackColor != activeColor)
+                        btn.BackColor = Color.FromArgb(235, 240, 252);
                 };
 
                 btn.MouseLeave += (s, e) =>
                 {
-                    if (btn.BackColor != ColorPalette.DarkMode.Active)
+                    if (btn.BackColor != activeColor)
                         btn.BackColor = Color.Transparent;
                 };
             }
@@ -122,7 +123,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 {
                     key.BackColor = Color.Transparent;
                     key.ForeColor = Color.FromArgb(100, 116, 139);
-                    key.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+                    key.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
                 }
             }
         }

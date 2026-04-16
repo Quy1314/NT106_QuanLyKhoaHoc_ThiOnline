@@ -45,7 +45,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             var titlePanel = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 64,
+                Height = 80,
                 BackColor = Color.Transparent
             };
 
@@ -64,7 +64,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Font = new Font("Segoe UI", 10F, FontStyle.Regular),
                 ForeColor = Color.FromArgb(100, 116, 139),
                 AutoSize = true,
-                Location = new Point(6, 36)
+                Location = new Point(6, 46)
             };
 
             titlePanel.Controls.Add(title);

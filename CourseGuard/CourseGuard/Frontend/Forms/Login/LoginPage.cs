@@ -313,6 +313,10 @@ namespace CourseGuard.Frontend.Forms.Login
             // Shift Button down
             btnLogin.Top = 328;
 
+            // Center "Don't have an account? Sign Up" link
+            lnkRegister.Left = (LoginPanel.Width - lnkRegister.Width) / 2;
+            lnkRegister.Top = btnLogin.Bottom + 16;
+
             // --- Register Panel Controls ---
             int regPadding = 40;
             int regFullWidth = RegisterPanel.Width - regPadding * 2;
