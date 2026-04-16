@@ -55,8 +55,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
             pnlTopHeader = new Panel();
             btnMail = new Button();
             pnlEmailDropdown = new Panel();
-            lblEmailHeader = new Label();
             flpEmails = new FlowLayoutPanel();
+            lblEmailHeader = new Label();
             pnlSidebar.SuspendLayout();
             pnlSidebarBottom.SuspendLayout();
             pnlSubMenuMonitoring.SuspendLayout();
@@ -225,7 +225,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             btnGroupMonitoring.Padding = new Padding(16, 0, 0, 0);
             btnGroupMonitoring.Size = new Size(260, 48);
             btnGroupMonitoring.TabIndex = 6;
-            btnGroupMonitoring.Text = "⏱️  Giám Sát && Chấm Điểm  ›";
+            btnGroupMonitoring.Text = "⏱️ Giám sát && Chấm thi ›";
             btnGroupMonitoring.TextAlign = ContentAlignment.MiddleLeft;
             btnGroupMonitoring.UseVisualStyleBackColor = false;
             btnGroupMonitoring.Click += btnGroupMonitoring_Click;
@@ -312,7 +312,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             btnGroupTesting.Padding = new Padding(16, 0, 0, 0);
             btnGroupTesting.Size = new Size(260, 48);
             btnGroupTesting.TabIndex = 4;
-            btnGroupTesting.Text = "📝  Khảo Thí && Đề Thi  ›";
+            btnGroupTesting.Text = "📝 Khảo Thí && Đề Thi  ›";
             btnGroupTesting.TextAlign = ContentAlignment.MiddleLeft;
             btnGroupTesting.UseVisualStyleBackColor = false;
             btnGroupTesting.Click += btnGroupTesting_Click;
@@ -380,7 +380,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             btnGroupCourseDocs.Padding = new Padding(16, 0, 0, 0);
             btnGroupCourseDocs.Size = new Size(260, 48);
             btnGroupCourseDocs.TabIndex = 2;
-            btnGroupCourseDocs.Text = "📚  Học Liệu && Lớp Học  ›";
+            btnGroupCourseDocs.Text = "📚 Học Liệu && Lớp Học  ›";
             btnGroupCourseDocs.TextAlign = ContentAlignment.MiddleLeft;
             btnGroupCourseDocs.UseVisualStyleBackColor = false;
             btnGroupCourseDocs.Click += btnGroupCourseDocs_Click;
@@ -439,6 +439,15 @@ namespace CourseGuard.Frontend.Forms.Teacher
             lblLogoText.Text = "CourseGuard";
             lblLogoText.TextAlign = ContentAlignment.MiddleLeft;
             // 
+            // pnlMainboard
+            // 
+            pnlMainboard.BackColor = Color.FromArgb(243, 244, 246);
+            pnlMainboard.Dock = DockStyle.Fill;
+            pnlMainboard.Location = new Point(260, 70);
+            pnlMainboard.Name = "pnlMainboard";
+            pnlMainboard.Size = new Size(1120, 790);
+            pnlMainboard.TabIndex = 1;
+            // 
             // pnlTopHeader
             // 
             pnlTopHeader.BackColor = Color.White;
@@ -480,6 +489,17 @@ namespace CourseGuard.Frontend.Forms.Teacher
             pnlEmailDropdown.TabIndex = 3;
             pnlEmailDropdown.Visible = false;
             // 
+            // flpEmails
+            // 
+            flpEmails.AutoScroll = true;
+            flpEmails.Dock = DockStyle.Fill;
+            flpEmails.FlowDirection = FlowDirection.TopDown;
+            flpEmails.Location = new Point(10, 50);
+            flpEmails.Name = "flpEmails";
+            flpEmails.Size = new Size(330, 360);
+            flpEmails.TabIndex = 1;
+            flpEmails.WrapContents = false;
+            // 
             // lblEmailHeader
             // 
             lblEmailHeader.Dock = DockStyle.Top;
@@ -492,26 +512,6 @@ namespace CourseGuard.Frontend.Forms.Teacher
             lblEmailHeader.TabIndex = 0;
             lblEmailHeader.Text = "Personal Inbox";
             lblEmailHeader.TextAlign = ContentAlignment.MiddleLeft;
-            // 
-            // flpEmails
-            // 
-            flpEmails.AutoScroll = true;
-            flpEmails.Dock = DockStyle.Fill;
-            flpEmails.FlowDirection = FlowDirection.TopDown;
-            flpEmails.Location = new Point(10, 50);
-            flpEmails.Name = "flpEmails";
-            flpEmails.Size = new Size(330, 360);
-            flpEmails.TabIndex = 1;
-            flpEmails.WrapContents = false;
-            // 
-            // pnlMainboard
-            // 
-            pnlMainboard.BackColor = Color.FromArgb(243, 244, 246);
-            pnlMainboard.Dock = DockStyle.Fill;
-            pnlMainboard.Location = new Point(260, 70);
-            pnlMainboard.Name = "pnlMainboard";
-            pnlMainboard.Size = new Size(1120, 790);
-            pnlMainboard.TabIndex = 1;
             // 
             // TeacherDashboard
             // 
