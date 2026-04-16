@@ -41,9 +41,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         /// <summary>Cờ trạng thái: true = đang lọc chỉ hiển thị thông báo chưa đọc.</summary>
         private bool _isFilteringUnread = false;
 
-        /// <summary>ID người dùng hiện tại.</summary>
-        private int _currentUserId = 1; 
-
         /// <summary>Lưu tham chiếu tới ID thông báo đang được chọn xem để highlight thẻ và thao tác</summary>
         private int _selectedNotificationId = -1;
 
@@ -454,7 +451,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
             try
             {
-                _allNotifications = await System.Threading.Tasks.Task.Run(() => _repo.LoadByUserId(_currentUserId));
+                _allNotifications = await System.Threading.Tasks.Task.Run(() => _repo.LoadAll());
 
                 ApplyFilters(); // Đổ dữ liệu lên Grid
 
@@ -463,6 +460,10 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             catch (Exception ex)
             {
                 SetStatus($"❌  Lỗi kết nối DB: {ex.Message}", ColorPalette.Status.ErrorLight);
+                MessageBox.Show(
+                    $"Không thể tải dữ liệu từ Supabase.\n\nChi tiết:\n{ex.Message}",
+                    "Lỗi kết nối",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {

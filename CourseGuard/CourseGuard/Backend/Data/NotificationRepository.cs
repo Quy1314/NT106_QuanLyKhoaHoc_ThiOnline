@@ -2,33 +2,53 @@
  * NotificationRepository.cs
  *
  * Layer: Infrastructure / Data
- * Vai trò: Xử lý tất cả thao tác CSDL liên quan đến thông báo (NOTIFICATIONS).
+ * Vai trò: Xử lý tất cả thao tác CSDL liên quan đến thông báo (notifications).
  *   - LoadByUserId: Lấy tất cả thông báo của một người dùng.
  *   - MarkAsRead: Đánh dấu thông báo là đã đọc.
  *   - Delete: Xóa thông báo.
  * Sử dụng: Được gọi bởi UC_Notification.
  *
  * Lưu ý:
- *   - Chuỗi kết nối sử dụng cùng endpoint Supabase như các Repository khác.
- *   - Hỗ trợ lấy dữ liệu và cập nhật trạng thái (is_read).
+ *   - Sử dụng DatabaseAction cho tất cả thao tác thực thi query.
+ *   - Không trực tiếp khởi tạo kết nối CSDL tại đây.
  */
 using System;
 using System.Collections.Generic;
-using Npgsql;
+using System.Data;
 using CourseGuard.Backend.Models;
 
 namespace CourseGuard.Backend.Data
 {
     /// <summary>
-    /// Lớp Repository quản lý thao tác CSDL cho bảng NOTIFICATIONS.
+    /// Lớp Repository quản lý thao tác CSDL cho bảng notifications.
     /// </summary>
     public class NotificationRepository
     {
-        // --- Chuỗi kết nối Supabase ---
-        // Sử dụng cùng một chuỗi kết nối với phần còn lại của dự án.
-        // Port 6543 là Transaction Pooler của Supabase (phù hợp cho ứng dụng desktop).
-        private readonly string _connectionString =
-            "Host=db.crtiwzjkcmpvyoqgdowv.supabase.co;Port=6543;Database=postgres;Username=postgres;Password=testdatabseuit;SSL Mode=Require;Trust Server Certificate=true;Timeout=15;";
+        /// <summary>
+        /// Lấy tất cả thông báo, sắp xếp theo CreatedAt (mới nhất trước).
+        /// </summary>
+        /// <returns>Danh sách <see cref="NotificationModel"/> sắp xếp theo thời gian tạo (giảm dần).</returns>
+        public List<NotificationModel> LoadAll()
+        {
+            var list = new List<NotificationModel>();
+
+            const string sql = @"
+                SELECT id, user_id, title, content, is_read, created_at
+                FROM notifications
+                ORDER BY created_at DESC;";
+
+            DataTable dt = DatabaseAction.ExecuteQuery(sql, null);
+
+            if (dt != null)
+            {
+                foreach (DataRow row in dt.Rows)
+                {
+                    list.Add(MapRow(row));
+                }
+            }
+
+            return list;
+        }
 
         /// <summary>
         /// Lấy tất cả thông báo của một người dùng, sắp xếp theo CreatedAt (mới nhất trước).
@@ -39,22 +59,25 @@ namespace CourseGuard.Backend.Data
         {
             var list = new List<NotificationModel>();
 
-            using var conn = new NpgsqlConnection(_connectionString);
-            conn.Open();
-
             const string sql = @"
                 SELECT id, user_id, title, content, is_read, created_at
-                FROM NOTIFICATIONS
+                FROM notifications
                 WHERE user_id = @userId
                 ORDER BY created_at DESC;";
 
-            using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@userId", userId);
-            using var reader = cmd.ExecuteReader();
-
-            while (reader.Read())
+            var parameters = new Dictionary<string, (SqlDbType, object)>
             {
-                list.Add(MapRow(reader));
+                { "@userId", (SqlDbType.Int, userId) }
+            };
+
+            DataTable dt = DatabaseAction.ExecuteQuery(sql, parameters);
+
+            if (dt != null)
+            {
+                foreach (DataRow row in dt.Rows)
+                {
+                    list.Add(MapRow(row));
+                }
             }
 
             return list;
@@ -67,17 +90,17 @@ namespace CourseGuard.Backend.Data
         /// <returns>true nếu cập nhật thành công, false nếu không tìm thấy thông báo.</returns>
         public bool MarkAsRead(int notificationId)
         {
-            using var conn = new NpgsqlConnection(_connectionString);
-            conn.Open();
-
             const string sql = @"
-                UPDATE NOTIFICATIONS
+                UPDATE notifications
                 SET is_read = true
                 WHERE id = @id;";
 
-            using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@id", notificationId);
-            int affected = cmd.ExecuteNonQuery();
+            var parameters = new Dictionary<string, (SqlDbType, object)>
+            {
+                { "@id", (SqlDbType.Int, notificationId) }
+            };
+
+            int affected = DatabaseAction.ExecuteNonQuery(sql, parameters);
 
             return affected > 0;
         }
@@ -89,33 +112,33 @@ namespace CourseGuard.Backend.Data
         /// <returns>true nếu xóa thành công, false nếu không tìm thấy thông báo.</returns>
         public bool Delete(int notificationId)
         {
-            using var conn = new NpgsqlConnection(_connectionString);
-            conn.Open();
-
             const string sql = @"
-                DELETE FROM NOTIFICATIONS
+                DELETE FROM notifications
                 WHERE id = @id;";
 
-            using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@id", notificationId);
-            int affected = cmd.ExecuteNonQuery();
+            var parameters = new Dictionary<string, (SqlDbType, object)>
+            {
+                { "@id", (SqlDbType.Int, notificationId) }
+            };
+
+            int affected = DatabaseAction.ExecuteNonQuery(sql, parameters);
 
             return affected > 0;
         }
 
         /// <summary>
-        /// Ánh xạ một hàng từ DataReader vào NotificationModel.
+        /// Ánh xạ một hàng từ DataRow vào NotificationModel.
         /// </summary>
-        private static NotificationModel MapRow(NpgsqlDataReader reader)
+        private static NotificationModel MapRow(DataRow row)
         {
             return new NotificationModel
             {
-                Id = reader.GetInt32(0),                      // id
-                UserId = reader.GetInt32(1),                  // user_id
-                Title = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),      // title
-                Content = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),    // content
-                IsRead = reader.GetBoolean(4),               // is_read
-                CreatedAt = reader.GetDateTime(5)            // created_at
+                Id = Convert.ToInt32(row["id"]),
+                UserId = Convert.ToInt32(row["user_id"]),
+                Title = row["title"] == DBNull.Value ? string.Empty : row["title"].ToString(),
+                Content = row["content"] == DBNull.Value ? string.Empty : row["content"].ToString(),
+                IsRead = Convert.ToBoolean(row["is_read"]),
+                CreatedAt = Convert.ToDateTime(row["created_at"])
             };
         }
     }
