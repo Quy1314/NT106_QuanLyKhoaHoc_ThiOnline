@@ -338,3 +338,15 @@ VALUES
     1, -- role ADMIN
     'active'
 );
+
+-- TẠO STUDENT ACCOUNT (cho team test)
+INSERT INTO users (username, password_hash, full_name, email, role_id, status)
+VALUES 
+(
+    'student',
+    '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9',
+    'Student Test',
+    'student@courseguard.local',
+    3, -- role STUDENT
+    'active'
+);

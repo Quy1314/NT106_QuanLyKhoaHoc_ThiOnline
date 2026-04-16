@@ -562,5 +562,36 @@ namespace CourseGuard.Backend.Data
 
             return users;
         }
+
+        /// <summary>
+        /// Ensures default seed accounts exist in the database.
+        /// Safe to call multiple times (uses ON CONFLICT DO NOTHING).
+        /// </summary>
+        public void EnsureSeedAccounts()
+        {
+            try
+            {
+                using var connection = CreateConnection();
+                connection.Open();
+
+                // Ensure "student" account exists (password: admin123, role: STUDENT)
+                const string seedQuery = @"
+                    INSERT INTO USERS (username, password_hash, full_name, email, role_id, status)
+                    SELECT @username, @password_hash, @full_name, @email, 
+                           (SELECT id FROM ROLES WHERE UPPER(name) = 'STUDENT'), 'active'
+                    WHERE NOT EXISTS (SELECT 1 FROM USERS WHERE LOWER(username) = LOWER(@username))";
+
+                using var command = new NpgsqlCommand(seedQuery, connection);
+                command.Parameters.AddWithValue("@username", "student");
+                command.Parameters.AddWithValue("@password_hash", "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9");
+                command.Parameters.AddWithValue("@full_name", "Student Test");
+                command.Parameters.AddWithValue("@email", "student@courseguard.local");
+                command.ExecuteNonQuery();
+            }
+            catch
+            {
+                // Silently ignore seed errors to avoid blocking app startup
+            }
+        }
     }
 }
