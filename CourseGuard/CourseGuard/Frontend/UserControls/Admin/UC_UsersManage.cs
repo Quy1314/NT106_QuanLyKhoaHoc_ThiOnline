@@ -24,6 +24,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
             InitializeComponent();
             _userService = new CourseGuard.Backend.Controllers.UserController(new CourseGuardDbContext(""));
 
+            // Bo góc + cursor tay cho tất cả buttons
+            CourseGuard.Frontend.Theme.RoundedButtonHelper.Apply(10,
+                btn_insert, btn_delete, btn_search, btn_Approve);
+
             // Default: Empty grid, only load on search
             dataGridView1.ReadOnly = true;
             dataGridView1.AllowUserToAddRows = false;

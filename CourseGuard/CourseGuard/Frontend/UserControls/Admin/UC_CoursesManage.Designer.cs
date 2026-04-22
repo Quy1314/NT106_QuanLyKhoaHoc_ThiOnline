@@ -315,7 +315,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // 
             lblEndDate.AutoSize = true;
             lblEndDate.Font = new Font("Segoe UI", 9F);
-            lblEndDate.Location = new Point(20, 265);
+            lblEndDate.Location = new Point(11, 265);
             lblEndDate.Name = "lblEndDate";
             lblEndDate.Size = new Size(66, 20);
             lblEndDate.TabIndex = 6;

@@ -28,171 +28,175 @@ namespace CourseGuard.Frontend.Forms.Admin
         /// </summary>
         private void InitializeComponent()
         {
-            Sidebar = new Panel();
-            btn_Reports = new Button();
-            btn_Courses = new Button();
-            btn_users = new Button();
-            btn_Dashboard = new Button();
-            btn_logout = new Button();
-            LOGO = new Label();
-            Header = new Panel();
-            Mainboard = new Panel();
-            Sidebar.SuspendLayout();
-            SuspendLayout();
+            this.sidebar = new System.Windows.Forms.Panel();
+            this.mainboard = new System.Windows.Forms.Panel();
+            this.btnDashboard = new System.Windows.Forms.Button();
+            this.btnUsers = new System.Windows.Forms.Button();
+            this.btnCourses = new System.Windows.Forms.Button();
+            this.btnReports = new System.Windows.Forms.Button();
+            this.btnDeviceMonitoring = new System.Windows.Forms.Button();
+            this.btnAuditLogs = new System.Windows.Forms.Button();
+            this.btnSettings = new System.Windows.Forms.Button();
+            this.btnLogout = new System.Windows.Forms.Button();
+            this.sidebar.SuspendLayout();
+            this.SuspendLayout();
             // 
-            // Sidebar
+            // sidebar
             // 
-            Sidebar.BackColor = Color.FromArgb(17, 24, 39);
-            Sidebar.Controls.Add(btn_Reports);
-            Sidebar.Controls.Add(btn_Courses);
-            Sidebar.Controls.Add(btn_users);
-            Sidebar.Controls.Add(btn_Dashboard);
-            Sidebar.Controls.Add(btn_logout);
-            Sidebar.Controls.Add(LOGO);
-            Sidebar.Dock = DockStyle.Left;
-            Sidebar.Location = new Point(0, 0);
-            Sidebar.Name = "Sidebar";
-            Sidebar.Size = new Size(250, 450);
-            Sidebar.TabIndex = 0;
+            this.sidebar.BackColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.Secondary;
+            this.sidebar.Controls.Add(this.btnLogout);
+            this.sidebar.Controls.Add(this.btnDashboard);
+            this.sidebar.Controls.Add(this.btnUsers);
+            this.sidebar.Controls.Add(this.btnCourses);
+            this.sidebar.Controls.Add(this.btnReports);
+            this.sidebar.Controls.Add(this.btnDeviceMonitoring);
+            this.sidebar.Controls.Add(this.btnAuditLogs);
+            this.sidebar.Controls.Add(this.btnSettings);
+            this.sidebar.Dock = System.Windows.Forms.DockStyle.Left;
+            this.sidebar.Location = new System.Drawing.Point(0, 0);
+            this.sidebar.Name = "sidebar";
+            this.sidebar.Size = new System.Drawing.Size(200, 600);
+            this.sidebar.TabIndex = 0;
             // 
-            // btn_Reports
+            // mainboard
             // 
-            btn_Reports.BackColor = Color.Transparent;
-            btn_Reports.FlatAppearance.BorderSize = 0;
-            btn_Reports.FlatStyle = FlatStyle.Flat;
-            btn_Reports.Font = new Font("Segoe UI", 11F);
-            btn_Reports.ForeColor = Color.FromArgb(156, 163, 175);
-            btn_Reports.Location = new Point(12, 245);
-            btn_Reports.Name = "btn_Reports";
-            btn_Reports.Padding = new Padding(10, 0, 0, 0);
-            btn_Reports.Size = new Size(226, 45);
-            btn_Reports.TabIndex = 6;
-            btn_Reports.Text = "📊 Reports";
-            btn_Reports.TextAlign = ContentAlignment.MiddleLeft;
-            btn_Reports.UseVisualStyleBackColor = true;
-            btn_Reports.Click += Sidebar_Btn_Click;
+            this.mainboard.BackColor = CourseGuard.Frontend.Theme.ColorPalette.LightMode.Base;
+            this.mainboard.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.mainboard.Location = new System.Drawing.Point(200, 0);
+            this.mainboard.Name = "mainboard";
+            this.mainboard.Size = new System.Drawing.Size(800, 600);
+            this.mainboard.TabIndex = 1;
             // 
-            // btn_Courses
+            // btnDashboard
             // 
-            btn_Courses.BackColor = Color.Transparent;
-            btn_Courses.FlatAppearance.BorderSize = 0;
-            btn_Courses.FlatStyle = FlatStyle.Flat;
-            btn_Courses.Font = new Font("Segoe UI", 11F);
-            btn_Courses.ForeColor = Color.FromArgb(156, 163, 175);
-            btn_Courses.Location = new Point(12, 190);
-            btn_Courses.Name = "btn_Courses";
-            btn_Courses.Padding = new Padding(10, 0, 0, 0);
-            btn_Courses.Size = new Size(226, 45);
-            btn_Courses.TabIndex = 5;
-            btn_Courses.Text = "📚 Courses Manage";
-            btn_Courses.TextAlign = ContentAlignment.MiddleLeft;
-            btn_Courses.UseVisualStyleBackColor = true;
-            btn_Courses.Click += Sidebar_Btn_Click;
+            this.btnDashboard.BackColor = System.Drawing.Color.Transparent;
+            this.btnDashboard.FlatAppearance.BorderSize = 0;
+            this.btnDashboard.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnDashboard.ForeColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.TextPrimary;
+            this.btnDashboard.Location = new System.Drawing.Point(0, 0);
+            this.btnDashboard.Name = "btnDashboard";
+            this.btnDashboard.Size = new System.Drawing.Size(200, 50);
+            this.btnDashboard.TabIndex = 0;
+            this.btnDashboard.Text = "Dashboard";
+            this.btnDashboard.UseVisualStyleBackColor = false;
             // 
-            // btn_users
+            // btnUsers
             // 
-            btn_users.BackColor = Color.Transparent;
-            btn_users.FlatAppearance.BorderSize = 0;
-            btn_users.FlatStyle = FlatStyle.Flat;
-            btn_users.Font = new Font("Segoe UI", 11F);
-            btn_users.ForeColor = Color.FromArgb(156, 163, 175);
-            btn_users.Location = new Point(12, 135);
-            btn_users.Name = "btn_users";
-            btn_users.Padding = new Padding(10, 0, 0, 0);
-            btn_users.Size = new Size(226, 45);
-            btn_users.TabIndex = 4;
-            btn_users.Text = "👥 Users Manage";
-            btn_users.TextAlign = ContentAlignment.MiddleLeft;
-            btn_users.UseVisualStyleBackColor = true;
-            btn_users.Click += Sidebar_Btn_Click;
+            this.btnUsers.BackColor = System.Drawing.Color.Transparent;
+            this.btnUsers.FlatAppearance.BorderSize = 0;
+            this.btnUsers.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnUsers.ForeColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.TextPrimary;
+            this.btnUsers.Location = new System.Drawing.Point(0, 50);
+            this.btnUsers.Name = "btnUsers";
+            this.btnUsers.Size = new System.Drawing.Size(200, 50);
+            this.btnUsers.TabIndex = 1;
+            this.btnUsers.Text = "User Management";
+            this.btnUsers.UseVisualStyleBackColor = false;
             // 
-            // btn_Dashboard
+            // btnCourses
             // 
-            btn_Dashboard.BackColor = Color.FromArgb(37, 99, 235);
-            btn_Dashboard.FlatAppearance.BorderSize = 0;
-            btn_Dashboard.FlatStyle = FlatStyle.Flat;
-            btn_Dashboard.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-            btn_Dashboard.ForeColor = Color.White;
-            btn_Dashboard.Location = new Point(12, 80);
-            btn_Dashboard.Name = "btn_Dashboard";
-            btn_Dashboard.Padding = new Padding(10, 0, 0, 0);
-            btn_Dashboard.Size = new Size(226, 45);
-            btn_Dashboard.TabIndex = 3;
-            btn_Dashboard.Text = "🏠 Dashboard";
-            btn_Dashboard.TextAlign = ContentAlignment.MiddleLeft;
-            btn_Dashboard.UseVisualStyleBackColor = false;
-            btn_Dashboard.Click += Sidebar_Btn_Click;
+            this.btnCourses.BackColor = System.Drawing.Color.Transparent;
+            this.btnCourses.FlatAppearance.BorderSize = 0;
+            this.btnCourses.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnCourses.ForeColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.TextPrimary;
+            this.btnCourses.Location = new System.Drawing.Point(0, 100);
+            this.btnCourses.Name = "btnCourses";
+            this.btnCourses.Size = new System.Drawing.Size(200, 50);
+            this.btnCourses.TabIndex = 2;
+            this.btnCourses.Text = "Course Management";
+            this.btnCourses.UseVisualStyleBackColor = false;
             // 
-            // btn_logout
+            // btnReports
             // 
-            btn_logout.BackColor = Color.FromArgb(220, 53, 69);
-            btn_logout.Dock = DockStyle.Bottom;
-            btn_logout.FlatAppearance.BorderSize = 0;
-            btn_logout.FlatStyle = FlatStyle.Flat;
-            btn_logout.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-            btn_logout.ForeColor = Color.White;
-            btn_logout.Location = new Point(0, 405);
-            btn_logout.Name = "btn_logout";
-            btn_logout.Size = new Size(250, 45);
-            btn_logout.TabIndex = 7;
-            btn_logout.Text = "🚪 Logout";
-            btn_logout.UseVisualStyleBackColor = false;
+            this.btnReports.BackColor = System.Drawing.Color.Transparent;
+            this.btnReports.FlatAppearance.BorderSize = 0;
+            this.btnReports.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnReports.ForeColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.TextPrimary;
+            this.btnReports.Location = new System.Drawing.Point(0, 150);
+            this.btnReports.Name = "btnReports";
+            this.btnReports.Size = new System.Drawing.Size(200, 50);
+            this.btnReports.TabIndex = 3;
+            this.btnReports.Text = "Reports";
+            this.btnReports.UseVisualStyleBackColor = false;
             // 
-            // LOGO
+            // btnDeviceMonitoring
             // 
-            LOGO.Font = new Font("Segoe UI", 14F, FontStyle.Bold);
-            LOGO.ForeColor = Color.White;
-            LOGO.Location = new Point(0, 20);
-            LOGO.Margin = new Padding(4, 0, 4, 0);
-            LOGO.Name = "LOGO";
-            LOGO.Size = new Size(250, 40);
-            LOGO.TabIndex = 2;
-            LOGO.Text = "COURSE GUARD";
-            LOGO.TextAlign = ContentAlignment.MiddleCenter;
+            this.btnDeviceMonitoring.BackColor = System.Drawing.Color.Transparent;
+            this.btnDeviceMonitoring.FlatAppearance.BorderSize = 0;
+            this.btnDeviceMonitoring.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnDeviceMonitoring.ForeColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.TextPrimary;
+            this.btnDeviceMonitoring.Location = new System.Drawing.Point(0, 200);
+            this.btnDeviceMonitoring.Name = "btnDeviceMonitoring";
+            this.btnDeviceMonitoring.Size = new System.Drawing.Size(200, 50);
+            this.btnDeviceMonitoring.TabIndex = 4;
+            this.btnDeviceMonitoring.Text = "Device Monitoring";
+            this.btnDeviceMonitoring.UseVisualStyleBackColor = false;
             // 
-            // Header
+            // btnAuditLogs
             // 
-            Header.BackColor = Color.White;
-            Header.Dock = DockStyle.Top;
-            Header.Location = new Point(250, 0);
-            Header.Name = "Header";
-            Header.Size = new Size(550, 60);
-            Header.TabIndex = 1;
+            this.btnAuditLogs.BackColor = System.Drawing.Color.Transparent;
+            this.btnAuditLogs.FlatAppearance.BorderSize = 0;
+            this.btnAuditLogs.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnAuditLogs.ForeColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.TextPrimary;
+            this.btnAuditLogs.Location = new System.Drawing.Point(0, 250);
+            this.btnAuditLogs.Name = "btnAuditLogs";
+            this.btnAuditLogs.Size = new System.Drawing.Size(200, 50);
+            this.btnAuditLogs.TabIndex = 5;
+            this.btnAuditLogs.Text = "Audit Logs";
+            this.btnAuditLogs.UseVisualStyleBackColor = false;
             // 
-            // Mainboard
+            // btnSettings
             // 
-            Mainboard.BackColor = Color.FromArgb(242, 244, 248);
-            Mainboard.Dock = DockStyle.Fill;
-            Mainboard.Location = new Point(250, 60);
-            Mainboard.Name = "Mainboard";
-            Mainboard.Size = new Size(550, 390);
-            Mainboard.TabIndex = 2;
-            Mainboard.Paint += Mainboard_Paint;
+            this.btnSettings.BackColor = System.Drawing.Color.Transparent;
+            this.btnSettings.FlatAppearance.BorderSize = 0;
+            this.btnSettings.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnSettings.ForeColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.TextPrimary;
+            this.btnSettings.Location = new System.Drawing.Point(0, 300);
+            this.btnSettings.Name = "btnSettings";
+            this.btnSettings.Size = new System.Drawing.Size(200, 50);
+            this.btnSettings.TabIndex = 6;
+            this.btnSettings.Text = "Settings";
+            this.btnSettings.UseVisualStyleBackColor = false;
+            // 
+            // btnLogout
+            // 
+            this.btnLogout.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(220)))), ((int)(((byte)(53)))), ((int)(((byte)(69)))));
+            this.btnLogout.Dock = System.Windows.Forms.DockStyle.Bottom;
+            this.btnLogout.FlatAppearance.BorderSize = 0;
+            this.btnLogout.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnLogout.ForeColor = System.Drawing.Color.White;
+            this.btnLogout.Location = new System.Drawing.Point(0, 550);
+            this.btnLogout.Name = "btnLogout";
+            this.btnLogout.Size = new System.Drawing.Size(200, 50);
+            this.btnLogout.TabIndex = 7;
+            this.btnLogout.Text = "Logout";
+            this.btnLogout.UseVisualStyleBackColor = false;
             // 
             // AdminDashboard
             // 
-            AutoScaleDimensions = new SizeF(8F, 20F);
-            AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(800, 450);
-            Controls.Add(Mainboard);
-            Controls.Add(Header);
-            Controls.Add(Sidebar);
-            Name = "AdminDashboard";
-            Text = "AdminDashboard";
-            Sidebar.ResumeLayout(false);
-            ResumeLayout(false);
+            this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 20F);
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.ClientSize = new System.Drawing.Size(1000, 600);
+            this.Controls.Add(this.mainboard);
+            this.Controls.Add(this.sidebar);
+            this.Name = "AdminDashboard";
+            this.Text = "Admin Dashboard";
+            this.WindowState = System.Windows.Forms.FormWindowState.Maximized;
+            this.sidebar.ResumeLayout(false);
+            this.ResumeLayout(false);
         }
 
         #endregion
 
-        private Panel Sidebar;
-        private Panel Header;
-        private Panel Mainboard;
-        private Label LOGO;
-        private Button btn_Reports;
-        private Button btn_Courses;
-        private Button btn_users;
-        private Button btn_Dashboard;
-        private Button btn_logout;
+        private System.Windows.Forms.Panel sidebar;
+        private System.Windows.Forms.Panel mainboard;
+        private System.Windows.Forms.Button btnDashboard;
+        private System.Windows.Forms.Button btnUsers;
+        private System.Windows.Forms.Button btnCourses;
+        private System.Windows.Forms.Button btnReports;
+        private System.Windows.Forms.Button btnDeviceMonitoring;
+        private System.Windows.Forms.Button btnAuditLogs;
+        private System.Windows.Forms.Button btnSettings;
+        private System.Windows.Forms.Button btnLogout;
     }
 }

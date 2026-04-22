@@ -24,6 +24,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
         public UC_AdminReports()
         {
             InitializeComponent();
+
+            // Bo góc + cursor tay cho tất cả buttons
+            CourseGuard.Frontend.Theme.RoundedButtonHelper.Apply(10,
+                btnFilter, btnExportCSV, btnExportExcel, btnExportPDF);
             
             // Default Date Range: Last 30 days
             dtpStartDate.Value = DateTime.Now.AddDays(-30);

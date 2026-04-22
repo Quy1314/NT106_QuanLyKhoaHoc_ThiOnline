@@ -32,6 +32,11 @@ namespace CourseGuard.Frontend.Forms.Login
         {
             InitializeComponent();
             CustomizeUI(); // Apply modern UI styles
+
+            // Bo góc + cursor tay cho tất cả buttons
+            CourseGuard.Frontend.Theme.RoundedButtonHelper.Apply(12,
+                btnLogin, btnRegisterSubmit, btnForgotSubmit);
+
             this.Load += LoginPage_Load;
             this.Resize += LoginPage_Resize;
             AttachEvents();

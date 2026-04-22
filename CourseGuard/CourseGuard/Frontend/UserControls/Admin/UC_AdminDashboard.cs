@@ -312,11 +312,13 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Margin = new Padding(8),
                 Font = new Font("Segoe UI", 10F, FontStyle.Bold),
                 TextAlign = ContentAlignment.MiddleCenter,
-                UseVisualStyleBackColor = false
+                UseVisualStyleBackColor = false,
+                Cursor = Cursors.Hand
             };
             button.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
             button.FlatAppearance.BorderSize = 1;
             button.Click += (_, _) => QuickActionRequested?.Invoke(target);
+
             return button;
         }
 

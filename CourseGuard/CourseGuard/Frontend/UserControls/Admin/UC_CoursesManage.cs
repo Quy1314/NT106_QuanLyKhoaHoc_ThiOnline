@@ -27,7 +27,12 @@ namespace CourseGuard.Frontend.UserControls.Admin
         public UC_CoursesManage()
         {
             InitializeComponent();
-            
+
+            // Bo góc + cursor tay cho tất cả buttons
+            CourseGuard.Frontend.Theme.RoundedButtonHelper.Apply(10,
+                btnAddCourse, btnUpdateCourse, btnDeleteCourse,
+                btnAddStudent, btnApproveStudent, btnRemoveStudent);
+
             _userService = new CourseGuard.Backend.Controllers.UserController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
             _courseService = new CourseGuard.Backend.Controllers.CourseController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
 
