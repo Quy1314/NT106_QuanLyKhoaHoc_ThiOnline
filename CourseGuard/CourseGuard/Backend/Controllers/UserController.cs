@@ -4,29 +4,39 @@ using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Services;
+using Npgsql;
 namespace CourseGuard.Backend.Controllers
 {
     public class UserController
     {
         private readonly CourseGuardDbContext _dbContext;
-        private readonly SmtpEmailService _smtpEmailService;
         public string LastErrorMessage { get; private set; } = string.Empty;
 
         public UserController(CourseGuardDbContext dbContext)
         {
             _dbContext = dbContext;
-            _smtpEmailService = new SmtpEmailService();
         }
 
         // Placeholder methods to replace the former IUserService
         public List<UserModel> SearchUsers(string status, string role)
         {
+            if (!UserSessionContext.IsAdmin())
+            {
+                LastErrorMessage = "Bạn không có quyền truy cập danh sách người dùng.";
+                return new List<UserModel>();
+            }
             return _dbContext.SearchUsers(status, role);
         }
 
         public List<UserModel> GetByRole(string role)
         {
-            return new List<UserModel>();
+            if (!UserSessionContext.IsAdmin())
+            {
+                LastErrorMessage = "Bạn không có quyền xem dữ liệu theo vai trò.";
+                return new List<UserModel>();
+            }
+
+            return _dbContext.GetUsersByRole(role);
         }
 
         public object? GetDashboardData()
@@ -36,13 +46,57 @@ namespace CourseGuard.Backend.Controllers
 
         public string AddUser(UserModel user, string password)
         {
-            // TODO: Implement direct DbContext add logic
-            return "Success";
+            LastErrorMessage = string.Empty;
+            if (!UserSessionContext.IsAdmin())
+            {
+                return "Forbidden";
+            }
+
+            if (string.IsNullOrWhiteSpace(user.Username) ||
+                string.IsNullOrWhiteSpace(user.Email) ||
+                string.IsNullOrWhiteSpace(password) ||
+                string.IsNullOrWhiteSpace(user.Role))
+            {
+                return "ValidationError";
+            }
+
+            if (password.Length < 6)
+            {
+                return "ValidationError";
+            }
+
+            user.Status = string.IsNullOrWhiteSpace(user.Status) ? "ACTIVE" : user.Status.ToUpperInvariant();
+            user.Role = user.Role.ToUpperInvariant();
+
+            try
+            {
+                string passwordHash = PasswordHasher.HashPassword(password);
+                _dbContext.InsertUser(user, passwordHash);
+                var createdUser = _dbContext.GetUserByUsername(user.Username);
+                _dbContext.LogUserActivity(UserSessionContext.CurrentUserId, "ADMIN_ADD_USER", $"Created user: {user.Username}", string.Empty);
+                return createdUser == null ? "UnexpectedError" : "Success";
+            }
+            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                LastErrorMessage = "Tên đăng nhập hoặc email đã tồn tại.";
+                return "Conflict";
+            }
+            catch (Exception ex)
+            {
+                LastErrorMessage = ex.Message;
+                return "UnexpectedError";
+            }
         }
 
         public bool DeleteUser(int userId)
         {
             LastErrorMessage = string.Empty;
+            if (!UserSessionContext.IsAdmin())
+            {
+                LastErrorMessage = "Bạn không có quyền xóa người dùng.";
+                return false;
+            }
+
             try
             {
                 bool deleted = _dbContext.DeleteUser(userId);
@@ -78,6 +132,11 @@ namespace CourseGuard.Backend.Controllers
         public bool ApproveUserRequest(int userId, string action)
         {
             LastErrorMessage = string.Empty;
+            if (!UserSessionContext.IsAdmin())
+            {
+                LastErrorMessage = "Bạn không có quyền duyệt yêu cầu người dùng.";
+                return false;
+            }
 
             // Simplified approval logic
             if (action == "APPROVE")
@@ -101,7 +160,8 @@ namespace CourseGuard.Backend.Controllers
                     "Vui lòng đăng nhập và đổi mật khẩu ngay sau khi vào hệ thống.\n\n" +
                     "CourseGuard Admin";
 
-                bool emailSent = _smtpEmailService.SendEmail(
+                var smtpEmailService = new SmtpEmailService();
+                bool emailSent = smtpEmailService.SendEmail(
                     user.Email,
                     "CourseGuard - Cap lai mat khau",
                     emailBody,
@@ -136,6 +196,12 @@ namespace CourseGuard.Backend.Controllers
 
         public bool ApproveRegistration(int userId)
         {
+            if (!UserSessionContext.IsAdmin())
+            {
+                LastErrorMessage = "Bạn không có quyền kích hoạt tài khoản.";
+                return false;
+            }
+
             try
             {
                 _dbContext.UpdateUserStatus(userId, "ACTIVE");
@@ -149,6 +215,12 @@ namespace CourseGuard.Backend.Controllers
 
         public bool ResetUserPassword(int userId, string newPassword)
         {
+            if (!UserSessionContext.IsAdmin())
+            {
+                LastErrorMessage = "Bạn không có quyền đặt lại mật khẩu.";
+                return false;
+            }
+
             try
             {
                 string passwordHash = PasswordHasher.HashPassword(newPassword);

@@ -1,6 +1,7 @@
 using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
+using CourseGuard.Backend.Config;
 using Npgsql;
 using CourseGuard.Backend.Models;
 
@@ -18,7 +19,10 @@ namespace CourseGuard.Backend.Data
         {
             if (string.IsNullOrWhiteSpace(connectionString))
             {
-                _connectionString = "Host=aws-1-ap-northeast-1.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.crtiwzjkcmpvyoqgdowv;Password=testdatabseuit;SSL Mode=Require;Trust Server Certificate=true;Timeout=15;Pooling=false;";
+                _connectionString = AppEnvironment.GetRequired(
+                    "COURSEGUARD_DB_CONNECTION",
+                    "SUPABASE_DB_CONNECTION",
+                    "CONNECTION_STRING");
             }
             else
             {
@@ -273,6 +277,39 @@ namespace CourseGuard.Backend.Data
             return affectedRows > 0;
         }
 
+        public List<UserModel> GetUsersByRole(string role)
+        {
+            var users = new List<UserModel>();
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status
+                                   FROM USERS u
+                                   JOIN ROLES r ON u.role_id = r.id
+                                   WHERE UPPER(r.name) = UPPER(@role)
+                                   ORDER BY u.id DESC";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@role", role);
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                users.Add(new UserModel
+                {
+                    Id = reader.GetInt32(0),
+                    Username = reader.GetString(1),
+                    PasswordHash = reader.GetString(2),
+                    FullName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                    Email = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                    Role = reader.GetString(5),
+                    Status = reader.GetString(6)
+                });
+            }
+
+            return users;
+        }
+
         public List<CourseModel> GetAllCourses()
         {
             var courses = new List<CourseModel>();
@@ -354,20 +391,24 @@ namespace CourseGuard.Backend.Data
             command.ExecuteNonQuery();
         }
 
-        public void EnrollStudent(int courseId, int studentId)
+        public bool EnrollStudent(int courseId, int studentId)
         {
             using var connection = CreateConnection();
             connection.Open();
 
-            string query = @"INSERT INTO ENROLLMENTS (course_id, student_id, status) 
-                            VALUES (@course_id, @student_id, 'ACTIVE')
-                            ON CONFLICT DO NOTHING";
-            
+            const string query = @"
+                WITH existing AS (
+                    SELECT 1 FROM ENROLLMENTS WHERE course_id = @course_id AND student_id = @student_id
+                )
+                INSERT INTO ENROLLMENTS (course_id, student_id, status)
+                SELECT @course_id, @student_id, 'ACTIVE'
+                WHERE NOT EXISTS (SELECT 1 FROM existing)";
+
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@course_id", courseId);
             command.Parameters.AddWithValue("@student_id", studentId);
 
-            command.ExecuteNonQuery();
+            return command.ExecuteNonQuery() > 0;
         }
 
         public bool UserExists(string username)
@@ -384,9 +425,18 @@ namespace CourseGuard.Backend.Data
         {
             using var connection = CreateConnection();
             connection.Open();
-            string query = @"INSERT INTO DEVICES (user_id, device_name, ip_address, status, last_active) 
-                            VALUES (@user_id, @device_name, @ip_address, 'ACTIVE', CURRENT_TIMESTAMP)
-                            ON CONFLICT (id) DO UPDATE SET last_active = CURRENT_TIMESTAMP, ip_address = @ip_address";
+            const string query = @"
+                WITH updated AS (
+                    UPDATE DEVICES
+                    SET last_active = CURRENT_TIMESTAMP,
+                        ip_address = @ip_address,
+                        status = 'ACTIVE'
+                    WHERE user_id = @user_id AND device_name = @device_name
+                    RETURNING id
+                )
+                INSERT INTO DEVICES (user_id, device_name, ip_address, status, last_active)
+                SELECT @user_id, @device_name, @ip_address, 'ACTIVE', CURRENT_TIMESTAMP
+                WHERE NOT EXISTS (SELECT 1 FROM updated)";
             
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@user_id", userId);
@@ -515,9 +565,18 @@ namespace CourseGuard.Backend.Data
         {
             await using var connection = CreateConnection();
             await connection.OpenAsync(cancellationToken);
-            const string query = @"INSERT INTO DEVICES (user_id, device_name, ip_address, status, last_active)
-                            VALUES (@user_id, @device_name, @ip_address, 'ACTIVE', CURRENT_TIMESTAMP)
-                            ON CONFLICT (id) DO UPDATE SET last_active = CURRENT_TIMESTAMP, ip_address = @ip_address";
+            const string query = @"
+                WITH updated AS (
+                    UPDATE DEVICES
+                    SET last_active = CURRENT_TIMESTAMP,
+                        ip_address = @ip_address,
+                        status = 'ACTIVE'
+                    WHERE user_id = @user_id AND device_name = @device_name
+                    RETURNING id
+                )
+                INSERT INTO DEVICES (user_id, device_name, ip_address, status, last_active)
+                SELECT @user_id, @device_name, @ip_address, 'ACTIVE', CURRENT_TIMESTAMP
+                WHERE NOT EXISTS (SELECT 1 FROM updated)";
 
             await using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@user_id", userId);

@@ -10,7 +10,7 @@ namespace CourseGuard.Frontend.Forms.Student
 {
     public partial class StudentDashboard : Form
     {
-        private Dictionary<Button, Func<UserControl>> _nav;
+        private Dictionary<Button, Func<UserControl>> _nav = new();
         private CourseGuard.Backend.Models.UserModel currentUser;
 
         public StudentDashboard(CourseGuard.Backend.Models.UserModel user)
@@ -35,7 +35,10 @@ namespace CourseGuard.Frontend.Forms.Student
             };
 
             SetActiveButton(btnDashboard);
-            LoadUI(_nav[btnDashboard]());
+            if (_nav.TryGetValue(btnDashboard, out Func<UserControl>? defaultFactory))
+            {
+                LoadUI(defaultFactory());
+            }
         }
 
         private void ApplyAdminLikeTheme()
@@ -99,7 +102,7 @@ namespace CourseGuard.Frontend.Forms.Student
             };
         }
 
-        private void Sidebar_Click(object sender, EventArgs e)
+        private void Sidebar_Click(object? sender, EventArgs e)
         {
             if (sender is Button btn && _nav.ContainsKey(btn))
             {

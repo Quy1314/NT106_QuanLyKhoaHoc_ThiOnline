@@ -2,6 +2,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CourseGuard.Backend.Config;
 
 namespace CourseGuard.Backend.Services
 {
@@ -11,19 +12,17 @@ namespace CourseGuard.Backend.Services
     /// </summary>
     public class SupabaseAuthService
     {
-        private const string DefaultSupabaseUrl = "https://crtiwzjkcmpvyoqgdowv.supabase.co";
-        private const string DefaultSupabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNydGl3emprY21wdnlvcWdkb3d2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2NDM3MjMsImV4cCI6MjA5MTIxOTcyM30.6qgj6o0UcvuKggt-M1TX32JwpcqLo46tEctQ2xgzx8U";
         private readonly string _supabaseUrl;
         private readonly string _anonKey;
 
         public SupabaseAuthService(string? supabaseUrl = null, string? anonKey = null)
         {
             _supabaseUrl = string.IsNullOrWhiteSpace(supabaseUrl)
-                ? (Environment.GetEnvironmentVariable("SUPABASE_URL") ?? DefaultSupabaseUrl)
+                ? AppEnvironment.GetRequired("SUPABASE_URL")
                 : supabaseUrl;
 
             _anonKey = string.IsNullOrWhiteSpace(anonKey)
-                ? (Environment.GetEnvironmentVariable("SUPABASE_ANON_KEY") ?? DefaultSupabaseAnonKey)
+                ? AppEnvironment.GetRequired("SUPABASE_ANON_KEY")
                 : anonKey;
         }
 

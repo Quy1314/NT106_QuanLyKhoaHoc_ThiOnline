@@ -14,6 +14,7 @@
  */
 using System;
 using System.Collections.Generic;
+using CourseGuard.Backend.Config;
 using Npgsql;
 using CourseGuard.Backend.Models;
 
@@ -27,8 +28,10 @@ namespace CourseGuard.Backend.Data
         // --- Chuỗi kết nối Supabase ---
         // Sử dụng cùng một chuỗi kết nối với phần còn lại của dự án.
         // Port 6543 là Transaction Pooler của Supabase (phù hợp cho ứng dụng desktop).
-        private readonly string _connectionString =
-            "Host=db.crtiwzjkcmpvyoqgdowv.supabase.co;Port=6543;Database=postgres;Username=postgres;Password=testdatabseuit;SSL Mode=Require;Trust Server Certificate=true;Timeout=15;";
+        private readonly string _connectionString = AppEnvironment.GetRequired(
+            "COURSEGUARD_DB_CONNECTION",
+            "SUPABASE_DB_CONNECTION",
+            "CONNECTION_STRING");
 
         /// <summary>
         /// Lấy tất cả thông báo của một người dùng, sắp xếp theo CreatedAt (mới nhất trước).

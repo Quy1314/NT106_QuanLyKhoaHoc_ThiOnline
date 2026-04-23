@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using Npgsql;
 
 namespace CourseGuard.Backend.Controllers
 {
@@ -30,9 +31,7 @@ namespace CourseGuard.Backend.Controllers
                 return null;
             }
 
-            string inputHash = PasswordHasher.HashPassword(password);
-            
-            if (user.PasswordHash == inputHash)
+            if (PasswordHasher.VerifyPassword(password, user.PasswordHash))
             {
                 return user;
             }
@@ -49,8 +48,7 @@ namespace CourseGuard.Backend.Controllers
                 return null;
             }
 
-            string inputHash = PasswordHasher.HashPassword(password);
-            return user.PasswordHash == inputHash ? user : null;
+            return PasswordHasher.VerifyPassword(password, user.PasswordHash) ? user : null;
         }
 
         public Task<UserModel?> GetUserProfileAsync(string username, CancellationToken cancellationToken = default)
@@ -131,6 +129,11 @@ namespace CourseGuard.Backend.Controllers
                 _dbContext.LogUserActivity(createdUser?.Id, "SIGNUP", $"New signup request: {user.Username}", string.Empty);
                 return true;
             }
+            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                LastErrorMessage = "Tên đăng nhập hoặc email đã tồn tại.";
+                return false;
+            }
             catch (Exception ex)
             {
                 Console.WriteLine($"Registration error: {ex.Message}");
@@ -158,6 +161,7 @@ namespace CourseGuard.Backend.Controllers
             // For this local WinForms app, we log the event and navigate back.
             Console.WriteLine("Auth: User session cleared.");
             _dbContext.LogUserActivity(userId, "LOGOUT", $"Logout: {username}", ipAddress);
+            UserSessionContext.Clear();
         }
     }
 }

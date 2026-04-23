@@ -14,10 +14,10 @@ namespace CourseGuard.Backend.Services
 {
     public class EmailItem
     {
-        public string Sender { get; set; }
-        public string Subject { get; set; }
-        public string Snippet { get; set; }
-        public string Date { get; set; }
+        public string Sender { get; set; } = string.Empty;
+        public string Subject { get; set; } = string.Empty;
+        public string Snippet { get; set; } = string.Empty;
+        public string Date { get; set; } = string.Empty;
     }
 
     public class GmailServiceHelper

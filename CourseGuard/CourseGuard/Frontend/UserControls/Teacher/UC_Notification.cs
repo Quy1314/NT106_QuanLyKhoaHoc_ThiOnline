@@ -42,15 +42,16 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private bool _isFilteringUnread = false;
 
         /// <summary>ID người dùng hiện tại.</summary>
-        private int _currentUserId = 1; 
+        private readonly int _currentUserId;
 
         /// <summary>Lưu tham chiếu tới ID thông báo đang được chọn xem để highlight thẻ và thao tác</summary>
         private int _selectedNotificationId = -1;
 
         // ── Constructor ──────────────────────────────────────────────────────────
 
-        public UC_Notification()
+        public UC_Notification(int currentUserId)
         {
+            _currentUserId = currentUserId;
             InitializeComponent();
 
             // Khởi tạo danh sách
@@ -449,6 +450,12 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         private async System.Threading.Tasks.Task LoadDataFromSupabaseAsync()
         {
+            if (_currentUserId <= 0)
+            {
+                SetStatus("❌  Không xác định được người dùng hiện tại.", ColorPalette.Status.ErrorLight);
+                return;
+            }
+
             SetStatus("⏳  Đang kết nối Supabase và tải dữ liệu...", ColorPalette.LightMode.TextSecondary);
             SetControlsEnabled(false);
 

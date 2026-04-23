@@ -19,7 +19,7 @@ namespace CourseGuard.Frontend.Forms.Admin
 {
     public partial class AdminDashboard : Form
     {
-        private Dictionary<Button, UserControl> _navigationMap;
+        private Dictionary<Button, UserControl> _navigationMap = new();
         private UserModel? currentUser;
         private Button? _btnDeviceMonitoring;
         private Button? _btnAuditLogs;
@@ -35,9 +35,9 @@ namespace CourseGuard.Frontend.Forms.Admin
             BuildAdminTemplateStyle();
             InitializeNavigation();
             // Default load (Dashboard)
-            if (_navigationMap.ContainsKey(btn_Dashboard))
+            if (_navigationMap.TryGetValue(btn_Dashboard, out UserControl? defaultView))
             {
-                LoadForm(_navigationMap[btn_Dashboard]);
+                LoadForm(defaultView);
             }
             btn_logout.Click += btn_logout_Click;
         }
@@ -111,7 +111,7 @@ namespace CourseGuard.Frontend.Forms.Admin
             SetActiveButton(btn_Dashboard);
         }
 
-        private void Sidebar_Btn_Click(object sender, EventArgs e)
+        private void Sidebar_Btn_Click(object? sender, EventArgs e)
         {
             if (sender is Button btn && _navigationMap.ContainsKey(btn))
             {
