@@ -24,6 +24,11 @@ namespace CourseGuard.Backend.Controllers
 
         public UserModel? Login(string username, string password)
         {
+            if (!UserIdentityBloomIndex.UsernameExists(_dbContext, username))
+            {
+                return null;
+            }
+
             var user = _dbContext.GetUserByUsername(username);
             
             if (user == null)
@@ -41,6 +46,11 @@ namespace CourseGuard.Backend.Controllers
 
         public async Task<UserModel?> LoginAsync(string username, string password, CancellationToken cancellationToken = default)
         {
+            if (!UserIdentityBloomIndex.UsernameExists(_dbContext, username))
+            {
+                return null;
+            }
+
             var user = await _dbContext.GetUserByUsernameAsync(username, cancellationToken);
 
             if (user == null)
@@ -108,11 +118,16 @@ namespace CourseGuard.Backend.Controllers
             }
 
             // 1. Manually check for existing username to provide better UX
-            if (_dbContext.UserExists(user.Username))
+            if (UserIdentityBloomIndex.UsernameExists(_dbContext, user.Username))
             {
                 Console.WriteLine("User registration failed: Username already exists.");
                 LastErrorMessage = "Tên đăng nhập đã tồn tại trong hệ thống.";
                 return false; 
+            }
+            if (UserIdentityBloomIndex.EmailExists(_dbContext, user.Email))
+            {
+                LastErrorMessage = "Email đã tồn tại trong hệ thống.";
+                return false;
             }
 
             // Hash password
@@ -126,6 +141,7 @@ namespace CourseGuard.Backend.Controllers
             {
                 _dbContext.InsertUser(user, passwordHash);
                 var createdUser = _dbContext.GetUserByUsername(user.Username);
+                UserIdentityBloomIndex.RegisterUserIdentity(user.Username, user.Email);
                 _dbContext.LogUserActivity(createdUser?.Id, "SIGNUP", $"New signup request: {user.Username}", string.Empty);
                 return true;
             }
@@ -144,6 +160,12 @@ namespace CourseGuard.Backend.Controllers
 
         public bool ForgotPasswordRequest(string username, string email)
         {
+            if (!UserIdentityBloomIndex.UsernameExists(_dbContext, username) ||
+                !UserIdentityBloomIndex.EmailExists(_dbContext, email))
+            {
+                return false;
+            }
+
             var user = _dbContext.GetUserByUsernameAndEmail(username, email);
             if (user != null)
             {

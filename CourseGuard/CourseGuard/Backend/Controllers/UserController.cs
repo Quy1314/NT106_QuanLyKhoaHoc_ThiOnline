@@ -65,6 +65,18 @@ namespace CourseGuard.Backend.Controllers
                 return "ValidationError";
             }
 
+            if (UserIdentityBloomIndex.UsernameExists(_dbContext, user.Username))
+            {
+                LastErrorMessage = "Tên đăng nhập đã tồn tại.";
+                return "Conflict";
+            }
+
+            if (UserIdentityBloomIndex.EmailExists(_dbContext, user.Email))
+            {
+                LastErrorMessage = "Email đã tồn tại.";
+                return "Conflict";
+            }
+
             user.Status = string.IsNullOrWhiteSpace(user.Status) ? "ACTIVE" : user.Status.ToUpperInvariant();
             user.Role = user.Role.ToUpperInvariant();
 
@@ -73,6 +85,7 @@ namespace CourseGuard.Backend.Controllers
                 string passwordHash = PasswordHasher.HashPassword(password);
                 _dbContext.InsertUser(user, passwordHash);
                 var createdUser = _dbContext.GetUserByUsername(user.Username);
+                UserIdentityBloomIndex.RegisterUserIdentity(user.Username, user.Email);
                 _dbContext.LogUserActivity(UserSessionContext.CurrentUserId, "ADMIN_ADD_USER", $"Created user: {user.Username}", string.Empty);
                 return createdUser == null ? "UnexpectedError" : "Success";
             }

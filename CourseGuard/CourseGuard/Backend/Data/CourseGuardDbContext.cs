@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using CourseGuard.Backend.Config;
 using Npgsql;
 using CourseGuard.Backend.Models;
+using System.Collections.Generic;
 
 namespace CourseGuard.Backend.Data
 {
@@ -419,6 +420,31 @@ namespace CourseGuard.Backend.Data
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@username", username);
             return Convert.ToInt64(command.ExecuteScalar()) > 0;
+        }
+
+        public bool EmailExists(string email)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            const string query = "SELECT COUNT(*) FROM USERS WHERE LOWER(email) = LOWER(@email)";
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@email", email);
+            return Convert.ToInt64(command.ExecuteScalar()) > 0;
+        }
+
+        public List<(string Username, string Email)> GetAllUsernamesAndEmails()
+        {
+            var result = new List<(string Username, string Email)>();
+            using var connection = CreateConnection();
+            connection.Open();
+            const string query = "SELECT COALESCE(username, ''), COALESCE(email, '') FROM USERS";
+            using var command = new NpgsqlCommand(query, connection);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add((reader.GetString(0), reader.GetString(1)));
+            }
+            return result;
         }
 
         public void LogDeviceActivity(int userId, string deviceName, string ipAddress)
