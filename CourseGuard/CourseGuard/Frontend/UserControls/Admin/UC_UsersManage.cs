@@ -53,7 +53,11 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 // Hide Password Hash if present in grid?
                 if (dataGridView1.Columns.Contains("PasswordHash"))
                 {
-                    dataGridView1.Columns["PasswordHash"].Visible = false;
+                    DataGridViewColumn? passwordColumn = dataGridView1.Columns["PasswordHash"];
+                    if (passwordColumn != null)
+                    {
+                        passwordColumn.Visible = false;
+                    }
                 }
             }
             catch (Exception ex)
@@ -97,7 +101,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 }
                 else
                 {
-                    MessageBox.Show("Thêm thất bại: " + result);
+                    string detail = !string.IsNullOrWhiteSpace(_userService.LastErrorMessage)
+                        ? _userService.LastErrorMessage
+                        : result;
+                    MessageBox.Show("Thêm thất bại: " + detail);
                 }
             }
             catch (Exception ex)
@@ -106,7 +113,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
         }
 
-        private void btn_delete_Click(object sender, EventArgs e)
+        private void btn_delete_Click(object? sender, EventArgs e)
         {
             if (dataGridView1.SelectedRows.Count > 0)
             {
@@ -149,7 +156,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
         }
 
-        private void btn_search_Click(object sender, EventArgs e)
+        private void btn_search_Click(object? sender, EventArgs e)
         {
             LoadData();
         }

@@ -172,9 +172,20 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
             try
             {
-                await Task.Run(() => _courseService.AddCourse(course));
-                MessageBox.Show("Thêm khóa học thành công!");
-                await RefreshDataAsync();
+                string result = await Task.Run(() => _courseService.AddCourse(course));
+                if (result == "Success")
+                {
+                    MessageBox.Show("Thêm khóa học thành công!");
+                    await RefreshDataAsync();
+                }
+                else if (result == "Forbidden")
+                {
+                    MessageBox.Show("Bạn không có quyền thực hiện thao tác này.");
+                }
+                else
+                {
+                    MessageBox.Show("Lỗi thêm khóa học: " + result);
+                }
             }
             catch (Exception ex)
             {
@@ -212,7 +223,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 }
                 else
                 {
-                    MessageBox.Show("Cập nhật thất bại.");
+                    MessageBox.Show("Cập nhật thất bại hoặc bạn không có quyền.");
                 }
             }
             catch (Exception ex)
@@ -244,7 +255,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                     }
                     else
                     {
-                        MessageBox.Show("Xóa thất bại.");
+                        MessageBox.Show("Xóa thất bại hoặc bạn không có quyền.");
                     }
                 }
                 catch (Exception ex)
@@ -280,7 +291,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 }
                 else
                 {
-                    MessageBox.Show("Học viên đã tham gia khóa học này hoặc có lỗi xảy ra.");
+                    MessageBox.Show("Học viên đã tham gia khóa học này, không tồn tại dữ liệu, hoặc bạn không có quyền.");
                 }
             }
             catch (Exception ex)

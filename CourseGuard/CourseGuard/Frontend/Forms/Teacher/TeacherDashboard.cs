@@ -230,7 +230,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         {
             UpdateTitle("Trung Tâm Thông Báo");
             SetActiveMainButton(btnNotifications);
-            LoadUserControl(new UC_Notification());
+            LoadUserControl(new UC_Notification(_currentTeacherId));
         }
 
         private void SetActiveMainButton(Button activeButton)

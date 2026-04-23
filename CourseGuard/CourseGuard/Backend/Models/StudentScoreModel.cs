@@ -11,7 +11,6 @@
  * Lưu ý:
  *   - TongKet và TrangThai là thuộc tính tính toán (computed), KHÔNG ghi vào DB, KHÔNG đọc từ CSV.
  */
-using CsvHelper.Configuration.Attributes;
 using CsvHelper.Configuration.Attributes; // Để dùng [Name] và [Ignore] của CSV
 namespace CourseGuard.Backend.Models
 {

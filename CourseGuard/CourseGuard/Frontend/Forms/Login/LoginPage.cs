@@ -14,6 +14,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
+using CourseGuard.Backend.Security;
 
 namespace CourseGuard.Frontend.Forms.Login
 {
@@ -537,6 +538,7 @@ namespace CourseGuard.Frontend.Forms.Login
                 // Login Success
                 finalUser.Role = normalizedRole;
                 CurrentUser = finalUser;
+                UserSessionContext.SetCurrentUser(finalUser.Id, finalUser.Role, finalUser.Username);
 
                 // Non-blocking post-login tasks
                 _ = RunPostLoginTasksAsync(finalUser, ipAddress);

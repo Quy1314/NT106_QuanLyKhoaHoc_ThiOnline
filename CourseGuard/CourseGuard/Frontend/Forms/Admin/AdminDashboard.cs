@@ -27,7 +27,6 @@ namespace CourseGuard.Frontend.Forms.Admin
             ApplyTheme();
             SetupButtonEvents();
             InitializeNavigation();
-
             // Bo góc tất cả buttons
             RoundedButtonHelper.Apply(12, btnDashboard, btnUsers, btnCourses,
                 btnReports, btnDeviceMonitoring, btnAuditLogs, btnSettings, btnLogout);

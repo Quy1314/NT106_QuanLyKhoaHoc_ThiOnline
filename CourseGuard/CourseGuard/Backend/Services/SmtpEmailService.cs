@@ -1,16 +1,12 @@
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
+using CourseGuard.Backend.Config;
 
 namespace CourseGuard.Backend.Services
 {
     public class SmtpEmailService
     {
-        private const string DefaultSmtpHost = "smtp.gmail.com";
-        private const int DefaultSmtpPort = 587;
-        private const string DefaultSmtpUser = "24521494@gm.uit.edu.vn";
-        private const string DefaultSmtpPassword = "mtlm rmvr dvrn ytsv";
-        private const string DefaultFromName = "CourseGuard Admin";
         private readonly string _host;
         private readonly int _port;
         private readonly string _username;
@@ -20,12 +16,12 @@ namespace CourseGuard.Backend.Services
 
         public SmtpEmailService()
         {
-            _host = Environment.GetEnvironmentVariable("SMTP_HOST") ?? DefaultSmtpHost;
-            _port = int.TryParse(Environment.GetEnvironmentVariable("SMTP_PORT"), out int parsedPort) ? parsedPort : DefaultSmtpPort;
-            _username = Environment.GetEnvironmentVariable("SMTP_USER") ?? DefaultSmtpUser;
-            _password = Environment.GetEnvironmentVariable("SMTP_PASS") ?? DefaultSmtpPassword;
+            _host = AppEnvironment.GetRequired("SMTP_HOST");
+            _port = int.TryParse(AppEnvironment.GetOptional("SMTP_PORT"), out int parsedPort) ? parsedPort : 587;
+            _username = AppEnvironment.GetRequired("SMTP_USER");
+            _password = AppEnvironment.GetRequired("SMTP_PASS");
             _fromEmail = Environment.GetEnvironmentVariable("SMTP_FROM_EMAIL") ?? _username;
-            _fromName = Environment.GetEnvironmentVariable("SMTP_FROM_NAME") ?? DefaultFromName;
+            _fromName = Environment.GetEnvironmentVariable("SMTP_FROM_NAME") ?? "CourseGuard Admin";
         }
 
         public bool SendEmail(string toEmail, string subject, string body, out string errorMessage)

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
+using CourseGuard.Backend.Security;
 
 namespace CourseGuard.Backend.Controllers
 {
@@ -22,6 +23,11 @@ namespace CourseGuard.Backend.Controllers
 
         public string AddCourse(CourseModel course)
         {
+            if (!UserSessionContext.IsAdmin())
+            {
+                return "Forbidden";
+            }
+
             try
             {
                 _dbContext.InsertCourse(course);
@@ -35,6 +41,11 @@ namespace CourseGuard.Backend.Controllers
 
         public bool UpdateCourse(CourseModel course)
         {
+            if (!UserSessionContext.IsAdmin())
+            {
+                return false;
+            }
+
             try
             {
                 _dbContext.UpdateCourse(course);
@@ -48,6 +59,11 @@ namespace CourseGuard.Backend.Controllers
 
         public bool DeleteCourse(int courseId)
         {
+            if (!UserSessionContext.IsAdmin())
+            {
+                return false;
+            }
+
             try
             {
                 _dbContext.DeleteCourse(courseId);
@@ -61,10 +77,14 @@ namespace CourseGuard.Backend.Controllers
 
         public bool EnrollStudent(int courseId, int studentId)
         {
+            if (!UserSessionContext.IsAdmin())
+            {
+                return false;
+            }
+
             try
             {
-                _dbContext.EnrollStudent(courseId, studentId);
-                return true;
+                return _dbContext.EnrollStudent(courseId, studentId);
             }
             catch
             {

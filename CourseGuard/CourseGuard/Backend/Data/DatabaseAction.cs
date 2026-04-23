@@ -8,14 +8,17 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using CourseGuard.Backend.Config;
 using Npgsql;
 
 namespace CourseGuard.Backend.Data
 {
     public static class DatabaseAction
     {
-        private static readonly string connectionString =
-            "Host=aws-1-ap-northeast-1.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.crtiwzjkcmpvyoqgdowv;Password=testdatabseuit;SSL Mode=Require;Trust Server Certificate=true;Timeout=15;Pooling=false;";
+        private static readonly string connectionString = AppEnvironment.GetRequired(
+            "COURSEGUARD_DB_CONNECTION",
+            "SUPABASE_DB_CONNECTION",
+            "CONNECTION_STRING");
 
         public static int ExecuteNonQuery(
             string query,
