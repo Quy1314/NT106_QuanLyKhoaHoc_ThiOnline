@@ -1,4 +1,5 @@
 using System.Data;
+using System.Drawing;
 using System.Windows.Forms;
 using CourseGuard.Frontend.Theme;
 
@@ -9,10 +10,20 @@ namespace CourseGuard.Frontend.UserControls.Student
         public UC_Result()
         {
             InitializeComponent();
+            ApplyAcademicStyle();
             LoadDummyData();
 
             // Bo góc buttons
             RoundedButtonHelper.Apply(btnReview, 10);
+        }
+
+        private void ApplyAcademicStyle()
+        {
+            BackColor = AcademicTheme.AppBackground;
+            btnReview.BackColor = AcademicTheme.Primary;
+            btnReview.ForeColor = Color.White;
+            btnReview.FlatAppearance.BorderSize = 0;
+            AcademicTheme.StyleGrid(dgvResults);
         }
 
         private void LoadDummyData()

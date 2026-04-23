@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Drawing;
 using System.Windows.Forms;
 using CourseGuard.Frontend.Forms.Student;
 using CourseGuard.Frontend.Theme;
@@ -11,10 +12,21 @@ namespace CourseGuard.Frontend.UserControls.Student
         public UC_TakeExam()
         {
             InitializeComponent();
+            ApplyAcademicStyle();
             LoadDummyData();
 
             // Bo góc buttons
             RoundedButtonHelper.Apply(btnStartExam, 10);
+        }
+
+        private void ApplyAcademicStyle()
+        {
+            BackColor = AcademicTheme.AppBackground;
+            lblTitle.ForeColor = AcademicTheme.TextPrimary;
+            btnStartExam.BackColor = AcademicTheme.Primary;
+            btnStartExam.ForeColor = Color.White;
+            btnStartExam.FlatAppearance.BorderSize = 0;
+            AcademicTheme.StyleGrid(dgvExams);
         }
 
         private void LoadDummyData()

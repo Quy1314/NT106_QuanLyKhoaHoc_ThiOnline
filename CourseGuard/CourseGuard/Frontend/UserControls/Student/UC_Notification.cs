@@ -1,4 +1,5 @@
 using System.Data;
+using System.Drawing;
 using System.Windows.Forms;
 using CourseGuard.Frontend.Theme;
 
@@ -9,10 +10,20 @@ namespace CourseGuard.Frontend.UserControls.Student
         public UC_Notification()
         {
             InitializeComponent();
+            ApplyAcademicStyle();
             LoadDummyData();
 
             // Bo góc buttons
             RoundedButtonHelper.Apply(btnMarkAsRead, 10);
+        }
+
+        private void ApplyAcademicStyle()
+        {
+            BackColor = AcademicTheme.AppBackground;
+            btnMarkAsRead.BackColor = AcademicTheme.Primary;
+            btnMarkAsRead.ForeColor = Color.White;
+            btnMarkAsRead.FlatAppearance.BorderSize = 0;
+            AcademicTheme.StyleGrid(dgvNotifications);
         }
 
         private void LoadDummyData()

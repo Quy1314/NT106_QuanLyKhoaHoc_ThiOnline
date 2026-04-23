@@ -338,7 +338,7 @@ VALUES
     'Quản trị viên',
     'admin@courseguard.local',
     1, -- role ADMIN
-    'active'
+    'ACTIVE'
 );
 
 -- TẠO STUDENT ACCOUNT (cho team test)
@@ -350,5 +350,5 @@ VALUES
     'Student Test',
     'student@courseguard.local',
     3, -- role STUDENT
-    'active'
+    'ACTIVE'
 );

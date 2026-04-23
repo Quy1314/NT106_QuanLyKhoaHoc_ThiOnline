@@ -2,6 +2,7 @@
 
 using System;
 using System.Data;
+using System.Drawing;
 using System.Windows.Forms;
 using CourseGuard.Frontend.Theme;
 
@@ -12,6 +13,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         public UC_CourseList()
         {
             InitializeComponent();
+            ApplyAcademicStyle();
             LoadDummyData();
             
             // Bo góc buttons
@@ -25,6 +27,20 @@ namespace CourseGuard.Frontend.UserControls.Student
                     btnSearch.PerformClick();
                 }
             };
+        }
+
+        private void ApplyAcademicStyle()
+        {
+            BackColor = AcademicTheme.AppBackground;
+            btnSearch.BackColor = AcademicTheme.Primary;
+            btnSearch.ForeColor = Color.White;
+            btnJoin.BackColor = AcademicTheme.Primary;
+            btnJoin.ForeColor = Color.White;
+            btnViewDetails.BackColor = AcademicTheme.Surface;
+            btnViewDetails.ForeColor = AcademicTheme.TextSecondary;
+            btnViewDetails.FlatAppearance.BorderColor = AcademicTheme.BorderSoft;
+            btnViewDetails.FlatAppearance.BorderSize = 1;
+            AcademicTheme.StyleGrid(dgvCourses);
         }
         
         private void LoadDummyData()

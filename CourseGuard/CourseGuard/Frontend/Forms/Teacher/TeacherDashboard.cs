@@ -23,24 +23,24 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void ApplyAdminLikeTheme()
         {
-            BackColor = Color.FromArgb(248, 250, 252);
-            pnlSidebar.BackColor = Color.White;
-            pnlLogo.BackColor = Color.White;
-            pnlSidebarBottom.BackColor = Color.White;
-            pnlDivider.BackColor = Color.FromArgb(226, 232, 240);
-            pnlTopHeader.BackColor = Color.White;
-            pnlMainboard.BackColor = Color.FromArgb(248, 250, 252);
-            pnlSubMenuCourseDocs.BackColor = Color.FromArgb(248, 250, 252);
-            pnlSubMenuTesting.BackColor = Color.FromArgb(248, 250, 252);
-            pnlSubMenuMonitoring.BackColor = Color.FromArgb(248, 250, 252);
+            BackColor = AcademicTheme.AppBackground;
+            pnlSidebar.BackColor = AcademicTheme.Surface;
+            pnlLogo.BackColor = AcademicTheme.Surface;
+            pnlSidebarBottom.BackColor = AcademicTheme.Surface;
+            pnlDivider.BackColor = AcademicTheme.BorderSoft;
+            pnlTopHeader.BackColor = AcademicTheme.Surface;
+            pnlMainboard.BackColor = AcademicTheme.AppBackground;
+            pnlSubMenuCourseDocs.BackColor = AcademicTheme.AppBackground;
+            pnlSubMenuTesting.BackColor = AcademicTheme.AppBackground;
+            pnlSubMenuMonitoring.BackColor = AcademicTheme.AppBackground;
 
-            lblLogoText.ForeColor = Color.FromArgb(15, 23, 42);
-            lblLogoIcon.ForeColor = Color.FromArgb(37, 99, 235);
-            lblEmailHeader.ForeColor = Color.FromArgb(37, 99, 235);
-            btnMail.ForeColor = Color.FromArgb(100, 116, 139);
+            lblLogoText.ForeColor = AcademicTheme.TextPrimary;
+            lblLogoIcon.ForeColor = AcademicTheme.Primary;
+            lblEmailHeader.ForeColor = AcademicTheme.Primary;
+            btnMail.ForeColor = AcademicTheme.TextSecondary;
 
             StyleButtonTree(pnlSidebar);
-            btnLogout.BackColor = Color.FromArgb(239, 68, 68);
+            btnLogout.BackColor = Color.FromArgb(220, 38, 38);
             btnLogout.ForeColor = Color.White;
             btnLogout.FlatStyle = FlatStyle.Flat;
             btnLogout.FlatAppearance.BorderSize = 0;
@@ -57,7 +57,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                     if (b.Name != "btnLogout")
                     {
                         b.BackColor = Color.Transparent;
-                        b.ForeColor = Color.FromArgb(100, 116, 139);
+                        b.ForeColor = AcademicTheme.TextSecondary;
                     }
                 }
 
@@ -99,7 +99,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         // ---------------------------------------------------------------
         private void AttachHoverEvents()
         {
-            Color colorSidebarHover = Color.FromArgb(241, 245, 249);
+            Color colorSidebarHover = Color.FromArgb(222, 224, 255);
             Color colorLogoutHover  = ColorTranslator.FromHtml("#EF4444");
 
             foreach (Control c in pnlSidebar.Controls)
@@ -240,13 +240,13 @@ namespace CourseGuard.Frontend.Forms.Teacher
             {
                 if (btn == activeButton)
                 {
-                    btn.BackColor = Color.FromArgb(37, 99, 235);
+                    btn.BackColor = AcademicTheme.Primary;
                     btn.ForeColor = Color.White;
                 }
                 else
                 {
                     btn.BackColor = Color.Transparent;
-                    btn.ForeColor = Color.FromArgb(100, 116, 139);
+                    btn.ForeColor = AcademicTheme.TextSecondary;
                 }
             }
         }

@@ -15,6 +15,7 @@ using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.Forms.Login
 {
@@ -68,23 +69,23 @@ namespace CourseGuard.Frontend.Forms.Login
         private void CustomizeUI()
         {
             // Form Background / Shell
-            this.BackColor = Color.FromArgb(15, 23, 42);
+            this.BackColor = AcademicTheme.AppBackground;
             this.FormBorderStyle = FormBorderStyle.Sizable; // User requested Sizable
             this.AcceptButton = btnLogin;
             EnsureModernShell();
 
             // Panel Style
-            LoginPanel.BackColor = Color.White;
+            LoginPanel.BackColor = AcademicTheme.Surface;
             LoginPanel.BorderStyle = BorderStyle.None;
-            RegisterPanel.BackColor = Color.White;
+            RegisterPanel.BackColor = AcademicTheme.Surface;
             RegisterPanel.BorderStyle = BorderStyle.None;
-            ForgotPassPanel.BackColor = Color.White;
+            ForgotPassPanel.BackColor = AcademicTheme.Surface;
             ForgotPassPanel.BorderStyle = BorderStyle.None;
 
             // Title Style
             LoginTitle.Text = "Sign In";
             LoginTitle.Font = new Font("Segoe UI", 24F, FontStyle.Bold);
-            LoginTitle.ForeColor = Color.FromArgb(15, 23, 42);
+            LoginTitle.ForeColor = AcademicTheme.TextPrimary;
             LoginTitle.AutoSize = false;
             LoginTitle.Size = new Size(LoginPanel.Width, 50);
             LoginTitle.TextAlign = ContentAlignment.MiddleCenter;
@@ -93,7 +94,7 @@ namespace CourseGuard.Frontend.Forms.Login
             // LOGO Style
             LOGO.Text = "COURSEGUARD";
             LOGO.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-            LOGO.ForeColor = Color.FromArgb(71, 85, 105);
+            LOGO.ForeColor = AcademicTheme.TextSecondary;
             LOGO.BorderStyle = BorderStyle.None;
             LOGO.TextAlign = ContentAlignment.MiddleCenter;
             LOGO.AutoSize = false;
@@ -117,7 +118,7 @@ namespace CourseGuard.Frontend.Forms.Login
             // Button
             btnLogin.Text = "Sign In";
             btnLogin.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-            btnLogin.BackColor = Color.FromArgb(37, 99, 235); // Royal Blue
+            btnLogin.BackColor = AcademicTheme.Primary;
             btnLogin.ForeColor = Color.White;
             btnLogin.FlatStyle = FlatStyle.Flat;
             btnLogin.FlatAppearance.BorderSize = 0;
@@ -125,35 +126,35 @@ namespace CourseGuard.Frontend.Forms.Login
             btnLogin.Size = new Size(320, 45); // Bigger button
 
             // Links/Other
-            linkLabel1.LinkColor = Color.FromArgb(37, 99, 235);
+            linkLabel1.LinkColor = AcademicTheme.PrimaryStrong;
             chkRemember.Font = new Font("Segoe UI", 9F);
-            lnkRegister.LinkColor = Color.FromArgb(37, 99, 235);
+            lnkRegister.LinkColor = AcademicTheme.PrimaryStrong;
             lnkRegister.Text = "Don't have an account? Sign Up";
 
             // Register Controls
             RegisterTitle.Text = "Create Account";
-            RegisterTitle.ForeColor = Color.FromArgb(15, 23, 42);
+            RegisterTitle.ForeColor = AcademicTheme.TextPrimary;
             lblRegUsername.Text = "Username";
             lblRegFullName.Text = "Full Name";
             lblRegEmail.Text = "Email";
             lblRegPassword.Text = "Password";
             txtRegPassword.UseSystemPasswordChar = true;
             lnkBackToLoginFromReg.Text = "Back to Login";
-            lnkBackToLoginFromReg.LinkColor = Color.FromArgb(37, 99, 235);
-            btnRegisterSubmit.BackColor = Color.FromArgb(37, 99, 235);
+            lnkBackToLoginFromReg.LinkColor = AcademicTheme.PrimaryStrong;
+            btnRegisterSubmit.BackColor = AcademicTheme.Primary;
             btnRegisterSubmit.FlatStyle = FlatStyle.Flat;
             btnRegisterSubmit.FlatAppearance.BorderSize = 0;
             btnRegisterSubmit.ForeColor = Color.White;
 
             // Forgot Controls
             ForgotTitle.Text = "Forgot Password";
-            ForgotTitle.ForeColor = Color.FromArgb(15, 23, 42);
+            ForgotTitle.ForeColor = AcademicTheme.TextPrimary;
             lblForgotUsername.Text = "Username";
             lblForgotEmail.Text = "Email";
             lnkBackToLoginFromForgot.Text = "Back to Login";
-            lnkBackToLoginFromForgot.LinkColor = Color.FromArgb(37, 99, 235);
+            lnkBackToLoginFromForgot.LinkColor = AcademicTheme.PrimaryStrong;
             btnForgotSubmit.Text = "Xác nhận quên mật khẩu";
-            btnForgotSubmit.BackColor = Color.FromArgb(37, 99, 235);
+            btnForgotSubmit.BackColor = AcademicTheme.Primary;
             btnForgotSubmit.FlatStyle = FlatStyle.Flat;
             btnForgotSubmit.FlatAppearance.BorderSize = 0;
             btnForgotSubmit.ForeColor = Color.White;
@@ -176,10 +177,10 @@ namespace CourseGuard.Frontend.Forms.Login
                 Controls.Add(_rightVisualPanel);
             }
 
-            _leftShellPanel.BackColor = Color.White;
+            _leftShellPanel.BackColor = AcademicTheme.Surface;
             _leftShellPanel.BringToFront();
 
-            _rightVisualPanel.BackColor = Color.FromArgb(15, 23, 42);
+            _rightVisualPanel.BackColor = AcademicTheme.PrimaryStrong;
             _rightVisualPanel.Paint -= RightVisualPanel_Paint;
             _rightVisualPanel.Paint += RightVisualPanel_Paint;
             _rightVisualPanel.BringToFront();
@@ -189,14 +190,14 @@ namespace CourseGuard.Frontend.Forms.Login
             _brandLabel.ForeColor = Color.White;
             _brandLabel.AutoSize = true;
 
-            _welcomeLabel.Text = "Welcome to CourseGuard";
+            _welcomeLabel.Text = "Modern Academic Workspace";
             _welcomeLabel.Font = new Font("Segoe UI", 24F, FontStyle.Bold);
             _welcomeLabel.ForeColor = Color.White;
             _welcomeLabel.AutoSize = true;
 
-            _subtitleLabel.Text = "Sign in to access your enterprise dashboard";
+            _subtitleLabel.Text = "Secure access for Admin, Teacher, and Student dashboards";
             _subtitleLabel.Font = new Font("Segoe UI", 10F);
-            _subtitleLabel.ForeColor = Color.FromArgb(148, 163, 184);
+            _subtitleLabel.ForeColor = Color.FromArgb(202, 207, 255);
             _subtitleLabel.AutoSize = true;
 
             if (!_rightVisualPanel.Controls.Contains(_brandLabel)) _rightVisualPanel.Controls.Add(_brandLabel);

@@ -12,6 +12,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Data;
+using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Admin
 {
@@ -23,6 +24,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
         {
             InitializeComponent();
             _userService = new CourseGuard.Backend.Controllers.UserController(new CourseGuardDbContext(""));
+            ApplyAcademicStyle();
 
             // Bo góc + cursor tay cho tất cả buttons
             CourseGuard.Frontend.Theme.RoundedButtonHelper.Apply(10,
@@ -38,6 +40,22 @@ namespace CourseGuard.Frontend.UserControls.Admin
             this.btn_search.Click += new System.EventHandler(this.btn_search_Click);
             this.btn_Approve.Click += btn_Approve_Click;
             this.cb_StatusFilter.SelectedIndex = 0; // "ALL"
+        }
+
+        private void ApplyAcademicStyle()
+        {
+            BackColor = AcademicTheme.AppBackground;
+            btn_insert.BackColor = AcademicTheme.Primary;
+            btn_insert.ForeColor = System.Drawing.Color.White;
+            btn_search.BackColor = AcademicTheme.Primary;
+            btn_search.ForeColor = System.Drawing.Color.White;
+            btn_Approve.BackColor = AcademicTheme.Surface;
+            btn_Approve.ForeColor = AcademicTheme.TextSecondary;
+            btn_Approve.FlatAppearance.BorderColor = AcademicTheme.BorderSoft;
+            btn_Approve.FlatAppearance.BorderSize = 1;
+            btn_delete.BackColor = System.Drawing.Color.FromArgb(220, 38, 38);
+            btn_delete.ForeColor = System.Drawing.Color.White;
+            AcademicTheme.StyleGrid(dataGridView1);
         }
 
         private void LoadData()

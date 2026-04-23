@@ -18,43 +18,44 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private void ApplyTheme()
         {
             // Set base appearance
-            this.BackColor = Color.FromArgb(245, 247, 250);
+            this.BackColor = AcademicTheme.AppBackground;
             this.Font = new Font("Segoe UI", 10F);
 
             // Header Panel
-            lblTitle.ForeColor = ColorPalette.LightMode.Accent; // Using Accent as the primary blue color
+            lblTitle.ForeColor = AcademicTheme.Primary;
 
             // Action Panel
-            txtSearch.BackColor = ColorPalette.LightMode.Secondary;
-            txtSearch.ForeColor = ColorPalette.LightMode.TextPrimary;
+            txtSearch.BackColor = AcademicTheme.Surface;
+            txtSearch.ForeColor = AcademicTheme.TextPrimary;
             txtSearch.BorderStyle = BorderStyle.FixedSingle;
 
-            btnAddExam.BackColor = ColorPalette.LightMode.Accent;
+            btnAddExam.BackColor = AcademicTheme.Primary;
             btnAddExam.ForeColor = Color.White;
             RoundedButtonHelper.Apply(btnAddExam, 15);
 
             // DataGridView Default Style
-            dgvExams.BackgroundColor = Color.White;
+            dgvExams.BackgroundColor = AcademicTheme.Surface;
             dgvExams.BorderStyle = BorderStyle.None;
             dgvExams.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-            dgvExams.GridColor = ColorPalette.LightMode.Border;
+            dgvExams.GridColor = AcademicTheme.BorderSoft;
             
             dgvExams.EnableHeadersVisualStyles = false;
-            dgvExams.ColumnHeadersDefaultCellStyle.BackColor = ColorPalette.LightMode.Base;
-            dgvExams.ColumnHeadersDefaultCellStyle.ForeColor = ColorPalette.LightMode.TextSecondary;
-            dgvExams.ColumnHeadersDefaultCellStyle.SelectionBackColor = ColorPalette.LightMode.Base;
-            dgvExams.ColumnHeadersDefaultCellStyle.SelectionForeColor = ColorPalette.LightMode.TextSecondary;
+            dgvExams.ColumnHeadersDefaultCellStyle.BackColor = AcademicTheme.SurfaceLow;
+            dgvExams.ColumnHeadersDefaultCellStyle.ForeColor = AcademicTheme.TextSecondary;
+            dgvExams.ColumnHeadersDefaultCellStyle.SelectionBackColor = AcademicTheme.SurfaceLow;
+            dgvExams.ColumnHeadersDefaultCellStyle.SelectionForeColor = AcademicTheme.TextSecondary;
             dgvExams.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             dgvExams.ColumnHeadersHeight = 36;
             dgvExams.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
 
             dgvExams.DefaultCellStyle.BackColor = Color.White;
-            dgvExams.DefaultCellStyle.ForeColor = ColorPalette.LightMode.TextPrimary;
+            dgvExams.DefaultCellStyle.ForeColor = AcademicTheme.TextPrimary;
             dgvExams.DefaultCellStyle.Font = new Font("Segoe UI", 9.5F);
             dgvExams.DefaultCellStyle.SelectionBackColor = Color.FromArgb(219, 234, 254);
-            dgvExams.DefaultCellStyle.SelectionForeColor = ColorPalette.LightMode.TextPrimary;
+            dgvExams.DefaultCellStyle.SelectionForeColor = AcademicTheme.TextPrimary;
             dgvExams.DefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
             dgvExams.RowTemplate.Height = 38;
+            AcademicTheme.StyleGrid(dgvExams);
         }
 
         private void LoadDataPlaceholder()

@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
+using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Admin
 {
@@ -32,7 +33,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
         private void BuildDashboardFromTemplate()
         {
             Controls.Clear();
-            BackColor = Color.FromArgb(248, 250, 252);
+            BackColor = AcademicTheme.AppBackground;
 
             var root = new Panel
             {
@@ -60,7 +61,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
             var subtitle = new Label
             {
-                Text = "Monitor and manage your enterprise course system",
+                Text = "Monitor users, courses, and approvals in one place",
                 Font = new Font("Segoe UI", 10F, FontStyle.Regular),
                 ForeColor = Color.FromArgb(100, 116, 139),
                 AutoSize = true,
@@ -98,7 +99,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
             }
 
-            panel.Controls.Add(CreateKpiCard("Total Users", "2,450", "+12.5%", Color.FromArgb(37, 99, 235)), 0, 0);
+            panel.Controls.Add(CreateKpiCard("Total Users", "2,450", "+12.5%", AcademicTheme.Primary), 0, 0);
             panel.Controls.Add(CreateKpiCard("Active Courses", "87", "+8.2%", Color.FromArgb(34, 211, 238)), 1, 0);
             panel.Controls.Add(CreateKpiCard("Pending Requests", "24", "-3.1%", Color.FromArgb(245, 158, 11)), 2, 0);
             panel.Controls.Add(CreateKpiCard("Today Logins", "1,234", "+18.7%", Color.FromArgb(34, 197, 94)), 3, 0);
@@ -111,13 +112,9 @@ namespace CourseGuard.Frontend.UserControls.Admin
             {
                 Dock = DockStyle.Fill,
                 Margin = new Padding(8),
-                BackColor = Color.White
+                BackColor = AcademicTheme.Surface
             };
-            card.Paint += (_, e) =>
-            {
-                using var p = new Pen(Color.FromArgb(226, 232, 240));
-                e.Graphics.DrawRectangle(p, 0, 0, card.Width - 1, card.Height - 1);
-            };
+            AcademicTheme.StyleCard(card);
 
             var title = new Label { Text = label, AutoSize = true, ForeColor = Color.FromArgb(100, 116, 139), Font = new Font("Segoe UI", 10F), Location = new Point(16, 16) };
             var number = new Label { Text = value, AutoSize = true, ForeColor = Color.FromArgb(15, 23, 42), Font = new Font("Segoe UI", 22F, FontStyle.Bold), Location = new Point(14, 42) };
@@ -159,7 +156,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             _requestsGrid = new DataGridView
             {
                 Dock = DockStyle.Fill,
-                BackgroundColor = Color.White,
+                BackgroundColor = AcademicTheme.Surface,
                 BorderStyle = BorderStyle.None,
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
@@ -169,6 +166,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular),
                 EnableHeadersVisualStyles = false
             };
+            AcademicTheme.StyleGrid(_requestsGrid);
             _requestsGrid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             _requestsGrid.ColumnHeadersHeight = 30;
             _requestsGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
@@ -291,7 +289,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 WrapContents = false,
                 AutoScroll = true
             };
-            actions.Controls.Add(CreateActionButton("Add User", Color.FromArgb(37, 99, 235), "USERS"));
+            actions.Controls.Add(CreateActionButton("Add User", AcademicTheme.Primary, "USERS"));
             actions.Controls.Add(CreateActionButton("Create Course", Color.FromArgb(34, 211, 238), "COURSES"));
             actions.Controls.Add(CreateActionButton("Export Report", Color.FromArgb(139, 92, 246), "REPORTS"));
             actions.Controls.Add(CreateActionButton("View Audit", Color.FromArgb(245, 158, 11), "AUDIT"));
@@ -306,7 +304,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Text = text,
                 Width = 230,
                 Height = 42,
-                BackColor = Color.White,
+                BackColor = AcademicTheme.Surface,
                 ForeColor = color,
                 FlatStyle = FlatStyle.Flat,
                 Margin = new Padding(8),
@@ -315,7 +313,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 UseVisualStyleBackColor = false,
                 Cursor = Cursors.Hand
             };
-            button.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+            button.FlatAppearance.BorderColor = AcademicTheme.BorderSoft;
             button.FlatAppearance.BorderSize = 1;
             button.Click += (_, _) => QuickActionRequested?.Invoke(target);
 
@@ -328,9 +326,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
             {
                 Dock = DockStyle.Fill,
                 Margin = new Padding(8),
-                BackColor = Color.White,
+                BackColor = AcademicTheme.Surface,
                 Padding = new Padding(12)
             };
+            AcademicTheme.StyleCard(panel);
 
             var label = new Label
             {
@@ -338,20 +337,14 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Dock = DockStyle.Top,
                 Height = 30,
                 Font = new Font("Segoe UI", 11F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(15, 23, 42)
+                ForeColor = AcademicTheme.TextPrimary
             };
 
             var contentHost = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.White,
+                BackColor = AcademicTheme.Surface,
                 Padding = new Padding(0, 4, 0, 0)
-            };
-
-            panel.Paint += (_, e) =>
-            {
-                using var p = new Pen(Color.FromArgb(226, 232, 240));
-                e.Graphics.DrawRectangle(p, 0, 0, panel.Width - 1, panel.Height - 1);
             };
 
             panel.Controls.Add(contentHost);

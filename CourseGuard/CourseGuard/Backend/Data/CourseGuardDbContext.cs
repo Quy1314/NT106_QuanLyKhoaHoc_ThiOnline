@@ -161,12 +161,12 @@ namespace CourseGuard.Backend.Data
             string query = $@"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status 
                              FROM USERS u 
                              JOIN ROLES r ON u.role_id = r.id 
-                             WHERE u.status IN ({statusParams})";
+                             WHERE UPPER(u.status) IN ({statusParams})";
             
             using var command = new NpgsqlCommand(query, connection);
             for (int i = 0; i < statuses.Length; i++)
             {
-                command.Parameters.AddWithValue($"@s{i}", statuses[i]);
+                command.Parameters.AddWithValue($"@s{i}", statuses[i].ToUpperInvariant());
             }
 
             using var reader = command.ExecuteReader();
@@ -597,7 +597,7 @@ namespace CourseGuard.Backend.Data
                              JOIN ROLES r ON u.role_id = r.id 
                              WHERE 1=1";
             
-            if (status != "ALL") query += " AND u.status = @status";
+            if (status != "ALL") query += " AND UPPER(u.status) = UPPER(@status)";
             if (role != "ALL") query += " AND UPPER(r.name) = UPPER(@role)";
 
             using var command = new NpgsqlCommand(query, connection);
@@ -637,7 +637,7 @@ namespace CourseGuard.Backend.Data
                 const string seedQuery = @"
                     INSERT INTO USERS (username, password_hash, full_name, email, role_id, status)
                     SELECT @username, @password_hash, @full_name, @email, 
-                           (SELECT id FROM ROLES WHERE UPPER(name) = 'STUDENT'), 'active'
+                           (SELECT id FROM ROLES WHERE UPPER(name) = 'STUDENT'), 'ACTIVE'
                     WHERE NOT EXISTS (SELECT 1 FROM USERS WHERE LOWER(username) = LOWER(@username))";
 
                 using var command = new NpgsqlCommand(seedQuery, connection);

@@ -1,4 +1,5 @@
 using System.Data;
+using System.Drawing;
 using System.Windows.Forms;
 using CourseGuard.Frontend.Theme;
 
@@ -9,11 +10,21 @@ namespace CourseGuard.Frontend.UserControls.Student
         public UC_Schedule()
         {
             InitializeComponent();
+            ApplyAcademicStyle();
             cboTimeFilter.SelectedIndex = 0;
             LoadDummyData();
 
             // Bo góc buttons
             RoundedButtonHelper.Apply(btnJoinOnline, 10);
+        }
+
+        private void ApplyAcademicStyle()
+        {
+            BackColor = AcademicTheme.AppBackground;
+            btnJoinOnline.BackColor = AcademicTheme.Primary;
+            btnJoinOnline.ForeColor = Color.White;
+            btnJoinOnline.FlatAppearance.BorderSize = 0;
+            AcademicTheme.StyleGrid(dgvSchedule);
         }
 
         private void LoadDummyData()
