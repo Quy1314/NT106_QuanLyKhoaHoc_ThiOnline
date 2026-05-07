@@ -2,12 +2,18 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
+using CourseGuard.Backend.Controllers;
+using CourseGuard.Backend.Data;
+using CourseGuard.Backend.Security;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.Forms.Student
 {
     public partial class OnlineClassForm : Form
     {
+        private readonly AuthController _authController = new(new CourseGuardDbContext(""));
+        private bool _leaveActivityLogged;
+
         // ===== Trạng thái =====
         private bool isMicOn = true;
         private bool isCamOn = true;
@@ -51,6 +57,7 @@ namespace CourseGuard.Frontend.Forms.Student
             AddStrikethroughPaint(btnMic, () => !isMicOn);
             AddStrikethroughPaint(btnSpeaker, () => !isSpeakerOn);
             AddStrikethroughPaint(btnCam, () => !isCamOn);
+            this.FormClosing += OnlineClassForm_FormClosing;
         }
 
         // ===== TOOLTIPS =====
@@ -73,7 +80,7 @@ namespace CourseGuard.Frontend.Forms.Student
         {
             picVideo.Paint += (s, e) =>
             {
-                string msg = isCamOn ? "Teacher's Camera Stream" : "Camera đã tắt.";
+                string msg = isCamOn ? "Camera của giảng viên" : "Camera đã tắt.";
                 if (isScreenSharing) msg = "Bạn đang chia sẻ màn hình.";
                 SizeF sz = e.Graphics.MeasureString(msg, _videoFont);
                 e.Graphics.DrawString(msg, _videoFont, Brushes.White,
@@ -256,7 +263,11 @@ namespace CourseGuard.Frontend.Forms.Student
             {
                 var res = MessageBox.Show("Bạn có muốn rời phòng chứ?", "Xác nhận",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                if (res == DialogResult.Yes) this.Close();
+                if (res == DialogResult.Yes)
+                {
+                    LogOnlineSessionExit("Người dùng bấm rời lớp học online.");
+                    this.Close();
+                }
             };
 
             // ── Mic Toggle ──
@@ -348,6 +359,20 @@ namespace CourseGuard.Frontend.Forms.Student
                     }
                 }
             };
+        }
+
+        private void OnlineClassForm_FormClosing(object? sender, FormClosingEventArgs e)
+        {
+            LogOnlineSessionExit("Người dùng đóng cửa sổ lớp học online.");
+        }
+
+        private void LogOnlineSessionExit(string details)
+        {
+            if (_leaveActivityLogged) return;
+            _leaveActivityLogged = true;
+            int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
+            string username = UserSessionContext.CurrentUsername ?? "không xác định";
+            _authController.LogUserActivity(userId, "ONLINE_SESSION_EXIT", $"{details} Tài khoản={username}", string.Empty);
         }
     }
 }

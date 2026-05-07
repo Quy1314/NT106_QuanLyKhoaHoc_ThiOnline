@@ -52,9 +52,9 @@ namespace CourseGuard.Frontend.Forms.Admin
 
         private void ApplyTheme()
         {
-            BackColor = Color.FromArgb(248, 250, 252);
-            sidebar.BackColor = Color.White;
-            mainboard.BackColor = Color.FromArgb(248, 250, 252);
+            BackColor = AcademicTheme.AppBackground;
+            sidebar.BackColor = AcademicTheme.Surface;
+            mainboard.BackColor = AcademicTheme.AppBackground;
 
             Button[] menuButtons = { btnDashboard, btnUsers, btnCourses, btnReports, btnDeviceMonitoring, btnAuditLogs, btnSettings };
             foreach (var btn in menuButtons)
@@ -62,13 +62,13 @@ namespace CourseGuard.Frontend.Forms.Admin
                 btn.FlatStyle = FlatStyle.Flat;
                 btn.FlatAppearance.BorderSize = 0;
                 btn.BackColor = Color.Transparent;
-                btn.ForeColor = Color.FromArgb(100, 116, 139);
+                btn.ForeColor = AcademicTheme.TextSecondary;
                 btn.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
                 btn.TextAlign = ContentAlignment.MiddleLeft;
                 btn.Padding = new Padding(16, 0, 0, 0);
             }
 
-            btnLogout.BackColor = Color.FromArgb(239, 68, 68);
+            btnLogout.BackColor = Color.FromArgb(220, 38, 38);
             btnLogout.ForeColor = Color.White;
             btnLogout.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
         }
@@ -77,7 +77,7 @@ namespace CourseGuard.Frontend.Forms.Admin
         {
             // Gán sự kiện click và hover cho tất cả sidebar buttons (trừ Logout)
             Button[] sidebarButtons = { btnDashboard, btnUsers, btnCourses, btnReports, btnDeviceMonitoring, btnAuditLogs, btnSettings };
-            Color activeColor = Color.FromArgb(37, 99, 235);
+            Color activeColor = AcademicTheme.Primary;
 
             foreach (var btn in sidebarButtons)
             {
@@ -86,7 +86,7 @@ namespace CourseGuard.Frontend.Forms.Admin
                 btn.MouseEnter += (s, e) =>
                 {
                     if (btn.BackColor != activeColor)
-                        btn.BackColor = Color.FromArgb(235, 240, 252);
+                        btn.BackColor = Color.FromArgb(222, 224, 255);
                 };
 
                 btn.MouseLeave += (s, e) =>
@@ -112,9 +112,9 @@ namespace CourseGuard.Frontend.Forms.Admin
                 { btnUsers, () => new UC_UsersManage() },
                 { btnCourses, () => new UC_CoursesManage() },
                 { btnReports, () => new UC_AdminReports() },
-                { btnDeviceMonitoring, () => CreateEmptyView("Device Monitoring") },
-                { btnAuditLogs, () => CreateEmptyView("Audit Logs") },
-                { btnSettings, () => CreateEmptyView("Settings") }
+                { btnDeviceMonitoring, () => CreateEmptyView("Giám sát thiết bị") },
+                { btnAuditLogs, () => new UC_AdminLogStatistics() },
+                { btnSettings, () => CreateEmptyView("Cài đặt") }
             };
         }
 
@@ -150,14 +150,14 @@ namespace CourseGuard.Frontend.Forms.Admin
             {
                 if (key == activeBtn)
                 {
-                    key.BackColor = Color.FromArgb(37, 99, 235);
+                    key.BackColor = AcademicTheme.Primary;
                     key.ForeColor = Color.White;
                     key.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
                 }
                 else
                 {
                     key.BackColor = Color.Transparent;
-                    key.ForeColor = Color.FromArgb(100, 116, 139);
+                    key.ForeColor = AcademicTheme.TextSecondary;
                     key.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
                 }
             }

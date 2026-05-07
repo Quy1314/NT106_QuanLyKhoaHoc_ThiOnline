@@ -14,6 +14,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Admin
 {
@@ -27,6 +28,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
         public UC_CoursesManage()
         {
             InitializeComponent();
+            ApplyAcademicStyle();
 
             // Bo góc + cursor tay cho tất cả buttons
             CourseGuard.Frontend.Theme.RoundedButtonHelper.Apply(10,
@@ -39,6 +41,28 @@ namespace CourseGuard.Frontend.UserControls.Admin
             WireEvents();
             // Initial load
             _ = RefreshDataAsync();
+        }
+
+        private void ApplyAcademicStyle()
+        {
+            BackColor = AcademicTheme.AppBackground;
+            btnAddCourse.BackColor = AcademicTheme.Primary;
+            btnAddCourse.ForeColor = Color.White;
+            btnUpdateCourse.BackColor = AcademicTheme.Primary;
+            btnUpdateCourse.ForeColor = Color.White;
+            btnDeleteCourse.BackColor = Color.FromArgb(220, 38, 38);
+            btnDeleteCourse.ForeColor = Color.White;
+            btnAddStudent.BackColor = AcademicTheme.Primary;
+            btnAddStudent.ForeColor = Color.White;
+            btnApproveStudent.BackColor = AcademicTheme.Surface;
+            btnApproveStudent.ForeColor = AcademicTheme.TextSecondary;
+            btnApproveStudent.FlatAppearance.BorderColor = AcademicTheme.BorderSoft;
+            btnApproveStudent.FlatAppearance.BorderSize = 1;
+            btnRemoveStudent.BackColor = AcademicTheme.Surface;
+            btnRemoveStudent.ForeColor = AcademicTheme.TextSecondary;
+            btnRemoveStudent.FlatAppearance.BorderColor = AcademicTheme.BorderSoft;
+            btnRemoveStudent.FlatAppearance.BorderSize = 1;
+            AcademicTheme.StyleGrid(dgvCourses);
         }
 
         private void WireEvents()

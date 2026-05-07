@@ -24,6 +24,11 @@ namespace CourseGuard.Backend.Controllers
 
         public UserModel? Login(string username, string password)
         {
+            if (!UserIdentityBloomIndex.UsernameExists(_dbContext, username))
+            {
+                return null;
+            }
+
             var user = _dbContext.GetUserByUsername(username);
             
             if (user == null)
@@ -41,6 +46,11 @@ namespace CourseGuard.Backend.Controllers
 
         public async Task<UserModel?> LoginAsync(string username, string password, CancellationToken cancellationToken = default)
         {
+            if (!UserIdentityBloomIndex.UsernameExists(_dbContext, username))
+            {
+                return null;
+            }
+
             var user = await _dbContext.GetUserByUsernameAsync(username, cancellationToken);
 
             if (user == null)
@@ -108,11 +118,16 @@ namespace CourseGuard.Backend.Controllers
             }
 
             // 1. Manually check for existing username to provide better UX
-            if (_dbContext.UserExists(user.Username))
+            if (UserIdentityBloomIndex.UsernameExists(_dbContext, user.Username))
             {
                 Console.WriteLine("User registration failed: Username already exists.");
                 LastErrorMessage = "Tên đăng nhập đã tồn tại trong hệ thống.";
                 return false; 
+            }
+            if (UserIdentityBloomIndex.EmailExists(_dbContext, user.Email))
+            {
+                LastErrorMessage = "Email đã tồn tại trong hệ thống.";
+                return false;
             }
 
             // Hash password
@@ -126,7 +141,8 @@ namespace CourseGuard.Backend.Controllers
             {
                 _dbContext.InsertUser(user, passwordHash);
                 var createdUser = _dbContext.GetUserByUsername(user.Username);
-                _dbContext.LogUserActivity(createdUser?.Id, "SIGNUP", $"New signup request: {user.Username}", string.Empty);
+                UserIdentityBloomIndex.RegisterUserIdentity(user.Username, user.Email);
+                _dbContext.LogUserActivity(createdUser?.Id, "SIGNUP", $"Yêu cầu đăng ký mới: {user.Username}", string.Empty);
                 return true;
             }
             catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
@@ -144,15 +160,67 @@ namespace CourseGuard.Backend.Controllers
 
         public bool ForgotPasswordRequest(string username, string email)
         {
+            if (!UserIdentityBloomIndex.UsernameExists(_dbContext, username) ||
+                !UserIdentityBloomIndex.EmailExists(_dbContext, email))
+            {
+                return false;
+            }
+
             var user = _dbContext.GetUserByUsernameAndEmail(username, email);
             if (user != null)
             {
                 // Update status to RESET_REQUEST as requested
                 _dbContext.UpdateUserStatus(user.Id, "RESET_REQUEST");
-                _dbContext.LogUserActivity(user.Id, "FORGOT_PASSWORD", $"Forgot password request: {user.Username}", string.Empty);
+                _dbContext.LogUserActivity(user.Id, "FORGOT_PASSWORD", $"Yêu cầu quên mật khẩu: {user.Username}", string.Empty);
                 return true;
             }
             return false;
+        }
+
+        public bool ChangePassword(int userId, string oldPassword, string newPassword, string ipAddress = "")
+        {
+            LastErrorMessage = string.Empty;
+            if (userId <= 0)
+            {
+                LastErrorMessage = "Phiên người dùng không hợp lệ.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(oldPassword) || string.IsNullOrWhiteSpace(newPassword))
+            {
+                LastErrorMessage = "Vui lòng nhập đầy đủ mật khẩu cũ và mật khẩu mới.";
+                return false;
+            }
+
+            if (newPassword.Length < 6)
+            {
+                LastErrorMessage = "Mật khẩu mới phải có ít nhất 6 ký tự.";
+                return false;
+            }
+
+            var user = _dbContext.GetUserById(userId);
+            if (user == null)
+            {
+                LastErrorMessage = "Không tìm thấy người dùng.";
+                return false;
+            }
+
+            if (!PasswordHasher.VerifyPassword(oldPassword, user.PasswordHash))
+            {
+                LastErrorMessage = "Mật khẩu cũ không chính xác.";
+                return false;
+            }
+
+            if (PasswordHasher.VerifyPassword(newPassword, user.PasswordHash))
+            {
+                LastErrorMessage = "Mật khẩu mới phải khác mật khẩu cũ.";
+                return false;
+            }
+
+            string newPasswordHash = PasswordHasher.HashPassword(newPassword);
+            _dbContext.UpdateUserPassword(userId, newPasswordHash);
+            _dbContext.LogUserActivity(userId, "CHANGE_PASSWORD", $"Nguoi dung da doi mat khau: {user.Username}", ipAddress);
+            return true;
         }
 
         public void Logout(int? userId = null, string username = "", string ipAddress = "")
@@ -160,7 +228,7 @@ namespace CourseGuard.Backend.Controllers
             // In a production app, we would clear JWT tokens or Session state.
             // For this local WinForms app, we log the event and navigate back.
             Console.WriteLine("Auth: User session cleared.");
-            _dbContext.LogUserActivity(userId, "LOGOUT", $"Logout: {username}", ipAddress);
+            _dbContext.LogUserActivity(userId, "LOGOUT", $"Đăng xuất: {username}", ipAddress);
             UserSessionContext.Clear();
         }
     }

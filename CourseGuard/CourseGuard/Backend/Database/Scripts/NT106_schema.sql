@@ -1,3 +1,14 @@
+-- NT106 CONSOLIDATED SCHEMA
+-- Gộp toàn bộ file SQL hiện có thành một file duy nhất.
+-- Nguồn gộp:
+-- 1) SupabaseSchema.sql
+-- 2) Migrations/20260415_security_constraints.sql
+-- 3) Migrations/20260415_extend_courses_for_schedule.sql
+-- 4) Migrations/20260416_normalize_user_status.sql
+
+-- =========================================================
+-- [BEGIN] SupabaseSchema.sql
+-- =========================================================
 -- SUPABASE (POSTGRESQL) SCHEMA INIT SCRIPT
 -- Bỏ qua lệnh CREATE DATABASE / USE vì Supabase đã tự xử lý Database mặc định là postgres.
 
@@ -40,7 +51,7 @@ CREATE TABLE USERS (
     STATUS VARCHAR(20) DEFAULT 'ACTIVE',
     CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT FK_USERS_ROLES 
+    CONSTRAINT FK_USERS_ROLES
     FOREIGN KEY (ROLE_ID) REFERENCES ROLES(ID)
 );
 
@@ -361,7 +372,7 @@ WHERE CODE IN (
 
 -- TẠO ADMIN ACCOUNT
 INSERT INTO users (username, password_hash, full_name, email, role_id, status)
-VALUES 
+VALUES
 (
     'admin',
     '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9',
@@ -402,7 +413,7 @@ VALUES
 
 -- TẠO STUDENT ACCOUNT (cho team test)
 INSERT INTO users (username, password_hash, full_name, email, role_id, status)
-VALUES 
+VALUES
 (
     'student',
     '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9',
@@ -411,3 +422,64 @@ VALUES
     3, -- role STUDENT
     'ACTIVE'
 );
+
+-- =========================================================
+-- [END] SupabaseSchema.sql
+-- =========================================================
+
+-- =========================================================
+-- [BEGIN] Migrations/20260415_security_constraints.sql
+-- =========================================================
+-- 2026-04-15: data consistency constraints for enrollment/device flows
+-- Run once in production with privileged DB account.
+BEGIN;
+
+WITH ranked_enrollments AS (
+    SELECT id,
+           ROW_NUMBER() OVER (PARTITION BY course_id, student_id ORDER BY id) AS rn
+    FROM enrollments
+)
+DELETE FROM enrollments
+WHERE id IN (SELECT id FROM ranked_enrollments WHERE rn > 1);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_enrollments_course_student
+ON enrollments (course_id, student_id);
+
+CREATE INDEX IF NOT EXISTS idx_devices_user_device
+ON devices (user_id, device_name);
+
+COMMIT;
+-- =========================================================
+-- [END] Migrations/20260415_security_constraints.sql
+-- =========================================================
+
+-- =========================================================
+-- [BEGIN] Migrations/20260415_extend_courses_for_schedule.sql
+-- =========================================================
+-- Extend COURSES table to store academic timetable metadata.
+-- Safe to run multiple times.
+ALTER TABLE COURSES ADD COLUMN IF NOT EXISTS COURSE_CODE VARCHAR(20);
+ALTER TABLE COURSES ADD COLUMN IF NOT EXISTS CLASS_CODE VARCHAR(50);
+ALTER TABLE COURSES ADD COLUMN IF NOT EXISTS CREDITS INT;
+ALTER TABLE COURSES ADD COLUMN IF NOT EXISTS INSTRUCTOR_TEXT VARCHAR(255);
+ALTER TABLE COURSES ADD COLUMN IF NOT EXISTS SCHEDULE_TEXT VARCHAR(255);
+CREATE INDEX IF NOT EXISTS IDX_COURSES_CODE ON COURSES (COURSE_CODE);
+CREATE INDEX IF NOT EXISTS IDX_COURSES_CLASS_CODE ON COURSES (CLASS_CODE);
+-- =========================================================
+-- [END] Migrations/20260415_extend_courses_for_schedule.sql
+-- =========================================================
+
+-- =========================================================
+-- [BEGIN] Migrations/20260416_normalize_user_status.sql
+-- =========================================================
+-- 2026-04-16: normalize status values for schema-compatible filtering
+-- Run once after deploying latest backend changes.
+BEGIN;
+UPDATE USERS
+SET STATUS = UPPER(COALESCE(STATUS, 'ACTIVE'))
+WHERE STATUS IS NULL
+   OR STATUS <> UPPER(STATUS);
+COMMIT;
+-- =========================================================
+-- [END] Migrations/20260416_normalize_user_status.sql
+-- =========================================================

@@ -29,7 +29,8 @@ namespace CourseGuard.Frontend.Forms.Student
             btnLogout.Click += (s, e) => 
             { 
                 var authService = new CourseGuard.Backend.Controllers.AuthController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
-                authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty);
+                string ipAddress = GetLocalIpAddress();
+                authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty, ipAddress);
                 this.DialogResult = DialogResult.OK; // Assuming Parent form handles return to Login
                 this.Close(); 
             };
@@ -43,9 +44,9 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private void ApplyAdminLikeTheme()
         {
-            BackColor = Color.FromArgb(248, 250, 252);
-            sidebar.BackColor = Color.White;
-            mainboard.BackColor = Color.FromArgb(248, 250, 252);
+            BackColor = AcademicTheme.AppBackground;
+            sidebar.BackColor = AcademicTheme.Surface;
+            mainboard.BackColor = AcademicTheme.AppBackground;
 
             Button[] menuButtons = { btnDashboard, btnCourses, btnMyCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile };
             foreach (var btn in menuButtons)
@@ -53,13 +54,13 @@ namespace CourseGuard.Frontend.Forms.Student
                 btn.FlatStyle = FlatStyle.Flat;
                 btn.FlatAppearance.BorderSize = 0;
                 btn.BackColor = Color.Transparent;
-                btn.ForeColor = Color.FromArgb(100, 116, 139);
+                btn.ForeColor = AcademicTheme.TextSecondary;
                 btn.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
                 btn.TextAlign = ContentAlignment.MiddleLeft;
                 btn.Padding = new Padding(16, 0, 0, 0);
             }
 
-            btnLogout.BackColor = Color.FromArgb(239, 68, 68);
+            btnLogout.BackColor = Color.FromArgb(220, 38, 38);
             btnLogout.ForeColor = Color.White;
             btnLogout.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
         }
@@ -67,6 +68,8 @@ namespace CourseGuard.Frontend.Forms.Student
         private void SetupButtonEvents()
         {
             // Gán sự kiện click và hover cho tất cả sidebar buttons (trừ Logout)
+            Button[] sidebarButtons = { btnDashboard, btnCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile };
+            Color activeColor = AcademicTheme.Primary;
             Button[] sidebarButtons = { btnDashboard, btnCourses, btnMyCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile };
             Color activeColor = Color.FromArgb(37, 99, 235);
 
@@ -77,7 +80,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 btn.MouseEnter += (s, e) =>
                 {
                     if (btn.BackColor != activeColor)
-                        btn.BackColor = Color.FromArgb(235, 240, 252);
+                        btn.BackColor = Color.FromArgb(222, 224, 255);
                 };
 
                 btn.MouseLeave += (s, e) =>
@@ -119,14 +122,14 @@ namespace CourseGuard.Frontend.Forms.Student
             {
                 if (key == activeBtn)
                 {
-                    key.BackColor = Color.FromArgb(37, 99, 235);
+                    key.BackColor = AcademicTheme.Primary;
                     key.ForeColor = Color.White;
                     key.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
                 }
                 else
                 {
                     key.BackColor = Color.Transparent;
-                    key.ForeColor = Color.FromArgb(100, 116, 139);
+                    key.ForeColor = AcademicTheme.TextSecondary;
                     key.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
                 }
             }
@@ -142,6 +145,35 @@ namespace CourseGuard.Frontend.Forms.Student
             mainboard.Controls.Clear();
             uc.Dock = DockStyle.Fill;
             mainboard.Controls.Add(uc);
+        }
+
+        private static string GetLocalIpAddress()
+        {
+            try
+            {
+                foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up)
+                    {
+                        continue;
+                    }
+
+                    foreach (var ip in ni.GetIPProperties().UnicastAddresses)
+                    {
+                        if (ip.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
+                            !System.Net.IPAddress.IsLoopback(ip.Address))
+                        {
+                            return ip.Address.ToString();
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback below.
+            }
+
+            return "127.0.0.1";
         }
     }
 }

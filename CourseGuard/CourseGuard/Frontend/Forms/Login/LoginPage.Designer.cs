@@ -11,7 +11,7 @@ namespace CourseGuard.Frontend.Forms.Login
         private Label lblPassword;
         private TextBox txtUsername;
         private TextBox txtPassword;
-        private Button btnLogin;
+        private CourseGuard.Frontend.Theme.NeonGradientButton btnLogin;
         private LinkLabel lnkRegister;
         private Panel RegisterPanel;
         private Label RegisterTitle;
@@ -47,7 +47,7 @@ namespace CourseGuard.Frontend.Forms.Login
             txtUsername = new TextBox();
             lblPassword = new Label();
             txtPassword = new TextBox();
-            btnLogin = new Button();
+            btnLogin = new CourseGuard.Frontend.Theme.NeonGradientButton();
             lnkRegister = new LinkLabel();
 
             // Register Panel

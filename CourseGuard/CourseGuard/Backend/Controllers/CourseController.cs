@@ -87,7 +87,58 @@ namespace CourseGuard.Backend.Controllers
 
             try
             {
-                return _dbContext.EnrollStudent(courseId, studentId);
+                bool enrolled = _dbContext.EnrollStudent(courseId, studentId);
+                if (enrolled)
+                {
+                    _dbContext.LogUserActivity(
+                        UserSessionContext.CurrentUserId,
+                        "COURSE_ENROLL",
+                        $"Admin ghi danh học viên ID={studentId} vào khóa học ID={courseId}",
+                        string.Empty);
+                }
+                return enrolled;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public HashSet<int> GetStudentEnrolledCourseIds(int studentId)
+        {
+            if (studentId <= 0)
+            {
+                return new HashSet<int>();
+            }
+
+            return _dbContext.GetStudentEnrolledCourseIds(studentId);
+        }
+
+        public bool StudentJoinCourse(int courseId, int studentId)
+        {
+            if (studentId <= 0)
+            {
+                return false;
+            }
+
+            if (UserSessionContext.CurrentUserId != studentId)
+            {
+                return false;
+            }
+
+            try
+            {
+                bool enrolled = _dbContext.EnrollStudent(courseId, studentId);
+                if (enrolled)
+                {
+                    _dbContext.LogUserActivity(
+                        studentId,
+                        "COURSE_ENROLL_REQUEST",
+                        $"Học viên ID={studentId} tham gia khóa học ID={courseId}",
+                        string.Empty);
+                }
+
+                return enrolled;
             }
             catch
             {

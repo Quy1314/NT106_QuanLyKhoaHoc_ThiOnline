@@ -2,6 +2,7 @@ using System;
 using System.Data;
 using System.Drawing;
 using System.Windows.Forms;
+using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Student
 {
@@ -10,7 +11,14 @@ namespace CourseGuard.Frontend.UserControls.Student
         public UC_StudentDashboard()
         {
             InitializeComponent();
+            ApplyAcademicStyle();
             LoadDummyData();
+        }
+
+        private void ApplyAcademicStyle()
+        {
+            BackColor = AcademicTheme.AppBackground;
+            AcademicTheme.StyleGrid(dgvRecentNotices);
         }
 
         private void LoadDummyData()

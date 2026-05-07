@@ -5,6 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
+using System.Windows.Forms;
+using CourseGuard.Backend.Controllers;
+using CourseGuard.Backend.Data;
 using System.Linq;
 using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
@@ -17,12 +20,14 @@ namespace CourseGuard.Frontend.UserControls.Student
 {
     public partial class UC_Schedule : UserControl
     {
+        private readonly AuthController _authController = new(new CourseGuardDbContext(""));
         private readonly CourseController _controller;
         private List<EnrollmentModel> _enrollments = new();
 
         public UC_Schedule()
         {
             InitializeComponent();
+            ApplyAcademicStyle();
             cboTimeFilter.SelectedIndex = 0;
 
             _controller = new CourseController(new CourseGuardDbContext(""));
@@ -66,6 +71,16 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
         }
 
+        private void ApplyAcademicStyle()
+        {
+            BackColor = AcademicTheme.AppBackground;
+            btnJoinOnline.BackColor = AcademicTheme.Primary;
+            btnJoinOnline.ForeColor = Color.White;
+            btnJoinOnline.FlatAppearance.BorderSize = 0;
+            AcademicTheme.StyleGrid(dgvSchedule);
+        }
+
+        private void LoadDummyData()
         private void ApplyTimeFilter()
         {
             var filtered = _enrollments.AsEnumerable();
@@ -120,6 +135,16 @@ namespace CourseGuard.Frontend.UserControls.Student
             dgvSchedule.DataSource = dt;
             dgvSchedule.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
+            btnJoinOnline.Click += (s, e) => {
+                int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
+                string username = UserSessionContext.CurrentUsername ?? "không xác định";
+                string sessionName = dgvSchedule.CurrentRow?.Cells.Count > 1
+                    ? dgvSchedule.CurrentRow.Cells[1].Value?.ToString() ?? "buổi học online"
+                    : "buổi học online";
+                _authController.LogUserActivity(userId, "ONLINE_SESSION_JOIN", $"Người dùng {username} tham gia lớp học online: {sessionName}", string.Empty);
+                CourseGuard.Frontend.Forms.Student.OnlineClassForm frm = new CourseGuard.Frontend.Forms.Student.OnlineClassForm();
+                frm.Show();
+            };
             // Tô màu theo trạng thái
             foreach (DataGridViewRow row in dgvSchedule.Rows)
             {

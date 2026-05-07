@@ -510,7 +510,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             lblEmailHeader.Padding = new Padding(5, 5, 5, 10);
             lblEmailHeader.Size = new Size(330, 40);
             lblEmailHeader.TabIndex = 0;
-            lblEmailHeader.Text = "Personal Inbox";
+            lblEmailHeader.Text = "Hộp thư cá nhân";
             lblEmailHeader.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // TeacherDashboard

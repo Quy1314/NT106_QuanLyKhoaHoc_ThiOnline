@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
+using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Admin
 {
@@ -32,7 +33,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
         private void BuildDashboardFromTemplate()
         {
             Controls.Clear();
-            BackColor = Color.FromArgb(248, 250, 252);
+            BackColor = AcademicTheme.AppBackground;
 
             var root = new Panel
             {
@@ -51,7 +52,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
             var title = new Label
             {
-                Text = "Admin Dashboard",
+                Text = "Bảng điều khiển Admin",
                 Font = new Font("Segoe UI", 20F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(15, 23, 42),
                 AutoSize = true,
@@ -60,7 +61,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
             var subtitle = new Label
             {
-                Text = "Monitor and manage your enterprise course system",
+                Text = "Theo dõi người dùng, khóa học và phê duyệt tại một nơi",
                 Font = new Font("Segoe UI", 10F, FontStyle.Regular),
                 ForeColor = Color.FromArgb(100, 116, 139),
                 AutoSize = true,
@@ -98,10 +99,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
             }
 
-            panel.Controls.Add(CreateKpiCard("Total Users", "2,450", "+12.5%", Color.FromArgb(37, 99, 235)), 0, 0);
-            panel.Controls.Add(CreateKpiCard("Active Courses", "87", "+8.2%", Color.FromArgb(34, 211, 238)), 1, 0);
-            panel.Controls.Add(CreateKpiCard("Pending Requests", "24", "-3.1%", Color.FromArgb(245, 158, 11)), 2, 0);
-            panel.Controls.Add(CreateKpiCard("Today Logins", "1,234", "+18.7%", Color.FromArgb(34, 197, 94)), 3, 0);
+            panel.Controls.Add(CreateKpiCard("Tổng người dùng", "2,450", "+12.5%", AcademicTheme.Primary), 0, 0);
+            panel.Controls.Add(CreateKpiCard("Khóa học hoạt động", "87", "+8.2%", Color.FromArgb(34, 211, 238)), 1, 0);
+            panel.Controls.Add(CreateKpiCard("Yêu cầu chờ duyệt", "24", "-3.1%", Color.FromArgb(245, 158, 11)), 2, 0);
+            panel.Controls.Add(CreateKpiCard("Đăng nhập hôm nay", "1,234", "+18.7%", Color.FromArgb(34, 197, 94)), 3, 0);
             return panel;
         }
 
@@ -111,22 +112,18 @@ namespace CourseGuard.Frontend.UserControls.Admin
             {
                 Dock = DockStyle.Fill,
                 Margin = new Padding(8),
-                BackColor = Color.White
+                BackColor = AcademicTheme.Surface
             };
-            card.Paint += (_, e) =>
-            {
-                using var p = new Pen(Color.FromArgb(226, 232, 240));
-                e.Graphics.DrawRectangle(p, 0, 0, card.Width - 1, card.Height - 1);
-            };
+            AcademicTheme.StyleCard(card);
 
             var title = new Label { Text = label, AutoSize = true, ForeColor = Color.FromArgb(100, 116, 139), Font = new Font("Segoe UI", 10F), Location = new Point(16, 16) };
             var number = new Label { Text = value, AutoSize = true, ForeColor = Color.FromArgb(15, 23, 42), Font = new Font("Segoe UI", 22F, FontStyle.Bold), Location = new Point(14, 42) };
             var chip = new Label { Text = delta, AutoSize = true, ForeColor = accent, Font = new Font("Segoe UI", 9F, FontStyle.Bold), Location = new Point(16, 96) };
 
-            if (label == "Total Users") _totalUsersValueLabel = number;
-            else if (label == "Active Courses") _activeCoursesValueLabel = number;
-            else if (label == "Pending Requests") _pendingRequestsValueLabel = number;
-            else if (label == "Today Logins") _todayLoginsValueLabel = number;
+            if (label == "Tổng người dùng") _totalUsersValueLabel = number;
+            else if (label == "Khóa học hoạt động") _activeCoursesValueLabel = number;
+            else if (label == "Yêu cầu chờ duyệt") _pendingRequestsValueLabel = number;
+            else if (label == "Đăng nhập hôm nay") _todayLoginsValueLabel = number;
 
             card.Controls.Add(title);
             card.Controls.Add(number);
@@ -155,11 +152,11 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
         private Control CreateRequestsTable()
         {
-            var panel = CreateCardPanel("Recent User Requests");
+            var panel = CreateCardPanel("Yêu cầu người dùng gần đây");
             _requestsGrid = new DataGridView
             {
                 Dock = DockStyle.Fill,
-                BackgroundColor = Color.White,
+                BackgroundColor = AcademicTheme.Surface,
                 BorderStyle = BorderStyle.None,
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
@@ -169,16 +166,17 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular),
                 EnableHeadersVisualStyles = false
             };
+            AcademicTheme.StyleGrid(_requestsGrid);
             _requestsGrid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             _requestsGrid.ColumnHeadersHeight = 30;
             _requestsGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
             _requestsGrid.RowTemplate.Height = 30;
             _requestsGrid.DefaultCellStyle.WrapMode = DataGridViewTriState.False;
-            _requestsGrid.Columns.Add("Username", "User");
-            _requestsGrid.Columns.Add("Type", "Type");
-            _requestsGrid.Columns.Add("Status", "Status");
-            _requestsGrid.Columns.Add("Info", "Info");
-            _requestsGrid.Rows.Add("Loading...", "Registration", "PENDING", "Please wait");
+            _requestsGrid.Columns.Add("Username", "Người dùng");
+            _requestsGrid.Columns.Add("Type", "Loại");
+            _requestsGrid.Columns.Add("Status", "Trạng thái");
+            _requestsGrid.Columns.Add("Info", "Thông tin");
+            _requestsGrid.Rows.Add("Đang tải...", "Đăng ký", "PENDING", "Vui lòng chờ");
             AddCardContent(panel, _requestsGrid);
 
             _ = LoadPendingRequestsAsync();
@@ -202,7 +200,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 {
                     _requestsGrid.Rows.Add(
                         user.Username,
-                        "Registration",
+                        "Đăng ký",
                         user.Status,
                         string.IsNullOrWhiteSpace(user.Email) ? "-" : user.Email
                     );
@@ -210,20 +208,20 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
                 if (pendingOnly.Count == 0)
                 {
-                    _requestsGrid.Rows.Add("-", "Registration", "PENDING", "No pending users");
+                    _requestsGrid.Rows.Add("-", "Đăng ký", "PENDING", "Không có người dùng chờ duyệt");
                 }
             }
             catch (Exception ex)
             {
                 if (IsDisposed || Disposing || _requestsGrid == null) return;
                 _requestsGrid.Rows.Clear();
-                _requestsGrid.Rows.Add("Error", "Registration", "PENDING", ex.Message);
+                _requestsGrid.Rows.Add("Lỗi", "Đăng ký", "PENDING", ex.Message);
             }
         }
 
         private Control CreateActivitiesTable()
         {
-            var panel = CreateCardPanel("Recent Activities");
+            var panel = CreateCardPanel("Hoạt động gần đây");
             var list = new ListBox
             {
                 Dock = DockStyle.Fill,
@@ -232,7 +230,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 IntegralHeight = false,
                 ItemHeight = 22
             };
-            list.Items.Add("Loading activities...");
+            list.Items.Add("Đang tải hoạt động...");
             _activitiesList = list;
             AddCardContent(panel, list);
             return panel;
@@ -260,14 +258,18 @@ namespace CourseGuard.Frontend.UserControls.Admin
                     _activitiesList.Items.Clear();
                     foreach (var activity in activities)
                     {
+                        string actionText = TranslateAuditAction(activity.Action);
+                        string detailsText = string.IsNullOrWhiteSpace(activity.Details)
+                            ? "-"
+                            : activity.Details;
                         string text =
-                            $"{activity.Username} - {activity.Action} | IP: {activity.IpAddress} | {activity.CreatedAt:dd/MM/yyyy HH:mm:ss}";
+                            $"{activity.Username} - {actionText} | {detailsText} | IP: {activity.IpAddress} | {activity.CreatedAt:dd/MM/yyyy HH:mm:ss}";
                         _activitiesList.Items.Add(text);
                     }
 
                     if (activities.Count == 0)
                     {
-                        _activitiesList.Items.Add("No activity logs found.");
+                        _activitiesList.Items.Add("Không tìm thấy nhật ký hoạt động.");
                     }
                 }
             }
@@ -276,14 +278,14 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 if (_activitiesList != null)
                 {
                     _activitiesList.Items.Clear();
-                    _activitiesList.Items.Add("Failed to load activities: " + ex.Message);
+                    _activitiesList.Items.Add("Tải hoạt động thất bại: " + ex.Message);
                 }
             }
         }
 
         private Control CreateQuickActions()
         {
-            var panel = CreateCardPanel("Quick Actions");
+            var panel = CreateCardPanel("Thao tác nhanh");
             var actions = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -291,10 +293,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 WrapContents = false,
                 AutoScroll = true
             };
-            actions.Controls.Add(CreateActionButton("Add User", Color.FromArgb(37, 99, 235), "USERS"));
-            actions.Controls.Add(CreateActionButton("Create Course", Color.FromArgb(34, 211, 238), "COURSES"));
-            actions.Controls.Add(CreateActionButton("Export Report", Color.FromArgb(139, 92, 246), "REPORTS"));
-            actions.Controls.Add(CreateActionButton("View Audit", Color.FromArgb(245, 158, 11), "AUDIT"));
+            actions.Controls.Add(CreateActionButton("Thêm người dùng", AcademicTheme.Primary, "USERS"));
+            actions.Controls.Add(CreateActionButton("Tạo khóa học", Color.FromArgb(34, 211, 238), "COURSES"));
+            actions.Controls.Add(CreateActionButton("Xuất báo cáo", Color.FromArgb(139, 92, 246), "REPORTS"));
+            actions.Controls.Add(CreateActionButton("Xem Audit", Color.FromArgb(245, 158, 11), "AUDIT"));
             AddCardContent(panel, actions);
             return panel;
         }
@@ -306,7 +308,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Text = text,
                 Width = 230,
                 Height = 42,
-                BackColor = Color.White,
+                BackColor = AcademicTheme.Surface,
                 ForeColor = color,
                 FlatStyle = FlatStyle.Flat,
                 Margin = new Padding(8),
@@ -315,7 +317,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 UseVisualStyleBackColor = false,
                 Cursor = Cursors.Hand
             };
-            button.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+            button.FlatAppearance.BorderColor = AcademicTheme.BorderSoft;
             button.FlatAppearance.BorderSize = 1;
             button.Click += (_, _) => QuickActionRequested?.Invoke(target);
 
@@ -328,9 +330,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
             {
                 Dock = DockStyle.Fill,
                 Margin = new Padding(8),
-                BackColor = Color.White,
+                BackColor = AcademicTheme.Surface,
                 Padding = new Padding(12)
             };
+            AcademicTheme.StyleCard(panel);
 
             var label = new Label
             {
@@ -338,20 +341,14 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Dock = DockStyle.Top,
                 Height = 30,
                 Font = new Font("Segoe UI", 11F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(15, 23, 42)
+                ForeColor = AcademicTheme.TextPrimary
             };
 
             var contentHost = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.White,
+                BackColor = AcademicTheme.Surface,
                 Padding = new Padding(0, 4, 0, 0)
-            };
-
-            panel.Paint += (_, e) =>
-            {
-                using var p = new Pen(Color.FromArgb(226, 232, 240));
-                e.Graphics.DrawRectangle(p, 0, 0, panel.Width - 1, panel.Height - 1);
             };
 
             panel.Controls.Add(contentHost);
@@ -369,6 +366,32 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
 
             cardPanel.Controls.Add(content);
+        }
+
+        private static string TranslateAuditAction(string action)
+        {
+            return action?.ToUpperInvariant() switch
+            {
+                "LOGIN" => "Đăng nhập",
+                "LOGOUT" => "Đăng xuất",
+                "SIGNUP" => "Đăng ký tài khoản",
+                "FORGOT_PASSWORD" => "Yêu cầu quên mật khẩu",
+                "CHANGE_PASSWORD" => "Đổi mật khẩu",
+                "COURSE_ENROLL_REQUEST" => "Yêu cầu ghi danh khóa học",
+                "COURSE_ENROLL" => "Ghi danh khóa học",
+                "ONLINE_SESSION_JOIN" => "Vào lớp học online",
+                "ONLINE_SESSION_EXIT" => "Rời lớp học online",
+                "EXAM_JOIN" => "Vào bài thi",
+                "EXAM_SUBMIT" => "Nộp bài thi",
+                "EXAM_EXIT" => "Thoát bài thi",
+                "ADMIN_ADD_USER" => "Admin tạo tài khoản",
+                "ADMIN_DELETE_USER" => "Admin xóa tài khoản",
+                "ADMIN_APPROVE_REGISTRATION" => "Admin phê duyệt đăng ký",
+                "ADMIN_REJECT_USER_REQUEST" => "Admin từ chối yêu cầu",
+                "ADMIN_RESET_PASSWORD" => "Admin đặt lại mật khẩu",
+                "FORGOT_PASSWORD_APPROVED" => "Admin duyệt quên mật khẩu",
+                _ => action
+            };
         }
     }
 
