@@ -19,6 +19,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.mainboard = new System.Windows.Forms.Panel();
             this.btnDashboard = new System.Windows.Forms.Button();
             this.btnCourses = new System.Windows.Forms.Button();
+            this.btnMyCourses = new System.Windows.Forms.Button();
             this.btnExam = new System.Windows.Forms.Button();
             this.btnResult = new System.Windows.Forms.Button();
             this.btnSchedule = new System.Windows.Forms.Button();
@@ -35,6 +36,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.sidebar.Controls.Add(this.btnLogout);
             this.sidebar.Controls.Add(this.btnDashboard);
             this.sidebar.Controls.Add(this.btnCourses);
+            this.sidebar.Controls.Add(this.btnMyCourses);
             this.sidebar.Controls.Add(this.btnExam);
             this.sidebar.Controls.Add(this.btnResult);
             this.sidebar.Controls.Add(this.btnSchedule);
@@ -79,8 +81,21 @@ namespace CourseGuard.Frontend.Forms.Student
             this.btnCourses.Name = "btnCourses";
             this.btnCourses.Size = new System.Drawing.Size(200, 50);
             this.btnCourses.TabIndex = 1;
-            this.btnCourses.Text = "Courses";
+            this.btnCourses.Text = "Browse Courses";
             this.btnCourses.UseVisualStyleBackColor = false;
+            // 
+            // btnMyCourses
+            // 
+            this.btnMyCourses.BackColor = System.Drawing.Color.Transparent;
+            this.btnMyCourses.FlatAppearance.BorderSize = 0;
+            this.btnMyCourses.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnMyCourses.ForeColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.TextPrimary;
+            this.btnMyCourses.Location = new System.Drawing.Point(0, 100);
+            this.btnMyCourses.Name = "btnMyCourses";
+            this.btnMyCourses.Size = new System.Drawing.Size(200, 50);
+            this.btnMyCourses.TabIndex = 9;
+            this.btnMyCourses.Text = "My Courses";
+            this.btnMyCourses.UseVisualStyleBackColor = false;
             // 
             // btnExam
             // 
@@ -88,7 +103,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.btnExam.FlatAppearance.BorderSize = 0;
             this.btnExam.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnExam.ForeColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.TextPrimary;
-            this.btnExam.Location = new System.Drawing.Point(0, 100);
+            this.btnExam.Location = new System.Drawing.Point(0, 150);
             this.btnExam.Name = "btnExam";
             this.btnExam.Size = new System.Drawing.Size(200, 50);
             this.btnExam.TabIndex = 2;
@@ -101,7 +116,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.btnResult.FlatAppearance.BorderSize = 0;
             this.btnResult.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnResult.ForeColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.TextPrimary;
-            this.btnResult.Location = new System.Drawing.Point(0, 150);
+            this.btnResult.Location = new System.Drawing.Point(0, 200);
             this.btnResult.Name = "btnResult";
             this.btnResult.Size = new System.Drawing.Size(200, 50);
             this.btnResult.TabIndex = 3;
@@ -114,7 +129,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.btnSchedule.FlatAppearance.BorderSize = 0;
             this.btnSchedule.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnSchedule.ForeColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.TextPrimary;
-            this.btnSchedule.Location = new System.Drawing.Point(0, 200);
+            this.btnSchedule.Location = new System.Drawing.Point(0, 250);
             this.btnSchedule.Name = "btnSchedule";
             this.btnSchedule.Size = new System.Drawing.Size(200, 50);
             this.btnSchedule.TabIndex = 4;
@@ -127,7 +142,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.btnChat.FlatAppearance.BorderSize = 0;
             this.btnChat.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnChat.ForeColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.TextPrimary;
-            this.btnChat.Location = new System.Drawing.Point(0, 250);
+            this.btnChat.Location = new System.Drawing.Point(0, 300);
             this.btnChat.Name = "btnChat";
             this.btnChat.Size = new System.Drawing.Size(200, 50);
             this.btnChat.TabIndex = 5;
@@ -140,7 +155,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.btnNotify.FlatAppearance.BorderSize = 0;
             this.btnNotify.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnNotify.ForeColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.TextPrimary;
-            this.btnNotify.Location = new System.Drawing.Point(0, 300);
+            this.btnNotify.Location = new System.Drawing.Point(0, 350);
             this.btnNotify.Name = "btnNotify";
             this.btnNotify.Size = new System.Drawing.Size(200, 50);
             this.btnNotify.TabIndex = 6;
@@ -153,7 +168,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.btnProfile.FlatAppearance.BorderSize = 0;
             this.btnProfile.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnProfile.ForeColor = CourseGuard.Frontend.Theme.ColorPalette.DarkMode.TextPrimary;
-            this.btnProfile.Location = new System.Drawing.Point(0, 350);
+            this.btnProfile.Location = new System.Drawing.Point(0, 400);
             this.btnProfile.Name = "btnProfile";
             this.btnProfile.Size = new System.Drawing.Size(200, 50);
             this.btnProfile.TabIndex = 7;
@@ -198,6 +213,7 @@ namespace CourseGuard.Frontend.Forms.Student
         private System.Windows.Forms.Button btnChat;
         private System.Windows.Forms.Button btnNotify;
         private System.Windows.Forms.Button btnProfile;
+        private System.Windows.Forms.Button btnMyCourses;
         private System.Windows.Forms.Button btnLogout;
     }
 }

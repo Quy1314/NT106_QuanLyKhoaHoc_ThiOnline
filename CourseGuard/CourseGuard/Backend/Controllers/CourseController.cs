@@ -15,7 +15,10 @@ namespace CourseGuard.Backend.Controllers
             _dbContext = dbContext;
         }
 
-        // Actual implementations
+        // ════════════════════════════════════════════════════════════════
+        //  ADMIN-ONLY METHODS (giữ nguyên)
+        // ════════════════════════════════════════════════════════════════
+
         public List<CourseModel> GetAllCourses()
         {
             return _dbContext.GetAllCourses();
@@ -140,6 +143,150 @@ namespace CourseGuard.Backend.Controllers
             catch
             {
                 return false;
+            }
+        }
+
+        public List<EnrollmentModel> GetPendingEnrollments(int? courseId = null)
+        {
+            // Allow both Admin and Teacher to view pending enrollments
+            if (UserSessionContext.CurrentRole != "ADMIN" && UserSessionContext.CurrentRole != "TEACHER") 
+                return new List<EnrollmentModel>();
+
+            try { return _dbContext.GetPendingEnrollments(courseId); }
+            catch { return new List<EnrollmentModel>(); }
+        }
+
+        public bool ApproveEnrollment(int courseId, int studentId)
+        {
+            if (UserSessionContext.CurrentRole != "ADMIN" && UserSessionContext.CurrentRole != "TEACHER") 
+                return false;
+
+            try { return _dbContext.ApproveEnrollment(courseId, studentId); }
+            catch { return false; }
+        }
+
+        public bool RejectEnrollment(int courseId, int studentId)
+        {
+            if (UserSessionContext.CurrentRole != "ADMIN" && UserSessionContext.CurrentRole != "TEACHER") 
+                return false;
+
+            try { return _dbContext.RejectEnrollment(courseId, studentId); }
+            catch { return false; }
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  STUDENT METHODS (Giai đoạn Đăng ký & Quản lý môn học)
+        // ════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Lấy danh sách khóa học ACTIVE mà sinh viên chưa đăng ký
+        /// (để hiển thị trên trang "Duyệt khóa học").
+        /// </summary>
+        public List<CourseModel> GetAvailableCourses(int studentId)
+        {
+            try
+            {
+                return _dbContext.GetAvailableCourses(studentId);
+            }
+            catch
+            {
+                return new List<CourseModel>();
+            }
+        }
+
+        /// <summary>
+        /// Lấy danh sách enrollment của một sinh viên
+        /// (hiển thị trên trang "Khóa học của tôi").
+        /// </summary>
+        public List<EnrollmentModel> GetMyEnrollments(int studentId)
+        {
+            try
+            {
+                return _dbContext.GetEnrollmentsByStudent(studentId);
+            }
+            catch
+            {
+                return new List<EnrollmentModel>();
+            }
+        }
+
+        /// <summary>
+        /// Sinh viên tự ghi danh vào khóa học (trạng thái PENDING).
+        /// </summary>
+        public string RequestEnrollment(int courseId, int studentId)
+        {
+            try
+            {
+                // Kiểm tra trạng thái hiện tại
+                var existing = _dbContext.GetEnrollmentStatus(courseId, studentId);
+                if (existing != null)
+                {
+                    return existing switch
+                    {
+                        "PENDING" => "Bạn đã gửi yêu cầu tham gia khóa học này. Vui lòng chờ duyệt.",
+                        "ACTIVE" => "Bạn đã tham gia khóa học này rồi.",
+                        "DROPPED" => "Bạn đã rút khỏi khóa học này. Liên hệ Admin để đăng ký lại.",
+                        _ => $"Trạng thái hiện tại: {existing}"
+                    };
+                }
+
+                bool success = _dbContext.SelfEnroll(courseId, studentId);
+                return success
+                    ? "Đã gửi yêu cầu tham gia. Vui lòng chờ Admin/Giảng viên duyệt."
+                    : "Không thể gửi yêu cầu. Vui lòng thử lại.";
+            }
+            catch (Exception ex)
+            {
+                return "Lỗi: " + ex.Message;
+            }
+        }
+
+        /// <summary>
+        /// Sinh viên hủy đăng ký / rút khỏi khóa học.
+        /// </summary>
+        public string DropCourse(int courseId, int studentId)
+        {
+            try
+            {
+                var existing = _dbContext.GetEnrollmentStatus(courseId, studentId);
+                if (existing == null)
+                {
+                    return "Bạn chưa đăng ký khóa học này.";
+                }
+
+                if (existing == "DROPPED")
+                {
+                    return "Bạn đã rút khỏi khóa học này trước đó.";
+                }
+
+                bool success = _dbContext.DropEnrollment(courseId, studentId);
+                if (success)
+                {
+                    return existing == "PENDING"
+                        ? "Đã hủy yêu cầu tham gia thành công."
+                        : "Đã rút khỏi khóa học thành công.";
+                }
+
+                return "Không thể thực hiện. Vui lòng thử lại.";
+            }
+            catch (Exception ex)
+            {
+                return "Lỗi: " + ex.Message;
+            }
+        }
+
+        /// <summary>
+        /// Lấy số sinh viên đang ghi danh trong khóa học.
+        /// </summary>
+        public int GetEnrolledCount(int courseId)
+        {
+            try
+            {
+                return _dbContext.GetEnrolledCount(courseId);
+            }
+            catch
+            {
+                return 0;
             }
         }
     }
