@@ -411,6 +411,289 @@ namespace CourseGuard.Backend.Data
             return command.ExecuteNonQuery() > 0;
         }
 
+        // ════════════════════════════════════════════════════════════════
+        //  STUDENT ENROLLMENT METHODS
+        // ════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Lấy danh sách khóa học mà sinh viên đã ghi danh (bất kể trạng thái).
+        /// </summary>
+        public List<EnrollmentModel> GetEnrollmentsByStudent(int studentId)
+        {
+            var list = new List<EnrollmentModel>();
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"
+                SELECT e.id, e.course_id, e.student_id, e.status, e.joined_at,
+                       c.name AS course_name, COALESCE(u.full_name, u.username) AS teacher_name,
+                       c.status AS course_status, c.start_date, c.end_date, COALESCE(c.description, '') AS description
+                FROM ENROLLMENTS e
+                JOIN COURSES c ON e.course_id = c.id
+                JOIN USERS u ON c.teacher_id = u.id
+                WHERE e.student_id = @student_id
+                ORDER BY e.joined_at DESC";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@student_id", studentId);
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                list.Add(new EnrollmentModel
+                {
+                    Id = reader.GetInt32(0),
+                    CourseId = reader.GetInt32(1),
+                    StudentId = reader.GetInt32(2),
+                    Status = reader.GetString(3),
+                    JoinedAt = reader.IsDBNull(4) ? DateTime.MinValue : reader.GetDateTime(4),
+                    CourseName = reader.GetString(5),
+                    TeacherName = reader.IsDBNull(6) ? "Unknown" : reader.GetString(6),
+                    CourseStatus = reader.GetString(7),
+                    CourseStartDate = reader.IsDBNull(8) ? DateTime.MinValue : reader.GetDateTime(8),
+                    CourseEndDate = reader.IsDBNull(9) ? DateTime.MinValue : reader.GetDateTime(9),
+                    CourseDescription = reader.GetString(10)
+                });
+            }
+
+            return list;
+        }
+
+        /// <summary>
+        /// Lấy trạng thái enrollment hiện tại của sinh viên trong một khóa học.
+        /// Trả về null nếu chưa ghi danh.
+        /// </summary>
+        public string? GetEnrollmentStatus(int courseId, int studentId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = "SELECT status FROM ENROLLMENTS WHERE course_id = @course_id AND student_id = @student_id";
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            command.Parameters.AddWithValue("@student_id", studentId);
+
+            var result = command.ExecuteScalar();
+            return result?.ToString();
+        }
+
+        /// <summary>
+        /// Sinh viên tự ghi danh vào khóa học (trạng thái PENDING, chờ Admin/Teacher duyệt).
+        /// Trả về true nếu thành công, false nếu đã tồn tại.
+        /// </summary>
+        public bool SelfEnroll(int courseId, int studentId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"
+                INSERT INTO ENROLLMENTS (course_id, student_id, status)
+                SELECT @course_id, @student_id, 'PENDING'
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM ENROLLMENTS
+                    WHERE course_id = @course_id AND student_id = @student_id
+                )";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            command.Parameters.AddWithValue("@student_id", studentId);
+
+            return command.ExecuteNonQuery() > 0;
+        }
+
+        /// <summary>
+        /// Hủy / rút khỏi khóa học.
+        /// Nếu trạng thái là PENDING → xóa hẳn record.
+        /// Nếu trạng thái là ACTIVE → chuyển sang DROPPED.
+        /// </summary>
+        public bool DropEnrollment(int courseId, int studentId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            // Lấy trạng thái hiện tại
+            const string statusQuery = "SELECT status FROM ENROLLMENTS WHERE course_id = @cid AND student_id = @sid";
+            using var statusCmd = new NpgsqlCommand(statusQuery, connection);
+            statusCmd.Parameters.AddWithValue("@cid", courseId);
+            statusCmd.Parameters.AddWithValue("@sid", studentId);
+            var currentStatus = statusCmd.ExecuteScalar()?.ToString();
+
+            if (string.IsNullOrEmpty(currentStatus)) return false;
+
+            if (currentStatus == "PENDING")
+            {
+                // Xóa hẳn nếu chưa được duyệt
+                const string deleteQuery = "DELETE FROM ENROLLMENTS WHERE course_id = @cid AND student_id = @sid";
+                using var deleteCmd = new NpgsqlCommand(deleteQuery, connection);
+                deleteCmd.Parameters.AddWithValue("@cid", courseId);
+                deleteCmd.Parameters.AddWithValue("@sid", studentId);
+                return deleteCmd.ExecuteNonQuery() > 0;
+            }
+            else
+            {
+                // Chuyển sang DROPPED nếu đang ACTIVE
+                const string updateQuery = "UPDATE ENROLLMENTS SET status = 'DROPPED' WHERE course_id = @cid AND student_id = @sid AND status = 'ACTIVE'";
+                using var updateCmd = new NpgsqlCommand(updateQuery, connection);
+                updateCmd.Parameters.AddWithValue("@cid", courseId);
+                updateCmd.Parameters.AddWithValue("@sid", studentId);
+                return updateCmd.ExecuteNonQuery() > 0;
+            }
+        }
+
+        /// <summary>
+        /// Lấy danh sách khóa học ACTIVE mà sinh viên CHƯA ghi danh (để hiển thị "Browse Courses").
+        /// </summary>
+        public List<CourseModel> GetAvailableCourses(int studentId)
+        {
+            var courses = new List<CourseModel>();
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"
+                SELECT c.id, c.name, COALESCE(c.description, '') AS description, c.teacher_id,
+                       COALESCE(u.full_name, u.username) AS teacher_name,
+                       c.status, c.start_date, c.end_date
+                FROM COURSES c
+                JOIN USERS u ON c.teacher_id = u.id
+                WHERE UPPER(c.status) = 'ACTIVE'
+                  AND c.id NOT IN (
+                      SELECT course_id FROM ENROLLMENTS
+                      WHERE student_id = @student_id AND status IN ('PENDING', 'ACTIVE')
+                  )
+                ORDER BY c.created_at DESC";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@student_id", studentId);
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                courses.Add(new CourseModel
+                {
+                    Id = reader.GetInt32(0),
+                    Name = reader.GetString(1),
+                    Description = reader.GetString(2),
+                    TeacherId = reader.GetInt32(3),
+                    TeacherName = reader.IsDBNull(4) ? "Unknown" : reader.GetString(4),
+                    Status = reader.GetString(5),
+                    StartDate = reader.IsDBNull(6) ? DateTime.MinValue : reader.GetDateTime(6),
+                    EndDate = reader.IsDBNull(7) ? DateTime.MinValue : reader.GetDateTime(7)
+                });
+            }
+
+            return courses;
+        }
+
+        /// <summary>
+        /// Đếm số sinh viên đang tham gia (ACTIVE hoặc PENDING) trong một khóa học.
+        /// </summary>
+        public int GetEnrolledCount(int courseId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = "SELECT COUNT(*) FROM ENROLLMENTS WHERE course_id = @course_id AND status IN ('ACTIVE', 'PENDING')";
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@course_id", courseId);
+
+            return Convert.ToInt32(command.ExecuteScalar());
+        }
+
+
+        // ════════════════════════════════════════════════════════════════
+        //  ADMIN / TEACHER ENROLLMENT METHODS
+        // ════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Lấy danh sách các sinh viên đang có trạng thái PENDING để duyệt.
+        /// Có thể lọc theo khóa học (courseId) nếu muốn.
+        /// </summary>
+        public List<EnrollmentModel> GetPendingEnrollments(int? courseId = null)
+        {
+            var list = new List<EnrollmentModel>();
+            using var connection = CreateConnection();
+            connection.Open();
+
+            string query = @"
+                SELECT e.id, e.course_id, e.student_id, e.status, e.joined_at,
+                       c.name AS course_name, COALESCE(u.full_name, u.username) AS teacher_name,
+                       c.status AS course_status, c.start_date, c.end_date, COALESCE(c.description, '') AS description,
+                       COALESCE(s.full_name, s.username) AS student_name
+                FROM ENROLLMENTS e
+                JOIN COURSES c ON e.course_id = c.id
+                JOIN USERS u ON c.teacher_id = u.id
+                JOIN USERS s ON e.student_id = s.id
+                WHERE e.status = 'PENDING'";
+
+            if (courseId.HasValue)
+            {
+                query += " AND e.course_id = @course_id";
+            }
+            query += " ORDER BY e.joined_at DESC";
+
+            using var command = new NpgsqlCommand(query, connection);
+            if (courseId.HasValue)
+            {
+                command.Parameters.AddWithValue("@course_id", courseId.Value);
+            }
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                list.Add(new EnrollmentModel
+                {
+                    Id = reader.GetInt32(0),
+                    CourseId = reader.GetInt32(1),
+                    StudentId = reader.GetInt32(2),
+                    Status = reader.GetString(3),
+                    JoinedAt = reader.IsDBNull(4) ? DateTime.MinValue : reader.GetDateTime(4),
+                    CourseName = reader.GetString(5),
+                    TeacherName = reader.IsDBNull(6) ? "Unknown" : reader.GetString(6),
+                    CourseStatus = reader.GetString(7),
+                    CourseStartDate = reader.IsDBNull(8) ? DateTime.MinValue : reader.GetDateTime(8),
+                    CourseEndDate = reader.IsDBNull(9) ? DateTime.MinValue : reader.GetDateTime(9),
+                    CourseDescription = reader.GetString(10),
+                    StudentName = reader.GetString(11)
+                });
+            }
+
+            return list;
+        }
+
+        /// <summary>
+        /// Duyệt yêu cầu đăng ký của sinh viên (PENDING -> ACTIVE)
+        /// </summary>
+        public bool ApproveEnrollment(int courseId, int studentId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = "UPDATE ENROLLMENTS SET status = 'ACTIVE' WHERE course_id = @cid AND student_id = @sid AND status = 'PENDING'";
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@cid", courseId);
+            command.Parameters.AddWithValue("@sid", studentId);
+
+            return command.ExecuteNonQuery() > 0;
+        }
+
+        /// <summary>
+        /// Từ chối/Xóa yêu cầu đăng ký của sinh viên (chuyển DROPPED hoặc xóa)
+        /// Ở đây ta xóa luôn record nếu là PENDING để họ có thể đăng ký lại, hoặc chuyển sang DROPPED.
+        /// </summary>
+        public bool RejectEnrollment(int courseId, int studentId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            // Nếu đang PENDING thì XÓA để sinh viên có thể xin lại sau này nếu muốn
+            const string query = "DELETE FROM ENROLLMENTS WHERE course_id = @cid AND student_id = @sid";
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@cid", courseId);
+            command.Parameters.AddWithValue("@sid", studentId);
+
+            return command.ExecuteNonQuery() > 0;
+        }
+
         public bool UserExists(string username)
         {
             using var connection = CreateConnection();

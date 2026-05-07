@@ -49,6 +49,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btnDeleteCourse.Click += btnDeleteCourse_Click;
             dgvCourses.CellClick += dgvCourses_CellClick;
             btnAddStudent.Click += btnAddStudent_Click;
+            WireStudentApprovalEvents();
         }
 
         private async void UC_CoursesManage_VisibleChanged(object sender, EventArgs e)
@@ -272,32 +273,71 @@ namespace CourseGuard.Frontend.UserControls.Admin
                  MessageBox.Show("Vui lòng chọn khóa học.");
                  return;
             }
-            if (cboStudent.SelectedValue == null)
+            // Temporarily use an input box or a full list if we really wanted to manually add,
+            // but right now cboStudent is used for Pending requests. 
+            // For true "Add Student" bypassing requests, we would need a different combo box.
+            // Let's assume Admin just approves or rejects. If they click Add, we will manually enroll if we know the ID.
+            // To keep it simple, we reuse cboStudent but let's notify them to use Approve instead for requests.
+            MessageBox.Show("Vui lòng dùng tính năng 'Duyệt' hoặc 'Xóa' cho các yêu cầu tham gia phía dưới.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void WireStudentApprovalEvents()
+        {
+            cboSelectCourse.SelectedIndexChanged += async (s, e) =>
             {
-                 MessageBox.Show("Vui lòng chọn học viên.");
-                 return;
-            }
+                if (cboSelectCourse.SelectedValue is int courseId)
+                {
+                    await LoadPendingStudents(courseId);
+                }
+            };
 
-            int courseId = (int)cboSelectCourse.SelectedValue;
-            int studentId = (int)cboStudent.SelectedValue;
+            btnApproveStudent.Click += async (s, e) =>
+            {
+                if (cboSelectCourse.SelectedValue is int courseId && cboStudent.SelectedValue is int studentId)
+                {
+                    bool ok = await Task.Run(() => _courseService.ApproveEnrollment(courseId, studentId));
+                    if (ok)
+                    {
+                        MessageBox.Show("Đã duyệt sinh viên tham gia khóa học!");
+                        await LoadPendingStudents(courseId);
+                    }
+                    else MessageBox.Show("Lỗi duyệt sinh viên.");
+                }
+                else MessageBox.Show("Vui lòng chọn khóa học và sinh viên.");
+            };
 
+            btnRemoveStudent.Click += async (s, e) =>
+            {
+                if (cboSelectCourse.SelectedValue is int courseId && cboStudent.SelectedValue is int studentId)
+                {
+                    bool ok = await Task.Run(() => _courseService.RejectEnrollment(courseId, studentId));
+                    if (ok)
+                    {
+                        MessageBox.Show("Đã từ chối/xóa yêu cầu tham gia!");
+                        await LoadPendingStudents(courseId);
+                    }
+                    else MessageBox.Show("Lỗi từ chối sinh viên.");
+                }
+                else MessageBox.Show("Vui lòng chọn khóa học và sinh viên.");
+            };
+        }
+
+        private async Task LoadPendingStudents(int courseId)
+        {
             try
             {
-                bool success = await Task.Run(() => _courseService.EnrollStudent(courseId, studentId));
-                 if (success)
+                var pendings = await Task.Run(() => _courseService.GetPendingEnrollments(courseId));
+                cboStudent.DataSource = pendings;
+                cboStudent.DisplayMember = "StudentName";
+                cboStudent.ValueMember = "StudentId";
+                cboStudent.SelectedIndex = -1;
+
+                if (pendings.Count == 0)
                 {
-                    MessageBox.Show("Thêm học viên vào khóa học thành công!");
-                    // potentially reload list of students in course if there was a grid for that
-                }
-                else
-                {
-                    MessageBox.Show("Học viên đã tham gia khóa học này, không tồn tại dữ liệu, hoặc bạn không có quyền.");
+                    cboStudent.Text = "Không có yêu cầu chờ duyệt";
                 }
             }
-            catch (Exception ex)
-            {
-                 MessageBox.Show("Lỗi thêm học viên: " + ex.Message);
-            }
+            catch { }
         }
 
         private bool ValidateInputs()

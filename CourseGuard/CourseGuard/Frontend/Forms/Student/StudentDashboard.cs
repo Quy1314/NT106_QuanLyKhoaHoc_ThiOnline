@@ -22,7 +22,7 @@ namespace CourseGuard.Frontend.Forms.Student
             InitializeNavigation();
 
             // Bo góc tất cả buttons
-            RoundedButtonHelper.Apply(12, btnDashboard, btnCourses, btnExam,
+            RoundedButtonHelper.Apply(12, btnDashboard, btnCourses, btnMyCourses, btnExam,
                 btnResult, btnSchedule, btnChat, btnNotify, btnProfile, btnLogout);
 
             // Logout handler
@@ -47,7 +47,7 @@ namespace CourseGuard.Frontend.Forms.Student
             sidebar.BackColor = Color.White;
             mainboard.BackColor = Color.FromArgb(248, 250, 252);
 
-            Button[] menuButtons = { btnDashboard, btnCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile };
+            Button[] menuButtons = { btnDashboard, btnCourses, btnMyCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile };
             foreach (var btn in menuButtons)
             {
                 btn.FlatStyle = FlatStyle.Flat;
@@ -67,7 +67,7 @@ namespace CourseGuard.Frontend.Forms.Student
         private void SetupButtonEvents()
         {
             // Gán sự kiện click và hover cho tất cả sidebar buttons (trừ Logout)
-            Button[] sidebarButtons = { btnDashboard, btnCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile };
+            Button[] sidebarButtons = { btnDashboard, btnCourses, btnMyCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile };
             Color activeColor = Color.FromArgb(37, 99, 235);
 
             foreach (var btn in sidebarButtons)
@@ -94,6 +94,7 @@ namespace CourseGuard.Frontend.Forms.Student
             {
                 { btnDashboard, () => new UC_StudentDashboard() },
                 { btnCourses, () => new UC_CourseList() },
+                { btnMyCourses, () => new UC_MyCourses() },
                 { btnExam, () => new UC_TakeExam() },
                 { btnResult, () => new UC_Result() },
                 { btnSchedule, () => new UC_Schedule() },
