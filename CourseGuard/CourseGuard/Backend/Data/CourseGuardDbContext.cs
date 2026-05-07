@@ -269,6 +269,37 @@ namespace CourseGuard.Backend.Data
                 {
                     return false;
                 }
+
+                // If deleting a teacher, their courses must be removed first because
+                // COURSES.TEACHER_ID is NOT NULL and FK does not cascade.
+                if (roleName == "TEACHER")
+                {
+                    using var tx = connection.BeginTransaction();
+
+                    try
+                    {
+                        const string deleteCoursesQuery = "DELETE FROM COURSES WHERE TEACHER_ID = @id";
+                        using (var deleteCoursesCmd = new NpgsqlCommand(deleteCoursesQuery, connection, tx))
+                        {
+                            deleteCoursesCmd.Parameters.AddWithValue("@id", userId);
+                            deleteCoursesCmd.ExecuteNonQuery();
+                        }
+
+                        const string deleteUserQuery = "DELETE FROM USERS WHERE id = @id";
+                        using (var deleteUserCmd = new NpgsqlCommand(deleteUserQuery, connection, tx))
+                        {
+                            deleteUserCmd.Parameters.AddWithValue("@id", userId);
+                            int userAffectedRows = deleteUserCmd.ExecuteNonQuery();
+                            tx.Commit();
+                            return userAffectedRows > 0;
+                        }
+                    }
+                    catch
+                    {
+                        try { tx.Rollback(); } catch { /* ignore */ }
+                        throw;
+                    }
+                }
             }
 
             const string deleteQuery = "DELETE FROM USERS WHERE id = @id";
@@ -412,6 +443,29 @@ namespace CourseGuard.Backend.Data
             return command.ExecuteNonQuery() > 0;
         }
 
+        public HashSet<int> GetStudentEnrolledCourseIds(int studentId)
+        {
+            var result = new HashSet<int>();
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"
+                SELECT COURSE_ID
+                FROM ENROLLMENTS
+                WHERE STUDENT_ID = @student_id
+                  AND UPPER(COALESCE(STATUS, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@student_id", studentId);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(reader.GetInt32(0));
+            }
+
+            return result;
+        }
+
         public bool UserExists(string username)
         {
             using var connection = CreateConnection();
@@ -472,6 +526,336 @@ namespace CourseGuard.Backend.Data
             command.ExecuteNonQuery();
         }
 
+        private static void EnsureChatSchema(NpgsqlConnection connection)
+        {
+            const string sql = @"
+                CREATE TABLE IF NOT EXISTS MESSAGES (
+                    ID SERIAL PRIMARY KEY,
+                    COURSE_ID INT NOT NULL,
+                    SENDER_ID INT NOT NULL,
+                    CONTENT TEXT,
+                    SENT_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (COURSE_ID) REFERENCES COURSES(ID) ON DELETE CASCADE,
+                    FOREIGN KEY (SENDER_ID) REFERENCES USERS(ID)
+                );
+                ALTER TABLE MESSAGES ADD COLUMN IF NOT EXISTS MESSAGE_TYPE VARCHAR(20) NOT NULL DEFAULT 'TEXT';
+                ALTER TABLE MESSAGES ADD COLUMN IF NOT EXISTS FILE_URL TEXT;
+                ALTER TABLE MESSAGES ADD COLUMN IF NOT EXISTS FILE_NAME VARCHAR(255);
+                ALTER TABLE MESSAGES ADD COLUMN IF NOT EXISTS FILE_SIZE BIGINT;
+                ALTER TABLE MESSAGES ADD COLUMN IF NOT EXISTS MIME_TYPE VARCHAR(100);
+                ALTER TABLE MESSAGES ADD COLUMN IF NOT EXISTS REPLY_TO_ID INT NULL;
+                ALTER TABLE MESSAGES ADD COLUMN IF NOT EXISTS IS_DELETED BOOLEAN NOT NULL DEFAULT FALSE;
+                CREATE INDEX IF NOT EXISTS IDX_MESSAGES_COURSE_SENT_AT ON MESSAGES(COURSE_ID, SENT_AT DESC);
+                CREATE INDEX IF NOT EXISTS IDX_MESSAGES_SENDER_ID ON MESSAGES(SENDER_ID);
+                CREATE TABLE IF NOT EXISTS CHAT_READS (
+                    USER_ID INT NOT NULL,
+                    COURSE_ID INT NOT NULL,
+                    LAST_READ_MESSAGE_ID INT NULL,
+                    UPDATED_AT TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (USER_ID, COURSE_ID),
+                    FOREIGN KEY (USER_ID) REFERENCES USERS(ID) ON DELETE CASCADE,
+                    FOREIGN KEY (COURSE_ID) REFERENCES COURSES(ID) ON DELETE CASCADE,
+                    FOREIGN KEY (LAST_READ_MESSAGE_ID) REFERENCES MESSAGES(ID) ON DELETE SET NULL
+                );";
+
+            using var cmd = new NpgsqlCommand(sql, connection);
+            cmd.ExecuteNonQuery();
+        }
+
+        public List<ChatCourseModel> GetChatCoursesForUser(int userId)
+        {
+            var result = new List<ChatCourseModel>();
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureChatSchema(connection);
+
+            const string query = @"
+                SELECT c.ID,
+                       COALESCE(c.NAME, '') AS COURSE_NAME,
+                       COALESCE(c.CLASS_CODE, '') AS CLASS_CODE,
+                       (c.TEACHER_ID = @user_id) AS IS_TEACHER
+                FROM COURSES c
+                LEFT JOIN ENROLLMENTS e ON e.COURSE_ID = c.ID AND e.STUDENT_ID = @user_id
+                WHERE c.TEACHER_ID = @user_id
+                   OR (e.STUDENT_ID IS NOT NULL AND UPPER(COALESCE(e.STATUS, 'ACTIVE')) IN ('ACTIVE', 'APPROVED'))
+                ORDER BY c.ID DESC";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(new ChatCourseModel
+                {
+                    CourseId = reader.GetInt32(0),
+                    CourseName = reader.GetString(1),
+                    ClassCode = reader.GetString(2),
+                    IsTeacherCourse = reader.GetBoolean(3)
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<List<ChatCourseModel>> GetChatCoursesForUserAsync(int userId, CancellationToken cancellationToken = default)
+        {
+            var result = new List<ChatCourseModel>();
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsureChatSchema(connection);
+
+            const string query = @"
+                SELECT c.ID,
+                       COALESCE(c.NAME, '') AS COURSE_NAME,
+                       COALESCE(c.CLASS_CODE, '') AS CLASS_CODE,
+                       (c.TEACHER_ID = @user_id) AS IS_TEACHER
+                FROM COURSES c
+                LEFT JOIN ENROLLMENTS e ON e.COURSE_ID = c.ID AND e.STUDENT_ID = @user_id
+                WHERE c.TEACHER_ID = @user_id
+                   OR (e.STUDENT_ID IS NOT NULL AND UPPER(COALESCE(e.STATUS, 'ACTIVE')) IN ('ACTIVE', 'APPROVED'))
+                ORDER BY c.ID DESC";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                result.Add(new ChatCourseModel
+                {
+                    CourseId = reader.GetInt32(0),
+                    CourseName = reader.GetString(1),
+                    ClassCode = reader.GetString(2),
+                    IsTeacherCourse = reader.GetBoolean(3)
+                });
+            }
+
+            return result;
+        }
+
+        public bool CanAccessCourseChat(int userId, int courseId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureChatSchema(connection);
+
+            const string query = @"
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1
+                    FROM COURSES c
+                    LEFT JOIN ENROLLMENTS e ON e.COURSE_ID = c.ID AND e.STUDENT_ID = @user_id
+                    WHERE c.ID = @course_id
+                      AND (
+                          c.TEACHER_ID = @user_id
+                          OR (e.STUDENT_ID IS NOT NULL AND UPPER(COALESCE(e.STATUS, 'ACTIVE')) IN ('ACTIVE', 'APPROVED'))
+                      )
+                ) THEN 1 ELSE 0 END";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            return Convert.ToInt32(command.ExecuteScalar()) == 1;
+        }
+
+        public int SendChatMessage(int courseId, int senderId, string content)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureChatSchema(connection);
+
+            const string query = @"
+                INSERT INTO MESSAGES (COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, SENT_AT)
+                VALUES (@course_id, @sender_id, @content, 'TEXT', CURRENT_TIMESTAMP)
+                RETURNING ID";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            command.Parameters.AddWithValue("@sender_id", senderId);
+            command.Parameters.AddWithValue("@content", content);
+            object? result = command.ExecuteScalar();
+            return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+        }
+
+        public int SendChatFileMessage(int courseId, int senderId, string content, string fileUrl, string fileName, long fileSize, string mimeType)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureChatSchema(connection);
+
+            const string query = @"
+                INSERT INTO MESSAGES (COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, FILE_URL, FILE_NAME, FILE_SIZE, MIME_TYPE, SENT_AT)
+                VALUES (@course_id, @sender_id, @content, 'FILE', @file_url, @file_name, @file_size, @mime_type, CURRENT_TIMESTAMP)
+                RETURNING ID";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            command.Parameters.AddWithValue("@sender_id", senderId);
+            command.Parameters.AddWithValue("@content", content ?? string.Empty);
+            command.Parameters.AddWithValue("@file_url", fileUrl ?? string.Empty);
+            command.Parameters.AddWithValue("@file_name", fileName ?? string.Empty);
+            command.Parameters.AddWithValue("@file_size", fileSize);
+            command.Parameters.AddWithValue("@mime_type", mimeType ?? string.Empty);
+            object? result = command.ExecuteScalar();
+            return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+        }
+
+        public async Task<int> SendChatMessageAsync(int courseId, int senderId, string content, CancellationToken cancellationToken = default)
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsureChatSchema(connection);
+
+            const string query = @"
+                INSERT INTO MESSAGES (COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, SENT_AT)
+                VALUES (@course_id, @sender_id, @content, 'TEXT', CURRENT_TIMESTAMP)
+                RETURNING ID";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            command.Parameters.AddWithValue("@sender_id", senderId);
+            command.Parameters.AddWithValue("@content", content);
+            object? result = await command.ExecuteScalarAsync(cancellationToken);
+            return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+        }
+
+        public async Task<int> SendChatFileMessageAsync(
+            int courseId,
+            int senderId,
+            string content,
+            string fileUrl,
+            string fileName,
+            long fileSize,
+            string mimeType,
+            CancellationToken cancellationToken = default)
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsureChatSchema(connection);
+
+            const string query = @"
+                INSERT INTO MESSAGES (COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, FILE_URL, FILE_NAME, FILE_SIZE, MIME_TYPE, SENT_AT)
+                VALUES (@course_id, @sender_id, @content, 'FILE', @file_url, @file_name, @file_size, @mime_type, CURRENT_TIMESTAMP)
+                RETURNING ID";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            command.Parameters.AddWithValue("@sender_id", senderId);
+            command.Parameters.AddWithValue("@content", content ?? string.Empty);
+            command.Parameters.AddWithValue("@file_url", fileUrl ?? string.Empty);
+            command.Parameters.AddWithValue("@file_name", fileName ?? string.Empty);
+            command.Parameters.AddWithValue("@file_size", fileSize);
+            command.Parameters.AddWithValue("@mime_type", mimeType ?? string.Empty);
+            object? result = await command.ExecuteScalarAsync(cancellationToken);
+            return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+        }
+
+        public List<ChatMessageModel> GetChatMessages(int courseId, int limit = 100)
+        {
+            var result = new List<ChatMessageModel>();
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureChatSchema(connection);
+
+            const string query = @"
+                SELECT m.ID,
+                       m.COURSE_ID,
+                       m.SENDER_ID,
+                       COALESCE(u.FULL_NAME, u.USERNAME, 'Unknown') AS SENDER_NAME,
+                       COALESCE(r.NAME, '') AS SENDER_ROLE,
+                       COALESCE(m.CONTENT, '') AS CONTENT,
+                       COALESCE(m.MESSAGE_TYPE, 'TEXT') AS MESSAGE_TYPE,
+                       COALESCE(m.FILE_URL, '') AS FILE_URL,
+                       COALESCE(m.FILE_NAME, '') AS FILE_NAME,
+                       COALESCE(m.FILE_SIZE, 0) AS FILE_SIZE,
+                       COALESCE(m.MIME_TYPE, '') AS MIME_TYPE,
+                       m.SENT_AT
+                FROM MESSAGES m
+                JOIN USERS u ON u.ID = m.SENDER_ID
+                LEFT JOIN ROLES r ON r.ID = u.ROLE_ID
+                WHERE m.COURSE_ID = @course_id
+                  AND COALESCE(m.IS_DELETED, FALSE) = FALSE
+                ORDER BY m.SENT_AT ASC
+                LIMIT @limit";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            command.Parameters.AddWithValue("@limit", limit <= 0 ? 100 : limit);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(new ChatMessageModel
+                {
+                    Id = reader.GetInt32(0),
+                    CourseId = reader.GetInt32(1),
+                    SenderId = reader.GetInt32(2),
+                    SenderName = reader.GetString(3),
+                    SenderRole = reader.GetString(4),
+                    Content = reader.GetString(5),
+                    MessageType = reader.GetString(6),
+                    FileUrl = reader.GetString(7),
+                    FileName = reader.GetString(8),
+                    FileSize = reader.GetInt64(9),
+                    MimeType = reader.GetString(10),
+                    SentAt = reader.GetDateTime(11)
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<List<ChatMessageModel>> GetChatMessagesAsync(int courseId, int limit = 100, CancellationToken cancellationToken = default)
+        {
+            var result = new List<ChatMessageModel>();
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsureChatSchema(connection);
+
+            const string query = @"
+                SELECT m.ID,
+                       m.COURSE_ID,
+                       m.SENDER_ID,
+                       COALESCE(u.FULL_NAME, u.USERNAME, 'Unknown') AS SENDER_NAME,
+                       COALESCE(r.NAME, '') AS SENDER_ROLE,
+                       COALESCE(m.CONTENT, '') AS CONTENT,
+                       COALESCE(m.MESSAGE_TYPE, 'TEXT') AS MESSAGE_TYPE,
+                       COALESCE(m.FILE_URL, '') AS FILE_URL,
+                       COALESCE(m.FILE_NAME, '') AS FILE_NAME,
+                       COALESCE(m.FILE_SIZE, 0) AS FILE_SIZE,
+                       COALESCE(m.MIME_TYPE, '') AS MIME_TYPE,
+                       m.SENT_AT
+                FROM MESSAGES m
+                JOIN USERS u ON u.ID = m.SENDER_ID
+                LEFT JOIN ROLES r ON r.ID = u.ROLE_ID
+                WHERE m.COURSE_ID = @course_id
+                  AND COALESCE(m.IS_DELETED, FALSE) = FALSE
+                ORDER BY m.SENT_AT ASC
+                LIMIT @limit";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            command.Parameters.AddWithValue("@limit", limit <= 0 ? 100 : limit);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                result.Add(new ChatMessageModel
+                {
+                    Id = reader.GetInt32(0),
+                    CourseId = reader.GetInt32(1),
+                    SenderId = reader.GetInt32(2),
+                    SenderName = reader.GetString(3),
+                    SenderRole = reader.GetString(4),
+                    Content = reader.GetString(5),
+                    MessageType = reader.GetString(6),
+                    FileUrl = reader.GetString(7),
+                    FileName = reader.GetString(8),
+                    FileSize = reader.GetInt64(9),
+                    MimeType = reader.GetString(10),
+                    SentAt = reader.GetDateTime(11)
+                });
+            }
+
+            return result;
+        }
+
         private static void EnsureAuditLogSchema(NpgsqlConnection connection)
         {
             const string sql = @"
@@ -490,11 +874,40 @@ namespace CourseGuard.Backend.Data
             cmd.ExecuteNonQuery();
         }
 
+        private static void EnsureLoginDailyStatsSchema(NpgsqlConnection connection)
+        {
+            const string sql = @"
+                CREATE TABLE IF NOT EXISTS LOGIN_DAILY_STATS (
+                    STAT_DATE DATE PRIMARY KEY,
+                    LOGIN_COUNT INT NOT NULL DEFAULT 0,
+                    UPDATED_AT TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX IF NOT EXISTS IDX_LOGIN_DAILY_STATS_DATE
+                    ON LOGIN_DAILY_STATS (STAT_DATE DESC);";
+
+            using var cmd = new NpgsqlCommand(sql, connection);
+            cmd.ExecuteNonQuery();
+        }
+
+        private static void UpsertTodayLoginStats(NpgsqlConnection connection)
+        {
+            const string sql = @"
+                INSERT INTO LOGIN_DAILY_STATS (STAT_DATE, LOGIN_COUNT, UPDATED_AT)
+                VALUES (CURRENT_DATE, 1, CURRENT_TIMESTAMP)
+                ON CONFLICT (STAT_DATE)
+                DO UPDATE SET LOGIN_COUNT = LOGIN_DAILY_STATS.LOGIN_COUNT + 1,
+                              UPDATED_AT = CURRENT_TIMESTAMP";
+
+            using var cmd = new NpgsqlCommand(sql, connection);
+            cmd.ExecuteNonQuery();
+        }
+
         public void LogUserActivity(int? userId, string action, string details, string ipAddress)
         {
             using var connection = CreateConnection();
             connection.Open();
             EnsureAuditLogSchema(connection);
+            EnsureLoginDailyStatsSchema(connection);
 
             const string query = @"
                 INSERT INTO AUDIT_LOGS (USER_ID, ACTION, TARGET_TABLE, TARGET_ID, DETAILS, IP_ADDRESS, CREATED_AT)
@@ -507,6 +920,11 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@details", details ?? string.Empty);
             command.Parameters.AddWithValue("@ip_address", ipAddress ?? string.Empty);
             command.ExecuteNonQuery();
+
+            if (string.Equals(action, "LOGIN", StringComparison.OrdinalIgnoreCase))
+            {
+                UpsertTodayLoginStats(connection);
+            }
         }
 
         public async Task LogUserActivityAsync(int? userId, string action, string details, string ipAddress, CancellationToken cancellationToken = default)
@@ -514,6 +932,7 @@ namespace CourseGuard.Backend.Data
             await using var connection = CreateConnection();
             await connection.OpenAsync(cancellationToken);
             EnsureAuditLogSchema(connection);
+            EnsureLoginDailyStatsSchema(connection);
 
             const string query = @"
                 INSERT INTO AUDIT_LOGS (USER_ID, ACTION, TARGET_TABLE, TARGET_ID, DETAILS, IP_ADDRESS, CREATED_AT)
@@ -526,6 +945,11 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@details", details ?? string.Empty);
             command.Parameters.AddWithValue("@ip_address", ipAddress ?? string.Empty);
             await command.ExecuteNonQueryAsync(cancellationToken);
+
+            if (string.Equals(action, "LOGIN", StringComparison.OrdinalIgnoreCase))
+            {
+                UpsertTodayLoginStats(connection);
+            }
         }
 
         public AdminDashboardMetricsModel GetAdminDashboardMetrics()
@@ -565,7 +989,13 @@ namespace CourseGuard.Backend.Data
                        COALESCE(a.DETAILS, '') AS DETAILS
                 FROM AUDIT_LOGS a
                 LEFT JOIN USERS u ON u.ID = a.USER_ID
-                WHERE a.ACTION IN ('LOGIN', 'LOGOUT', 'SIGNUP', 'FORGOT_PASSWORD')
+                WHERE a.ACTION IN (
+                    'LOGIN', 'LOGOUT', 'SIGNUP', 'FORGOT_PASSWORD', 'CHANGE_PASSWORD',
+                    'COURSE_ENROLL_REQUEST', 'COURSE_ENROLL', 'ONLINE_SESSION_JOIN', 'ONLINE_SESSION_EXIT',
+                    'EXAM_JOIN', 'EXAM_SUBMIT', 'EXAM_EXIT',
+                    'ADMIN_ADD_USER', 'ADMIN_DELETE_USER', 'ADMIN_APPROVE_REGISTRATION',
+                    'ADMIN_REJECT_USER_REQUEST', 'ADMIN_RESET_PASSWORD', 'FORGOT_PASSWORD_APPROVED'
+                )
                 ORDER BY a.CREATED_AT DESC
                 LIMIT @limit";
 
@@ -585,6 +1015,208 @@ namespace CourseGuard.Backend.Data
             }
 
             return result;
+        }
+
+        public List<LoginFrequencyModel> GetLoginFrequencyStats(int days = 7)
+        {
+            var result = new List<LoginFrequencyModel>();
+            int safeDays = days <= 0 ? 7 : days;
+
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureLoginDailyStatsSchema(connection);
+
+            const string query = @"
+                SELECT STAT_DATE, LOGIN_COUNT
+                FROM LOGIN_DAILY_STATS
+                WHERE STAT_DATE >= CURRENT_DATE - (@days - 1)
+                ORDER BY STAT_DATE ASC";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@days", safeDays);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(new LoginFrequencyModel
+                {
+                    LoginDate = reader.GetDateTime(0),
+                    LoginCount = reader.GetInt32(1)
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<List<LoginFrequencyModel>> GetLoginFrequencyStatsAsync(int days = 7, CancellationToken cancellationToken = default)
+        {
+            var result = new List<LoginFrequencyModel>();
+            int safeDays = days <= 0 ? 7 : days;
+
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsureLoginDailyStatsSchema(connection);
+
+            const string query = @"
+                SELECT STAT_DATE, LOGIN_COUNT
+                FROM LOGIN_DAILY_STATS
+                WHERE STAT_DATE >= CURRENT_DATE - (@days - 1)
+                ORDER BY STAT_DATE ASC";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@days", safeDays);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                result.Add(new LoginFrequencyModel
+                {
+                    LoginDate = reader.GetDateTime(0),
+                    LoginCount = reader.GetInt32(1)
+                });
+            }
+
+            return result;
+        }
+
+        public List<CourseListItemModel> GetCourseListItems(int limit = 100)
+        {
+            var result = new List<CourseListItemModel>();
+            int safeLimit = limit <= 0 ? 100 : limit;
+
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"
+                SELECT c.ID,
+                       COALESCE(c.NAME, '') AS COURSE_NAME,
+                       COALESCE(u.FULL_NAME, u.USERNAME, 'Unknown') AS TEACHER_NAME,
+                       COALESCE(c.STATUS, 'UNKNOWN') AS COURSE_STATUS,
+                       COUNT(e.ID)::int AS ENROLLMENT_COUNT
+                FROM COURSES c
+                LEFT JOIN USERS u ON u.ID = c.TEACHER_ID
+                LEFT JOIN ENROLLMENTS e ON e.COURSE_ID = c.ID
+                GROUP BY c.ID, c.NAME, u.FULL_NAME, u.USERNAME, c.STATUS
+                ORDER BY c.ID DESC
+                LIMIT @limit";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@limit", safeLimit);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(new CourseListItemModel
+                {
+                    CourseId = reader.GetInt32(0),
+                    CourseName = reader.GetString(1),
+                    TeacherName = reader.GetString(2),
+                    Status = reader.GetString(3),
+                    EnrollmentCount = reader.GetInt32(4)
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<List<CourseListItemModel>> GetCourseListItemsAsync(int limit = 100, CancellationToken cancellationToken = default)
+        {
+            var result = new List<CourseListItemModel>();
+            int safeLimit = limit <= 0 ? 100 : limit;
+
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            const string query = @"
+                SELECT c.ID,
+                       COALESCE(c.NAME, '') AS COURSE_NAME,
+                       COALESCE(u.FULL_NAME, u.USERNAME, 'Unknown') AS TEACHER_NAME,
+                       COALESCE(c.STATUS, 'UNKNOWN') AS COURSE_STATUS,
+                       COUNT(e.ID)::int AS ENROLLMENT_COUNT
+                FROM COURSES c
+                LEFT JOIN USERS u ON u.ID = c.TEACHER_ID
+                LEFT JOIN ENROLLMENTS e ON e.COURSE_ID = c.ID
+                GROUP BY c.ID, c.NAME, u.FULL_NAME, u.USERNAME, c.STATUS
+                ORDER BY c.ID DESC
+                LIMIT @limit";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@limit", safeLimit);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                result.Add(new CourseListItemModel
+                {
+                    CourseId = reader.GetInt32(0),
+                    CourseName = reader.GetString(1),
+                    TeacherName = reader.GetString(2),
+                    Status = reader.GetString(3),
+                    EnrollmentCount = reader.GetInt32(4)
+                });
+            }
+
+            return result;
+        }
+
+        public AccountSummaryModel GetAccountSummary()
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"
+                SELECT
+                    COUNT(*)::int AS TOTAL_ACCOUNTS,
+                    COUNT(*) FILTER (WHERE UPPER(COALESCE(u.STATUS, '')) = 'ACTIVE')::int AS ACTIVE_ACCOUNTS,
+                    COUNT(*) FILTER (WHERE UPPER(COALESCE(u.STATUS, '')) = 'PENDING')::int AS PENDING_ACCOUNTS,
+                    COUNT(*) FILTER (WHERE UPPER(COALESCE(r.NAME, '')) = 'TEACHER')::int AS TEACHER_ACCOUNTS,
+                    COUNT(*) FILTER (WHERE UPPER(COALESCE(r.NAME, '')) = 'STUDENT')::int AS STUDENT_ACCOUNTS
+                FROM USERS u
+                LEFT JOIN ROLES r ON r.ID = u.ROLE_ID";
+
+            using var command = new NpgsqlCommand(query, connection);
+            using var reader = command.ExecuteReader(CommandBehavior.SingleRow);
+            if (reader.Read())
+            {
+                return new AccountSummaryModel
+                {
+                    TotalAccounts = reader.GetInt32(0),
+                    ActiveAccounts = reader.GetInt32(1),
+                    PendingAccounts = reader.GetInt32(2),
+                    TeacherAccounts = reader.GetInt32(3),
+                    StudentAccounts = reader.GetInt32(4)
+                };
+            }
+
+            return new AccountSummaryModel();
+        }
+
+        public async Task<AccountSummaryModel> GetAccountSummaryAsync(CancellationToken cancellationToken = default)
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            const string query = @"
+                SELECT
+                    COUNT(*)::int AS TOTAL_ACCOUNTS,
+                    COUNT(*) FILTER (WHERE UPPER(COALESCE(u.STATUS, '')) = 'ACTIVE')::int AS ACTIVE_ACCOUNTS,
+                    COUNT(*) FILTER (WHERE UPPER(COALESCE(u.STATUS, '')) = 'PENDING')::int AS PENDING_ACCOUNTS,
+                    COUNT(*) FILTER (WHERE UPPER(COALESCE(r.NAME, '')) = 'TEACHER')::int AS TEACHER_ACCOUNTS,
+                    COUNT(*) FILTER (WHERE UPPER(COALESCE(r.NAME, '')) = 'STUDENT')::int AS STUDENT_ACCOUNTS
+                FROM USERS u
+                LEFT JOIN ROLES r ON r.ID = u.ROLE_ID";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                return new AccountSummaryModel
+                {
+                    TotalAccounts = reader.GetInt32(0),
+                    ActiveAccounts = reader.GetInt32(1),
+                    PendingAccounts = reader.GetInt32(2),
+                    TeacherAccounts = reader.GetInt32(3),
+                    StudentAccounts = reader.GetInt32(4)
+                };
+            }
+
+            return new AccountSummaryModel();
         }
 
         public async Task LogDeviceActivityAsync(int userId, string deviceName, string ipAddress, CancellationToken cancellationToken = default)

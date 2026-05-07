@@ -29,6 +29,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private void InitializeComponent()
         {
             pnlChat = new Panel();
+            cboCourses = new ComboBox();
+            lblCourse = new Label();
             lblTitle = new Label();
             txtMessage = new TextBox();
             btnSend = new Button();
@@ -39,31 +41,52 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             // ============= TOP PANEL =============
             pnlChat.BackColor = System.Drawing.Color.White;
             pnlChat.BorderStyle = BorderStyle.FixedSingle;
+            pnlChat.Controls.Add(cboCourses);
+            pnlChat.Controls.Add(lblCourse);
             pnlChat.Controls.Add(lblTitle);
             pnlChat.Dock = DockStyle.Top;
             pnlChat.Location = new System.Drawing.Point(0, 0);
             pnlChat.Name = "pnlChat";
-            pnlChat.Size = new System.Drawing.Size(764, 50);
+            pnlChat.Size = new System.Drawing.Size(764, 88);
             pnlChat.TabIndex = 0;
 
             // ============= TITLE LABEL =============
             lblTitle.AutoSize = false;
             lblTitle.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold);
             lblTitle.ForeColor = System.Drawing.Color.FromArgb(33, 33, 33);
-            lblTitle.Location = new System.Drawing.Point(15, 12);
+            lblTitle.Location = new System.Drawing.Point(15, 8);
             lblTitle.Name = "lblTitle";
             lblTitle.Size = new System.Drawing.Size(300, 25);
             lblTitle.TabIndex = 0;
             lblTitle.Text = "💬 Trò chuyện";
             lblTitle.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
 
+            // ============= COURSE LABEL =============
+            lblCourse.AutoSize = true;
+            lblCourse.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            lblCourse.ForeColor = System.Drawing.Color.FromArgb(55, 65, 81);
+            lblCourse.Location = new System.Drawing.Point(16, 43);
+            lblCourse.Name = "lblCourse";
+            lblCourse.Size = new System.Drawing.Size(66, 20);
+            lblCourse.TabIndex = 1;
+            lblCourse.Text = "Khóa học";
+
+            // ============= COURSE COMBOBOX =============
+            cboCourses.DropDownStyle = ComboBoxStyle.DropDownList;
+            cboCourses.Font = new System.Drawing.Font("Segoe UI", 9F);
+            cboCourses.FormattingEnabled = true;
+            cboCourses.Location = new System.Drawing.Point(92, 39);
+            cboCourses.Name = "cboCourses";
+            cboCourses.Size = new System.Drawing.Size(655, 28);
+            cboCourses.TabIndex = 2;
+
             // ============= LIST BOX - MESSAGE DISPLAY =============
             lstChat.BackColor = System.Drawing.Color.FromArgb(245, 247, 250);
             lstChat.Font = new System.Drawing.Font("Segoe UI", 10F);
             lstChat.ForeColor = System.Drawing.Color.FromArgb(33, 33, 33);
-            lstChat.Location = new System.Drawing.Point(0, 50);
+            lstChat.Location = new System.Drawing.Point(0, 88);
             lstChat.Name = "lstChat";
-            lstChat.Size = new System.Drawing.Size(764, 480);
+            lstChat.Size = new System.Drawing.Size(764, 442);
             lstChat.TabIndex = 1;
 
             // ============= TEXT BOX - INPUT =============
@@ -110,6 +133,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         #endregion
 
         private Panel pnlChat;
+        private ComboBox cboCourses;
+        private Label lblCourse;
         private Label lblTitle;
         private TextBox txtMessage;
         private Button btnSend;

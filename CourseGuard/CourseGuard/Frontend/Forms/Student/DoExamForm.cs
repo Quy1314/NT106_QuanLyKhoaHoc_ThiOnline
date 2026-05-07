@@ -1,12 +1,17 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using CourseGuard.Backend.Controllers;
+using CourseGuard.Backend.Data;
+using CourseGuard.Backend.Security;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.Forms.Student
 {
     public partial class DoExamForm : Form
     {
+        private readonly AuthController _authController = new(new CourseGuardDbContext(""));
+
         public DoExamForm()
         {
             InitializeComponent();
@@ -14,8 +19,15 @@ namespace CourseGuard.Frontend.Forms.Student
             LoadDummyQuestionsBox();
             btnSubmit.Click += (s, e) => {
                 var res = MessageBox.Show("Bạn có chắc chắn muốn nộp bài không?", "Xác nhận", MessageBoxButtons.YesNo);
-                if (res == DialogResult.Yes) this.Close();
+                if (res == DialogResult.Yes)
+                {
+                    int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
+                    string username = UserSessionContext.CurrentUsername ?? "không xác định";
+                    _authController.LogUserActivity(userId, "EXAM_SUBMIT", $"Người dùng {username} đã nộp bài thi.", string.Empty);
+                    this.Close();
+                }
             };
+            this.FormClosing += DoExamForm_FormClosing;
 
             // Bo góc buttons
             RoundedButtonHelper.Apply(10, btnSubmit, btnPrev, btnNext);
@@ -59,6 +71,13 @@ namespace CourseGuard.Frontend.Forms.Student
                 RoundedButtonHelper.Apply(btn, 8);
                 flpQuestions.Controls.Add(btn);
             }
+        }
+
+        private void DoExamForm_FormClosing(object? sender, FormClosingEventArgs e)
+        {
+            int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
+            string username = UserSessionContext.CurrentUsername ?? "không xác định";
+            _authController.LogUserActivity(userId, "EXAM_EXIT", $"Người dùng {username} đã thoát màn hình làm bài thi.", string.Empty);
         }
     }
 }

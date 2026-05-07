@@ -29,7 +29,8 @@ namespace CourseGuard.Frontend.Forms.Student
             btnLogout.Click += (s, e) => 
             { 
                 var authService = new CourseGuard.Backend.Controllers.AuthController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
-                authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty);
+                string ipAddress = GetLocalIpAddress();
+                authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty, ipAddress);
                 this.DialogResult = DialogResult.OK; // Assuming Parent form handles return to Login
                 this.Close(); 
             };
@@ -141,6 +142,35 @@ namespace CourseGuard.Frontend.Forms.Student
             mainboard.Controls.Clear();
             uc.Dock = DockStyle.Fill;
             mainboard.Controls.Add(uc);
+        }
+
+        private static string GetLocalIpAddress()
+        {
+            try
+            {
+                foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up)
+                    {
+                        continue;
+                    }
+
+                    foreach (var ip in ni.GetIPProperties().UnicastAddresses)
+                    {
+                        if (ip.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
+                            !System.Net.IPAddress.IsLoopback(ip.Address))
+                        {
+                            return ip.Address.ToString();
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback below.
+            }
+
+            return "127.0.0.1";
         }
     }
 }

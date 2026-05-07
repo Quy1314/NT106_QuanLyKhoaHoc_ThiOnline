@@ -86,7 +86,7 @@ namespace CourseGuard.Backend.Controllers
                 _dbContext.InsertUser(user, passwordHash);
                 var createdUser = _dbContext.GetUserByUsername(user.Username);
                 UserIdentityBloomIndex.RegisterUserIdentity(user.Username, user.Email);
-                _dbContext.LogUserActivity(UserSessionContext.CurrentUserId, "ADMIN_ADD_USER", $"Created user: {user.Username}", string.Empty);
+                _dbContext.LogUserActivity(UserSessionContext.CurrentUserId, "ADMIN_ADD_USER", $"Admin tạo tài khoản: {user.Username}", string.Empty);
                 return createdUser == null ? "UnexpectedError" : "Success";
             }
             catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
@@ -116,6 +116,10 @@ namespace CourseGuard.Backend.Controllers
                 if (!deleted)
                 {
                     LastErrorMessage = "Không thể xóa user (có thể là tài khoản ADMIN hoặc user không tồn tại).";
+                }
+                else
+                {
+                    _dbContext.LogUserActivity(UserSessionContext.CurrentUserId, "ADMIN_DELETE_USER", $"Admin xóa tài khoản ID={userId}", string.Empty);
                 }
                 return deleted;
             }
@@ -189,12 +193,13 @@ namespace CourseGuard.Backend.Controllers
                 string passwordHash = PasswordHasher.HashPassword(temporaryPassword);
                 _dbContext.UpdateUserPassword(userId, passwordHash);
                 _dbContext.UpdateUserStatus(userId, "ACTIVE");
-                _dbContext.LogUserActivity(userId, "FORGOT_PASSWORD_APPROVED", $"Admin sent temporary password for: {user.Username}", string.Empty);
+                _dbContext.LogUserActivity(userId, "FORGOT_PASSWORD_APPROVED", $"Admin đã gửi mật khẩu tạm thời cho: {user.Username}", string.Empty);
                 return true;
             }
             else if (action == "REJECT")
             {
                 _dbContext.UpdateUserStatus(userId, "REJECTED");
+                _dbContext.LogUserActivity(UserSessionContext.CurrentUserId, "ADMIN_REJECT_USER_REQUEST", $"Admin tu choi yeu cau nguoi dung ID={userId}", string.Empty);
                 return true;
             }
 
@@ -218,6 +223,7 @@ namespace CourseGuard.Backend.Controllers
             try
             {
                 _dbContext.UpdateUserStatus(userId, "ACTIVE");
+                _dbContext.LogUserActivity(UserSessionContext.CurrentUserId, "ADMIN_APPROVE_REGISTRATION", $"Admin phe duyet dang ky cho nguoi dung ID={userId}", string.Empty);
                 return true;
             }
             catch
@@ -239,6 +245,7 @@ namespace CourseGuard.Backend.Controllers
                 string passwordHash = PasswordHasher.HashPassword(newPassword);
                 _dbContext.UpdateUserPassword(userId, passwordHash);
                 _dbContext.UpdateUserStatus(userId, "ACTIVE"); // Chuyển về ACTIVE sau khi reset
+                _dbContext.LogUserActivity(UserSessionContext.CurrentUserId, "ADMIN_RESET_PASSWORD", $"Admin dat lai mat khau cho nguoi dung ID={userId}", string.Empty);
                 return true;
             }
             catch

@@ -173,8 +173,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void btnOnlineClasses_Click(object sender, EventArgs e)
         {
-            UpdateTitle("Lớp học trực tuyến");
-            // TODO: LoadUserControl(new UC_OnlineClasses());
+            UpdateTitle("Lớp học trực tuyến - Chat");
+            LoadUserControl(new UC_Chat());
         }
 
         // --- Nhóm: Khảo Thí & Đề Thi ---
@@ -264,7 +264,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
             if (result == DialogResult.Yes)
             {
                 var authService = new CourseGuard.Backend.Controllers.AuthController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
-                authService.Logout(_currentTeacherId, _currentTeacherUsername);
+                string ipAddress = GetLocalIpAddress();
+                authService.Logout(_currentTeacherId, _currentTeacherUsername, ipAddress);
                 this.Close();
             }
         }
@@ -345,7 +346,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             flpEmails.Controls.Clear();
             var errorLabel = new Label 
             { 
-                Text = "Could not load emails: " + errorMsg, 
+                Text = "Không thể tải email: " + errorMsg, 
                 AutoSize = true, 
                 ForeColor = Color.Red, 
                 Padding = new Padding(10) 
@@ -374,6 +375,35 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private void btnMail_MouseLeave(object sender, EventArgs e)
         {
             btnMail.ForeColor = ColorPalette.LightMode.TextSecondary; // Revert original color
+        }
+
+        private static string GetLocalIpAddress()
+        {
+            try
+            {
+                foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up)
+                    {
+                        continue;
+                    }
+
+                    foreach (var ip in ni.GetIPProperties().UnicastAddresses)
+                    {
+                        if (ip.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
+                            !System.Net.IPAddress.IsLoopback(ip.Address))
+                        {
+                            return ip.Address.ToString();
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback below.
+            }
+
+            return "127.0.0.1";
         }
     }
 }

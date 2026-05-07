@@ -38,7 +38,6 @@ namespace CourseGuard.Frontend.UserControls.Student
             lstContacts.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
             lstContacts.Font = new Font("Segoe UI", 11F);
             lstContacts.FormattingEnabled = true;
-            lstContacts.Items.AddRange(new object[] { "Lập trình C# (Nhóm lớp)", "Mạng máy tính (Nhóm lớp)", "Giảng viên: Nguyễn Văn A", "Giảng viên: Trần Thị B" });
             lstContacts.Location = new Point(20, 80);
             lstContacts.Name = "lstContacts";
             lstContacts.Size = new Size(250, 454);
@@ -56,7 +55,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             txtMessages.ScrollBars = ScrollBars.Vertical;
             txtMessages.Size = new Size(590, 390);
             txtMessages.TabIndex = 2;
-            txtMessages.Text = "GV: Các em chuẩn bị bài về nhà nhé!\r\nGV: Ai có thắc mắc gì không?\r\nBạn: Dạ em hiểu rồi ạ.\r\n";
+            txtMessages.Text = string.Empty;
             // 
             // txtInput
             // 

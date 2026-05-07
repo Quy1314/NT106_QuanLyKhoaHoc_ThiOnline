@@ -112,9 +112,9 @@ namespace CourseGuard.Frontend.Forms.Admin
                 { btnUsers, () => new UC_UsersManage() },
                 { btnCourses, () => new UC_CoursesManage() },
                 { btnReports, () => new UC_AdminReports() },
-                { btnDeviceMonitoring, () => CreateEmptyView("Device Monitoring") },
-                { btnAuditLogs, () => CreateEmptyView("Audit Logs") },
-                { btnSettings, () => CreateEmptyView("Settings") }
+                { btnDeviceMonitoring, () => CreateEmptyView("Giám sát thiết bị") },
+                { btnAuditLogs, () => new UC_AdminLogStatistics() },
+                { btnSettings, () => CreateEmptyView("Cài đặt") }
             };
         }
 
