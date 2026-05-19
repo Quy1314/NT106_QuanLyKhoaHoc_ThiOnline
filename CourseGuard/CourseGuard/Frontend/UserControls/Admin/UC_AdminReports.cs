@@ -14,6 +14,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Data;
 using System.IO;
 using System.Drawing.Printing;
+using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Admin
 {
@@ -71,7 +72,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             LoadData();
         }
 
-        private void LoadData()
+        private async void LoadData()
         {
             string? reportType = cboReportType.SelectedItem?.ToString();
             DateTime start = dtpStartDate.Value.Date;
@@ -117,14 +118,19 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 { "@end", (SqlDbType.DateTime, end) }
             };
 
+            this.ShowSkeleton(SkeletonType.TableWithToolbar);
             try
             {
-                DataTable dt = DatabaseAction.ExecuteQuery(query, parameters);
+                DataTable dt = await Task.Run(() => DatabaseAction.ExecuteQuery(query, parameters));
                 dataGridView1.DataSource = dt;
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Lỗi tải dữ liệu báo cáo: " + ex.Message);
+            }
+            finally
+            {
+                this.HideSkeleton();
             }
         }
 

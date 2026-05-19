@@ -51,8 +51,8 @@ namespace CourseGuard.Frontend.Forms.Login
             InitializeComponent();
             CustomizeUI(); // Apply modern UI styles
 
-            // Bo góc + cursor tay cho tất cả buttons
-            CourseGuard.Frontend.Theme.RoundedButtonHelper.Apply(12,
+            // Bo góc đồng bộ (10px) cho tất cả buttons
+            CourseGuard.Frontend.Theme.RoundedButtonHelper.Apply(10,
                 btnLogin, btnRegisterSubmit, btnForgotSubmit);
 
             this.Load += LoginPage_Load;
@@ -87,7 +87,7 @@ namespace CourseGuard.Frontend.Forms.Login
             SuspendLayout();
 
             // Form
-            BackColor = Color.Black;
+            BackColor = MetaTheme.Colors.FormBg;
             FormBorderStyle = FormBorderStyle.Sizable;
             DoubleBuffered = true;
             AcceptButton = btnLogin;
@@ -97,7 +97,7 @@ namespace CourseGuard.Frontend.Forms.Login
             // Panels inside glass card
             foreach (var p in new[] { LoginPanel, RegisterPanel, ForgotPassPanel })
             {
-                p.BackColor = Color.FromArgb(34, 38, 62);
+                p.BackColor = MetaTheme.Colors.CardBg;
                 p.BorderStyle = BorderStyle.None;
             }
 
@@ -110,14 +110,14 @@ namespace CourseGuard.Frontend.Forms.Login
             // Title
             LoginTitle.Text = "Sign In";
             LoginTitle.Font = titleFont;
-            LoginTitle.ForeColor = Color.White;
+            LoginTitle.ForeColor = MetaTheme.Colors.TextPrimary;
             LoginTitle.AutoSize = false;
             LoginTitle.TextAlign = ContentAlignment.MiddleCenter;
 
             // Brand
             LOGO.Text = "COURSEGUARD";
             LOGO.Font = FuturisticLoginKit.CreateUiFont(10.5f, FontStyle.Bold);
-            LOGO.ForeColor = Color.FromArgb(185, 235, 245, 255);
+            LOGO.ForeColor = MetaTheme.Colors.Accent;
             LOGO.BorderStyle = BorderStyle.None;
             LOGO.TextAlign = ContentAlignment.MiddleCenter;
             LOGO.AutoSize = false;
@@ -125,44 +125,40 @@ namespace CourseGuard.Frontend.Forms.Login
 
             // Labels (subtle)
             lblUsername.Font = smallBold;
-            lblUsername.ForeColor = Color.FromArgb(190, 255, 255, 255);
+            lblUsername.ForeColor = MetaTheme.Colors.TextSecondary;
             lblPassword.Font = smallBold;
-            lblPassword.ForeColor = Color.FromArgb(190, 255, 255, 255);
+            lblPassword.ForeColor = MetaTheme.Colors.TextSecondary;
 
             // Input shells (icon left, glow focus)
             txtUsername.Font = inputFont;
             txtPassword.Font = inputFont;
             txtUsername.BorderStyle = BorderStyle.None;
             txtPassword.BorderStyle = BorderStyle.None;
-            txtUsername.BackColor = Color.FromArgb(52, 58, 92);
-            txtPassword.BackColor = Color.FromArgb(52, 58, 92);
-            txtUsername.ForeColor = Color.White;
-            txtPassword.ForeColor = Color.White;
+            txtUsername.BackColor = MetaTheme.Colors.InputBg;
+            txtPassword.BackColor = MetaTheme.Colors.InputBg;
+            txtUsername.ForeColor = MetaTheme.Colors.TextPrimary;
+            txtPassword.ForeColor = MetaTheme.Colors.TextPrimary;
 
             CreateInputShells();
 
-            // Login button (neon gradient + shimmer + ripple)
+            // Login button
             btnLogin.Text = "Login";
+            MetaTheme.StylePrimaryButton(btnLogin);
             btnLogin.Font = buttonFont;
-            btnLogin.ForeColor = Color.White;
-            btnLogin.FlatStyle = FlatStyle.Flat;
-            btnLogin.FlatAppearance.BorderSize = 0;
-            btnLogin.BackColor = Color.Transparent;
-            btnLogin.Cursor = Cursors.Hand;
 
             // Links/Other
             chkRemember.Font = FuturisticLoginKit.CreateUiFont(9.5f, FontStyle.Regular);
-            chkRemember.ForeColor = Color.FromArgb(210, 255, 255, 255);
+            chkRemember.ForeColor = MetaTheme.Colors.TextSecondary;
             chkRemember.BackColor = LoginPanel.BackColor;
             chkRemember.FlatStyle = FlatStyle.Flat;
 
-            linkLabel1.LinkColor = Color.FromArgb(160, 120, 255);
-            linkLabel1.ActiveLinkColor = Color.FromArgb(70, 220, 255);
+            linkLabel1.LinkColor = MetaTheme.Colors.Accent;
+            linkLabel1.ActiveLinkColor = MetaTheme.Colors.AccentHover;
             linkLabel1.VisitedLinkColor = linkLabel1.LinkColor;
             linkLabel1.BackColor = LoginPanel.BackColor;
 
-            lnkRegister.LinkColor = Color.FromArgb(120, 255, 240);
-            lnkRegister.ActiveLinkColor = Color.FromArgb(160, 120, 255);
+            lnkRegister.LinkColor = MetaTheme.Colors.Accent;
+            lnkRegister.ActiveLinkColor = MetaTheme.Colors.AccentHover;
             lnkRegister.Text = "Don't have an account? Sign Up";
             lnkRegister.BackColor = LoginPanel.BackColor;
 
@@ -172,7 +168,7 @@ namespace CourseGuard.Frontend.Forms.Login
             // Register Controls (keep existing logic, just style)
             RegisterTitle.Text = "Create Account";
             RegisterTitle.Font = FuturisticLoginKit.CreateUiFont(22f, FontStyle.Bold);
-            RegisterTitle.ForeColor = Color.White;
+            RegisterTitle.ForeColor = MetaTheme.Colors.TextPrimary;
             RegisterTitle.BackColor = Color.Transparent;
             lblRegUsername.Text = "Username";
             lblRegFullName.Text = "Full Name";
@@ -180,15 +176,12 @@ namespace CourseGuard.Frontend.Forms.Login
             lblRegPassword.Text = "Password";
             txtRegPassword.UseSystemPasswordChar = true;
             lnkBackToLoginFromReg.Text = "Back to Login";
-            lnkBackToLoginFromReg.LinkColor = Color.FromArgb(120, 255, 240);
-            btnRegisterSubmit.BackColor = Color.FromArgb(82, 96, 138);
-            btnRegisterSubmit.FlatStyle = FlatStyle.Flat;
-            btnRegisterSubmit.FlatAppearance.BorderSize = 0;
-            btnRegisterSubmit.ForeColor = Color.White;
+            lnkBackToLoginFromReg.LinkColor = MetaTheme.Colors.TextSecondary;
+            MetaTheme.StylePrimaryButton(btnRegisterSubmit);
             btnRegisterSubmit.Font = FuturisticLoginKit.CreateUiFont(11f, FontStyle.Bold);
 
             // Register panel eye-friendly contrast tuning
-            var fieldLabelColor = Color.FromArgb(220, 235, 242, 255);
+            var fieldLabelColor = MetaTheme.Colors.TextSecondary;
             foreach (var lbl in new[] { lblRegUsername, lblRegFullName, lblRegEmail, lblRegPassword })
             {
                 lbl.ForeColor = fieldLabelColor;
@@ -198,27 +191,24 @@ namespace CourseGuard.Frontend.Forms.Login
             foreach (var tb in new[] { txtRegUsername, txtRegFullName, txtRegEmail, txtRegPassword })
             {
                 tb.BorderStyle = BorderStyle.None;
-                tb.BackColor = Color.FromArgb(66, 74, 108);
-                tb.ForeColor = Color.White;
+                tb.BackColor = MetaTheme.Colors.InputBg;
+                tb.ForeColor = MetaTheme.Colors.TextPrimary;
                 tb.Font = FuturisticLoginKit.CreateUiFont(11f, FontStyle.Regular);
             }
             lnkBackToLoginFromReg.BackColor = Color.Transparent;
-            lnkBackToLoginFromReg.ActiveLinkColor = Color.FromArgb(165, 135, 255);
+            lnkBackToLoginFromReg.ActiveLinkColor = MetaTheme.Colors.AccentHover;
             lnkBackToLoginFromReg.VisitedLinkColor = lnkBackToLoginFromReg.LinkColor;
 
             // Forgot Controls
             ForgotTitle.Text = "Forgot Password";
             ForgotTitle.Font = FuturisticLoginKit.CreateUiFont(22f, FontStyle.Bold);
-            ForgotTitle.ForeColor = Color.White;
+            ForgotTitle.ForeColor = MetaTheme.Colors.TextPrimary;
             lblForgotUsername.Text = "Username";
             lblForgotEmail.Text = "Email";
             lnkBackToLoginFromForgot.Text = "Back to Login";
-            lnkBackToLoginFromForgot.LinkColor = Color.FromArgb(120, 255, 240);
+            lnkBackToLoginFromForgot.LinkColor = MetaTheme.Colors.TextSecondary;
             btnForgotSubmit.Text = "Xác nhận quên mật khẩu";
-            btnForgotSubmit.BackColor = Color.FromArgb(82, 96, 138);
-            btnForgotSubmit.FlatStyle = FlatStyle.Flat;
-            btnForgotSubmit.FlatAppearance.BorderSize = 0;
-            btnForgotSubmit.ForeColor = Color.White;
+            MetaTheme.StylePrimaryButton(btnForgotSubmit);
             btnForgotSubmit.Font = FuturisticLoginKit.CreateUiFont(11f, FontStyle.Bold);
             ForgotTitle.BackColor = Color.Transparent;
             lblForgotUsername.ForeColor = fieldLabelColor;
@@ -229,14 +219,14 @@ namespace CourseGuard.Frontend.Forms.Login
             lblForgotEmail.Font = FuturisticLoginKit.CreateUiFont(10.5f, FontStyle.Bold);
             txtForgotUsername.BorderStyle = BorderStyle.None;
             txtForgotEmail.BorderStyle = BorderStyle.None;
-            txtForgotUsername.BackColor = Color.FromArgb(66, 74, 108);
-            txtForgotEmail.BackColor = Color.FromArgb(66, 74, 108);
-            txtForgotUsername.ForeColor = Color.White;
-            txtForgotEmail.ForeColor = Color.White;
+            txtForgotUsername.BackColor = MetaTheme.Colors.InputBg;
+            txtForgotEmail.BackColor = MetaTheme.Colors.InputBg;
+            txtForgotUsername.ForeColor = MetaTheme.Colors.TextPrimary;
+            txtForgotEmail.ForeColor = MetaTheme.Colors.TextPrimary;
             txtForgotUsername.Font = FuturisticLoginKit.CreateUiFont(11f, FontStyle.Regular);
             txtForgotEmail.Font = FuturisticLoginKit.CreateUiFont(11f, FontStyle.Regular);
             lnkBackToLoginFromForgot.BackColor = Color.Transparent;
-            lnkBackToLoginFromForgot.ActiveLinkColor = Color.FromArgb(165, 135, 255);
+            lnkBackToLoginFromForgot.ActiveLinkColor = MetaTheme.Colors.AccentHover;
             lnkBackToLoginFromForgot.VisitedLinkColor = lnkBackToLoginFromForgot.LinkColor;
 
             ResumeLayout(true);
@@ -539,7 +529,7 @@ namespace CourseGuard.Frontend.Forms.Login
 
             icon.Text = glyph;
             icon.Font = new Font("Segoe MDL2 Assets", 16f, FontStyle.Regular);
-            icon.ForeColor = Color.FromArgb(190, 255, 255, 255);
+            icon.ForeColor = MetaTheme.Colors.TextSecondary;
             icon.AutoSize = false;
             icon.Size = new Size(34, 44);
             icon.Location = new Point(10, 0);
@@ -548,8 +538,8 @@ namespace CourseGuard.Frontend.Forms.Login
             icon.Click += (_, _) => box.Focus();
 
             box.BorderStyle = BorderStyle.None;
-            box.BackColor = Color.FromArgb(52, 58, 92);
-            box.ForeColor = Color.White;
+            box.BackColor = MetaTheme.Colors.InputBg;
+            box.ForeColor = MetaTheme.Colors.TextPrimary;
         }
 
         private void ApplyUsernamePlaceholder()
@@ -557,7 +547,7 @@ namespace CourseGuard.Frontend.Forms.Login
             if (!string.IsNullOrWhiteSpace(txtUsername.Text)) return;
             _usernamePlaceholderActive = true;
             txtUsername.Text = UsernamePlaceholder;
-            txtUsername.ForeColor = Color.FromArgb(180, 220, 230, 250);
+            txtUsername.ForeColor = MetaTheme.Colors.TextMuted;
         }
 
         private void ApplyPasswordPlaceholder()
@@ -566,7 +556,7 @@ namespace CourseGuard.Frontend.Forms.Login
             _passwordPlaceholderActive = true;
             txtPassword.UseSystemPasswordChar = false;
             txtPassword.Text = PasswordPlaceholder;
-            txtPassword.ForeColor = Color.FromArgb(180, 220, 230, 250);
+            txtPassword.ForeColor = MetaTheme.Colors.TextMuted;
         }
 
         private void TxtUsername_Enter(object? sender, EventArgs e)
@@ -574,7 +564,7 @@ namespace CourseGuard.Frontend.Forms.Login
             if (!_usernamePlaceholderActive) return;
             _usernamePlaceholderActive = false;
             txtUsername.Text = string.Empty;
-            txtUsername.ForeColor = Color.White;
+            txtUsername.ForeColor = MetaTheme.Colors.TextPrimary;
         }
 
         private void TxtUsername_Leave(object? sender, EventArgs e)
@@ -590,7 +580,7 @@ namespace CourseGuard.Frontend.Forms.Login
             if (!_passwordPlaceholderActive) return;
             _passwordPlaceholderActive = false;
             txtPassword.Text = string.Empty;
-            txtPassword.ForeColor = Color.White;
+            txtPassword.ForeColor = MetaTheme.Colors.TextPrimary;
             txtPassword.UseSystemPasswordChar = true;
         }
 
@@ -668,7 +658,7 @@ namespace CourseGuard.Frontend.Forms.Login
                 Font = FuturisticLoginKit.CreateUiFont(9.5f, FontStyle.Bold),
             };
             b.FlatAppearance.BorderSize = 0;
-            RoundedButtonHelper.Apply(12, b);
+            RoundedButtonHelper.Apply(10, b);
 
             b.MouseEnter += (_, _) => { b.BackColor = Color.FromArgb(85, 255, 255, 255); b.Invalidate(); };
             b.MouseLeave += (_, _) => { b.BackColor = baseFill; b.Invalidate(); };

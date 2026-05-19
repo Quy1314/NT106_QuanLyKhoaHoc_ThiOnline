@@ -24,10 +24,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
         {
             InitializeComponent();
             _userService = new CourseGuard.Backend.Controllers.UserController(new CourseGuardDbContext(""));
-            ApplyAcademicStyle();
+            ApplyDarkStyle();
 
-            // Bo góc + cursor tay cho tất cả buttons
-            CourseGuard.Frontend.Theme.RoundedButtonHelper.Apply(10,
+            // Rounded buttons (matching Courses tab style)
+            RoundedButtonHelper.Apply(10,
                 btn_insert, btn_delete, btn_search, btn_Approve);
 
             // Default: Empty grid, only load on search
@@ -42,30 +42,38 @@ namespace CourseGuard.Frontend.UserControls.Admin
             this.cb_StatusFilter.SelectedIndex = 0; // "ALL"
         }
 
-        private void ApplyAcademicStyle()
+        private void ApplyDarkStyle()
         {
-            BackColor = AcademicTheme.AppBackground;
-            btn_insert.BackColor = AcademicTheme.Primary;
-            btn_insert.ForeColor = System.Drawing.Color.White;
-            btn_search.BackColor = AcademicTheme.Primary;
-            btn_search.ForeColor = System.Drawing.Color.White;
-            btn_Approve.BackColor = AcademicTheme.Surface;
-            btn_Approve.ForeColor = AcademicTheme.TextSecondary;
-            btn_Approve.FlatAppearance.BorderColor = AcademicTheme.BorderSoft;
-            btn_Approve.FlatAppearance.BorderSize = 1;
-            btn_delete.BackColor = System.Drawing.Color.FromArgb(220, 38, 38);
-            btn_delete.ForeColor = System.Drawing.Color.White;
-            AcademicTheme.StyleGrid(dataGridView1);
+            BackColor = MetaTheme.Colors.FormBg;
+
+            // Primary indigo buttons
+            MetaTheme.StylePrimaryButton(btn_insert);
+            MetaTheme.StylePrimaryButton(btn_search);
+
+            // Ghost approve button
+            MetaTheme.StyleGhostButton(btn_Approve);
+
+            // Critical-red delete button
+            btn_delete.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            btn_delete.FlatAppearance.BorderSize = 0;
+            btn_delete.BackColor = MetaTheme.Colors.LogoutRed;
+            btn_delete.ForeColor = MetaTheme.Colors.TextPrimary;
+            btn_delete.Font = MetaTheme.Fonts.ButtonMd();
+            btn_delete.Cursor = System.Windows.Forms.Cursors.Hand;
+            btn_delete.FlatAppearance.MouseOverBackColor = MetaTheme.Colors.LogoutRedHover;
+
+            MetaTheme.StyleGrid(dataGridView1);
         }
 
-        private void LoadData()
+        private async void LoadData()
         {
             string status = cb_StatusFilter.SelectedItem?.ToString() ?? "ALL";
             string role = (cb_roleID.SelectedItem == null || cb_roleID.Text == "Select Role") ? "ALL" : cb_roleID.Text.ToUpper();
 
+            this.ShowSkeleton(SkeletonType.FormWithTable);
             try
             {
-                var users = _userService.SearchUsers(status, role);
+                var users = await Task.Run(() => _userService.SearchUsers(status, role));
                 dataGridView1.DataSource = users;
                 
                 // Hide Password Hash if present in grid?
@@ -81,6 +89,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
             catch (Exception ex)
             {
                 MessageBox.Show("Lỗi tải dữ liệu: " + ex.Message);
+            }
+            finally
+            {
+                this.HideSkeleton();
             }
         }
 

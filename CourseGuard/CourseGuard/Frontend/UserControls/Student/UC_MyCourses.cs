@@ -20,34 +20,85 @@ namespace CourseGuard.Frontend.UserControls.Student
     {
         private readonly CourseController _controller;
         private List<EnrollmentModel> _allEnrollments = new();
+        private bool _isLoadingEnrollments;
 
         public UC_MyCourses()
         {
             InitializeComponent();
+            BuildCardLayout();
 
             _controller = new CourseController(new CourseGuardDbContext(""));
 
-            // Bo góc buttons
+            // Pill-shaped buttons
             RoundedButtonHelper.Apply(10, btnRefresh, btnViewDetail, btnDrop);
+
+            // Dark background
+            BackColor = AppColors.BgBase;
+            pnlCourseInfo.BorderStyle = BorderStyle.None;
+            pnlCourseInfo.BackColor = AppColors.BgCard;
+            pnlCourseInfo.Tag = "card";
+            lblTitle.ForeColor = AppColors.TextPrimary;
+            lblFilterLabel.ForeColor = AppColors.TextSecondary;
+            StudentTabChrome.StylePrimaryButton(btnRefresh);
+            StudentTabChrome.StyleSecondaryButton(btnViewDetail);
+            StudentTabChrome.StyleDangerButton(btnDrop);
+            StudentTabChrome.StyleGrid(dgvMyCourses);
+            StudentTabChrome.StyleInput(cboStatusFilter);
 
             // Events
             cboStatusFilter.SelectedIndex = 0;
             cboStatusFilter.SelectedIndexChanged += (s, e) => ApplyFilter();
-            btnRefresh.Click += (s, e) => LoadEnrollments();
+            btnRefresh.Click += async (s, e) => await LoadEnrollments();
             btnDrop.Click += BtnDrop_Click;
             btnViewDetail.Click += BtnViewDetail_Click;
             dgvMyCourses.SelectionChanged += DgvMyCourses_SelectionChanged;
 
-            // Styling DataGridView
-            StyleDataGridView();
+            // Dark DataGridView styling
+            MetaTheme.StyleGrid(dgvMyCourses);
 
             // Load dữ liệu thực
-            LoadEnrollments();
+            _ = LoadEnrollments();
+        }
+
+        private void BuildCardLayout()
+        {
+            lblTitle.Text = "Khóa học của tôi";
+            btnRefresh.Text = "Làm mới";
+            btnViewDetail.Text = "Chi tiết";
+            btnDrop.Text = "Hủy / Rút";
+
+            var root = StudentTabChrome.CreateRoot(this);
+            root.Controls.Add(StudentTabChrome.CreateHeader(
+                "Khóa học của tôi",
+                "Theo dõi khóa học đã tham gia, đang chờ duyệt hoặc đã rút.",
+                lblFilterLabel, cboStatusFilter, btnRefresh, btnViewDetail, btnDrop), 0, 0);
+
+            var content = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = AppColors.BgBase,
+                ColumnCount = 1,
+                RowCount = 2
+            };
+            content.RowStyles.Add(new RowStyle(SizeType.Percent, 68f));
+            content.RowStyles.Add(new RowStyle(SizeType.Percent, 32f));
+
+            var tableCard = StudentTabChrome.CreateDataCard("Danh sách khóa học", dgvMyCourses);
+            tableCard.Margin = new Padding(0, 0, 0, 12);
+            var detailCard = StudentTabChrome.CreateDataCard("Chi tiết ghi danh", pnlCourseInfo);
+            detailCard.Margin = new Padding(0, 12, 0, 0);
+
+            content.Controls.Add(tableCard, 0, 0);
+            content.Controls.Add(detailCard, 0, 1);
+            root.Controls.Add(content, 0, 1);
+
+            StudentTabChrome.EnableNaturalFocusClear(this);
         }
 
         // ── Load dữ liệu từ DB ──────────────────────────────────────────
-        private void LoadEnrollments()
+        private async System.Threading.Tasks.Task LoadEnrollments()
         {
+            this.ShowSkeleton(SkeletonType.TableWithToolbarAndDetailPanel);
             try
             {
                 int studentId = UserSessionContext.CurrentUserId ?? 0;
@@ -58,13 +109,17 @@ namespace CourseGuard.Frontend.UserControls.Student
                     return;
                 }
 
-                _allEnrollments = _controller.GetMyEnrollments(studentId);
+                _allEnrollments = await System.Threading.Tasks.Task.Run(() => _controller.GetMyEnrollments(studentId));
                 ApplyFilter();
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Lỗi tải dữ liệu: " + ex.Message,
                     "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                this.HideSkeleton();
             }
         }
 
@@ -93,6 +148,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         // ── Bind dữ liệu vào DataGridView ───────────────────────────────
         private void BindToGrid(List<EnrollmentModel> enrollments)
         {
+            _isLoadingEnrollments = true;
             DataTable dt = new DataTable();
             dt.Columns.Add("ID", typeof(int));
             dt.Columns.Add("CourseId", typeof(int));
@@ -130,20 +186,48 @@ namespace CourseGuard.Frontend.UserControls.Student
                 );
             }
 
-            dgvMyCourses.DataSource = dt;
-            dgvMyCourses.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            try
+            {
+                dgvMyCourses.DataSource = dt;
+                dgvMyCourses.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
-            // Ẩn cột ID/CourseId nội bộ
-            if (dgvMyCourses.Columns.Contains("ID"))
-                dgvMyCourses.Columns["ID"].Visible = false;
-            if (dgvMyCourses.Columns.Contains("CourseId"))
-                dgvMyCourses.Columns["CourseId"].Visible = false;
+                // Ẩn cột ID/CourseId nội bộ
+                DataGridViewColumn? idColumn = dgvMyCourses.Columns["ID"];
+                if (idColumn != null)
+                    idColumn.Visible = false;
 
-            // Reset detail panel
-            ClearDetailPanel();
+                DataGridViewColumn? courseIdColumn = dgvMyCourses.Columns["CourseId"];
+                if (courseIdColumn != null)
+                    courseIdColumn.Visible = false;
 
-            // Tô màu theo trạng thái
-            ColorizeRows();
+                // Reset detail panel
+                ClearDetailPanel();
+
+                // Tô màu theo trạng thái
+                ColorizeRows();
+                ClearMyCoursesGridSelection();
+
+                if (IsHandleCreated && !IsDisposed && !Disposing)
+                {
+                    BeginInvoke(new MethodInvoker(() =>
+                    {
+                        if (IsDisposed || Disposing)
+                            return;
+
+                        ClearMyCoursesGridSelection();
+                        _isLoadingEnrollments = false;
+                    }));
+                }
+                else
+                {
+                    _isLoadingEnrollments = false;
+                }
+            }
+            catch
+            {
+                _isLoadingEnrollments = false;
+                throw;
+            }
         }
 
         // ── Tô màu hàng theo trạng thái ─────────────────────────────────
@@ -155,27 +239,22 @@ namespace CourseGuard.Frontend.UserControls.Student
                 string status = row.Cells["Trạng thái"].Value?.ToString() ?? "";
 
                 if (status.Contains("Đang học"))
-                {
-                    row.DefaultCellStyle.ForeColor = Color.FromArgb(5, 150, 105);
-                }
+                    row.DefaultCellStyle.ForeColor = MetaTheme.Colors.Success;
                 else if (status.Contains("Chờ duyệt"))
-                {
-                    row.DefaultCellStyle.ForeColor = Color.FromArgb(217, 119, 6);
-                }
+                    row.DefaultCellStyle.ForeColor = MetaTheme.Colors.Warning;
                 else if (status.Contains("Đã rút"))
-                {
-                    row.DefaultCellStyle.ForeColor = Color.FromArgb(220, 38, 38);
-                }
+                    row.DefaultCellStyle.ForeColor = MetaTheme.Colors.Critical;
                 else if (status.Contains("Hoàn thành"))
-                {
-                    row.DefaultCellStyle.ForeColor = Color.FromArgb(37, 99, 235);
-                }
+                    row.DefaultCellStyle.ForeColor = MetaTheme.Colors.Info;
             }
         }
 
         // ── Khi chọn dòng → hiện chi tiết ───────────────────────────────
         private void DgvMyCourses_SelectionChanged(object? sender, EventArgs e)
         {
+            if (_isLoadingEnrollments)
+                return;
+
             if (dgvMyCourses.CurrentRow == null || dgvMyCourses.CurrentRow.IsNewRow)
             {
                 ClearDetailPanel();
@@ -209,15 +288,21 @@ namespace CourseGuard.Frontend.UserControls.Student
             };
             lblStatus.ForeColor = enrollment.Status switch
             {
-                "ACTIVE" => Color.FromArgb(16, 185, 129),
-                "PENDING" => Color.FromArgb(245, 158, 11),
-                "DROPPED" => Color.FromArgb(239, 68, 68),
-                _ => Color.FromArgb(100, 116, 139)
+                "ACTIVE" => MetaTheme.Colors.Success,
+                "PENDING" => MetaTheme.Colors.Warning,
+                "DROPPED" => MetaTheme.Colors.Critical,
+                _ => MetaTheme.Colors.TextMuted
             };
 
             lblDescription.Text = string.IsNullOrWhiteSpace(enrollment.CourseDescription)
                 ? "(Không có mô tả)"
                 : enrollment.CourseDescription;
+        }
+
+        private void ClearMyCoursesGridSelection()
+        {
+            dgvMyCourses.ClearSelection();
+            dgvMyCourses.CurrentCell = null;
         }
 
         private void ClearDetailPanel()
@@ -251,7 +336,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                           $"📝 Trạng thái khóa học: {enrollment.CourseStatus}\n\n" +
                           $"📖 Mô tả:\n{(string.IsNullOrWhiteSpace(enrollment.CourseDescription) ? "(Không có)" : enrollment.CourseDescription)}";
 
-            MessageBox.Show(info, "Chi tiết khóa học", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MetaTheme.ShowModernDialog(info, "Chi tiết khóa học");
         }
 
         // ── Hủy / Rút khỏi khóa học ─────────────────────────────────────
@@ -259,8 +344,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         {
             if (dgvMyCourses.CurrentRow == null || dgvMyCourses.CurrentRow.IsNewRow)
             {
-                MessageBox.Show("Vui lòng chọn một khóa học để hủy/rút.", "Thông báo",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MetaTheme.ShowModernDialog("Vui lòng chọn một khóa học để hủy/rút.", "Thông báo");
                 return;
             }
 
@@ -290,27 +374,9 @@ namespace CourseGuard.Frontend.UserControls.Student
             MessageBox.Show(message, "Kết quả", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
             // Reload
-            LoadEnrollments();
+            _ = LoadEnrollments();
         }
 
-        // ── Style DataGridView ───────────────────────────────────────────
-        private void StyleDataGridView()
-        {
-            dgvMyCourses.EnableHeadersVisualStyles = false;
-            dgvMyCourses.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 58, 138);
-            dgvMyCourses.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgvMyCourses.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-            dgvMyCourses.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
-            dgvMyCourses.ColumnHeadersHeight = 40;
 
-            dgvMyCourses.DefaultCellStyle.Font = new Font("Segoe UI", 10F);
-            dgvMyCourses.DefaultCellStyle.SelectionBackColor = Color.FromArgb(219, 234, 254);
-            dgvMyCourses.DefaultCellStyle.SelectionForeColor = Color.FromArgb(30, 58, 138);
-            dgvMyCourses.DefaultCellStyle.Padding = new Padding(5, 3, 5, 3);
-
-            dgvMyCourses.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(248, 250, 252);
-            dgvMyCourses.GridColor = Color.FromArgb(226, 232, 240);
-            dgvMyCourses.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-        }
     }
 }

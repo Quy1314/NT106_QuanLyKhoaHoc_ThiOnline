@@ -12,7 +12,21 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         {
             InitializeComponent();
             ApplyTheme();
-            LoadDataPlaceholder();
+            _ = LoadDataAsync();
+        }
+
+        private async System.Threading.Tasks.Task LoadDataAsync()
+        {
+            this.ShowSkeleton(SkeletonType.TableWithToolbar);
+            try
+            {
+                await System.Threading.Tasks.Task.Delay(500);
+                LoadDataPlaceholder();
+            }
+            finally
+            {
+                this.HideSkeleton();
+            }
         }
 
         private void ApplyTheme()
@@ -31,7 +45,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
             btnAddExam.BackColor = AcademicTheme.Primary;
             btnAddExam.ForeColor = Color.White;
-            RoundedButtonHelper.Apply(btnAddExam, 15);
+            RoundedButtonHelper.Apply(btnAddExam, 10);
 
             // DataGridView Default Style
             dgvExams.BackgroundColor = AcademicTheme.Surface;

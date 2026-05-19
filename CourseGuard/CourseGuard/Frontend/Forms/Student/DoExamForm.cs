@@ -68,7 +68,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 btn.FlatAppearance.BorderSize = 0;
                 if (i <= 5) btn.BackColor = Color.FromArgb(220, 252, 231);
                 if (i == 6) btn.BackColor = Color.FromArgb(254, 243, 199);
-                RoundedButtonHelper.Apply(btn, 8);
+                RoundedButtonHelper.Apply(btn, 10);
                 flpQuestions.Controls.Add(btn);
             }
         }

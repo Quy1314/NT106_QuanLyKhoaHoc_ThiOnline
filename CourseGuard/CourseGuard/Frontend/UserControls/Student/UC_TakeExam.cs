@@ -17,8 +17,9 @@ namespace CourseGuard.Frontend.UserControls.Student
         public UC_TakeExam()
         {
             InitializeComponent();
+            BuildCardLayout();
             ApplyAcademicStyle();
-            LoadDummyData();
+            _ = LoadDataAsync();
 
             // Bo góc buttons
             RoundedButtonHelper.Apply(btnStartExam, 10);
@@ -26,12 +27,35 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private void ApplyAcademicStyle()
         {
-            BackColor = AcademicTheme.AppBackground;
-            lblTitle.ForeColor = AcademicTheme.TextPrimary;
-            btnStartExam.BackColor = AcademicTheme.Primary;
-            btnStartExam.ForeColor = Color.White;
-            btnStartExam.FlatAppearance.BorderSize = 0;
-            AcademicTheme.StyleGrid(dgvExams);
+            BackColor = AppColors.BgBase;
+            StudentTabChrome.StylePrimaryButton(btnStartExam);
+            StudentTabChrome.StyleGrid(dgvExams);
+        }
+
+        private void BuildCardLayout()
+        {
+            btnStartExam.Text = "Bắt đầu làm bài";
+            var root = StudentTabChrome.CreateRoot(this);
+            root.Controls.Add(StudentTabChrome.CreateHeader(
+                "Bài kiểm tra",
+                "Theo dõi bài kiểm tra đang mở, thời lượng và trạng thái làm bài.",
+                btnStartExam), 0, 0);
+            root.Controls.Add(StudentTabChrome.CreateDataCard("Danh sách bài kiểm tra", dgvExams), 0, 1);
+            StudentTabChrome.EnableNaturalFocusClear(this, dgvExams);
+        }
+
+        private async System.Threading.Tasks.Task LoadDataAsync()
+        {
+            this.ShowSkeleton(SkeletonType.ExamListWithToolbar);
+            try
+            {
+                await System.Threading.Tasks.Task.Delay(500);
+                LoadDummyData();
+            }
+            finally
+            {
+                this.HideSkeleton();
+            }
         }
 
         private void LoadDummyData()
@@ -48,13 +72,21 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             dgvExams.DataSource = dt;
             dgvExams.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgvExams.ClearSelection();
+            dgvExams.CurrentCell = null;
         }
 
         private void btnStartExam_Click(object sender, EventArgs e)
         {
+            if (dgvExams.CurrentRow == null || dgvExams.CurrentRow.IsNewRow)
+            {
+                MetaTheme.ShowModernDialog("Vui lòng chọn một bài kiểm tra.", "Thông báo");
+                return;
+            }
+
             int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
             string username = UserSessionContext.CurrentUsername ?? "unknown";
-            string examName = dgvExams.CurrentRow?.Cells.Count > 0
+            string examName = dgvExams.CurrentRow.Cells.Count > 0
                 ? dgvExams.CurrentRow.Cells[0].Value?.ToString() ?? "unknown-exam"
                 : "unknown-exam";
             _authController.LogUserActivity(userId, "EXAM_JOIN", $"User {username} joined exam: {examName}", string.Empty);

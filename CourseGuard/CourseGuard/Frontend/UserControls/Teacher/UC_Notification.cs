@@ -139,11 +139,11 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             // Bo góc cho hai nút chức năng trong pnlDetail
             btnMarkAsReadDetail.BackColor = ColorPalette.LightMode.Accent;
             btnMarkAsReadDetail.ForeColor = Color.White;
-            RoundedButtonHelper.Apply(btnMarkAsReadDetail, 15);
+            RoundedButtonHelper.Apply(btnMarkAsReadDetail, 10);
 
             btnDeleteDetail.BackColor = ColorPalette.Status.ErrorLight;
             btnDeleteDetail.ForeColor = Color.White;
-            RoundedButtonHelper.Apply(btnDeleteDetail, 15);
+            RoundedButtonHelper.Apply(btnDeleteDetail, 10);
 
             // ── Status Bar ───────────────────────────────────────────
             pnlStatus.BackColor = ColorPalette.LightMode.Secondary;
@@ -457,6 +457,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
             SetStatus("⏳  Đang kết nối Supabase và tải dữ liệu...", ColorPalette.LightMode.TextSecondary);
             SetControlsEnabled(false);
+            this.ShowSkeleton(SkeletonType.NotificationList);
 
             try
             {
@@ -473,6 +474,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             finally
             {
                 SetControlsEnabled(true);
+                this.HideSkeleton();
             }
         }
 

@@ -10,8 +10,9 @@ namespace CourseGuard.Frontend.UserControls.Student
         public UC_Result()
         {
             InitializeComponent();
+            BuildCardLayout();
             ApplyAcademicStyle();
-            LoadDummyData();
+            _ = LoadDataAsync();
 
             // Bo góc buttons
             RoundedButtonHelper.Apply(btnReview, 10);
@@ -19,11 +20,35 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private void ApplyAcademicStyle()
         {
-            BackColor = AcademicTheme.AppBackground;
-            btnReview.BackColor = AcademicTheme.Primary;
-            btnReview.ForeColor = Color.White;
-            btnReview.FlatAppearance.BorderSize = 0;
-            AcademicTheme.StyleGrid(dgvResults);
+            BackColor = AppColors.BgBase;
+            StudentTabChrome.StylePrimaryButton(btnReview);
+            StudentTabChrome.StyleGrid(dgvResults);
+        }
+
+        private void BuildCardLayout()
+        {
+            btnReview.Text = "Xem lại bài";
+            var root = StudentTabChrome.CreateRoot(this);
+            root.Controls.Add(StudentTabChrome.CreateHeader(
+                "Kết quả học tập",
+                "Xem điểm, trạng thái chấm và mở lại bài làm khi được phép.",
+                btnReview), 0, 0);
+            root.Controls.Add(StudentTabChrome.CreateDataCard("Bảng điểm bài kiểm tra", dgvResults), 0, 1);
+            StudentTabChrome.EnableNaturalFocusClear(this, dgvResults);
+        }
+
+        private async System.Threading.Tasks.Task LoadDataAsync()
+        {
+            this.ShowSkeleton(SkeletonType.ResultTable);
+            try
+            {
+                await System.Threading.Tasks.Task.Delay(500);
+                LoadDummyData();
+            }
+            finally
+            {
+                this.HideSkeleton();
+            }
         }
 
         private void LoadDummyData()
@@ -40,6 +65,8 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             dgvResults.DataSource = dt;
             dgvResults.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgvResults.ClearSelection();
+            dgvResults.CurrentCell = null;
         }
     }
 }

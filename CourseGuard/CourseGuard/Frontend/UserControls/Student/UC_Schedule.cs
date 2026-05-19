@@ -27,12 +27,13 @@ namespace CourseGuard.Frontend.UserControls.Student
         public UC_Schedule()
         {
             InitializeComponent();
-            ApplyAcademicStyle();
+            BuildCardLayout();
+            ApplyMetaStyle();
             cboTimeFilter.SelectedIndex = 0;
 
             _controller = new CourseController(new CourseGuardDbContext(""));
 
-            // Bo góc buttons
+            // Pill-shaped button per DESIGN.md
             RoundedButtonHelper.Apply(btnJoinOnline, 10);
 
             // Events
@@ -40,27 +41,42 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             btnJoinOnline.Click += (s, e) =>
             {
+                if (dgvSchedule.CurrentRow == null || dgvSchedule.CurrentRow.IsNewRow)
+                {
+                    MetaTheme.ShowModernDialog("Vui lòng chọn một buổi học.", "Thông báo");
+                    return;
+                }
+
+                int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
+                string username = UserSessionContext.CurrentUsername ?? "không xác định";
+                string sessionName = dgvSchedule.CurrentRow.Cells.Count > 1
+                    ? dgvSchedule.CurrentRow.Cells[1].Value?.ToString() ?? "buổi học online"
+                    : "buổi học online";
+                _authController.LogUserActivity(userId, "ONLINE_SESSION_JOIN", $"Người dùng {username} tham gia lớp học online: {sessionName}", string.Empty);
                 CourseGuard.Frontend.Forms.Student.OnlineClassForm frm = new CourseGuard.Frontend.Forms.Student.OnlineClassForm();
                 frm.Show();
             };
 
-            // Style
-            StyleDataGridView();
+            // Style — use MetaTheme.StyleGrid
+            MetaTheme.StyleGrid(dgvSchedule);
 
             // Load dữ liệu thực
-            LoadSchedule();
+            _ = LoadSchedule();
         }
 
-        private void LoadSchedule()
+        private async System.Threading.Tasks.Task LoadSchedule()
         {
+            this.ShowSkeleton(SkeletonType.CalendarView);
             try
             {
                 int studentId = UserSessionContext.CurrentUserId ?? 0;
                 if (studentId == 0) return;
 
-                _enrollments = _controller.GetMyEnrollments(studentId)
-                    .Where(e => e.Status == "ACTIVE")
-                    .ToList();
+                _enrollments = await System.Threading.Tasks.Task.Run(() => 
+                    _controller.GetMyEnrollments(studentId)
+                        .Where(e => e.Status == "ACTIVE")
+                        .ToList()
+                );
 
                 ApplyTimeFilter();
             }
@@ -69,18 +85,33 @@ namespace CourseGuard.Frontend.UserControls.Student
                 MessageBox.Show("Lỗi tải lịch học: " + ex.Message,
                     "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+            finally
+            {
+                this.HideSkeleton();
+            }
         }
 
-        private void ApplyAcademicStyle()
+        private void ApplyMetaStyle()
         {
-            BackColor = AcademicTheme.AppBackground;
-            btnJoinOnline.BackColor = AcademicTheme.Primary;
-            btnJoinOnline.ForeColor = Color.White;
-            btnJoinOnline.FlatAppearance.BorderSize = 0;
-            AcademicTheme.StyleGrid(dgvSchedule);
+            BackColor = AppColors.BgBase;
+            StudentTabChrome.StylePrimaryButton(btnJoinOnline);
+            StudentTabChrome.StyleGrid(dgvSchedule);
+            lblTitle.ForeColor = AppColors.TextPrimary;
+            StudentTabChrome.StyleInput(cboTimeFilter);
         }
 
-        private void LoadDummyData()
+        private void BuildCardLayout()
+        {
+            btnJoinOnline.Text = "Tham gia online";
+            var root = StudentTabChrome.CreateRoot(this);
+            root.Controls.Add(StudentTabChrome.CreateHeader(
+                "Lịch học",
+                "Xem lịch học theo tuần, tháng và tham gia buổi học online.",
+                cboTimeFilter, btnJoinOnline), 0, 0);
+            root.Controls.Add(StudentTabChrome.CreateDataCard("Lịch khóa học", dgvSchedule), 0, 1);
+            StudentTabChrome.EnableNaturalFocusClear(this, dgvSchedule);
+        }
+
         private void ApplyTimeFilter()
         {
             var filtered = _enrollments.AsEnumerable();
@@ -135,44 +166,23 @@ namespace CourseGuard.Frontend.UserControls.Student
             dgvSchedule.DataSource = dt;
             dgvSchedule.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
-            btnJoinOnline.Click += (s, e) => {
-                int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
-                string username = UserSessionContext.CurrentUsername ?? "không xác định";
-                string sessionName = dgvSchedule.CurrentRow?.Cells.Count > 1
-                    ? dgvSchedule.CurrentRow.Cells[1].Value?.ToString() ?? "buổi học online"
-                    : "buổi học online";
-                _authController.LogUserActivity(userId, "ONLINE_SESSION_JOIN", $"Người dùng {username} tham gia lớp học online: {sessionName}", string.Empty);
-                CourseGuard.Frontend.Forms.Student.OnlineClassForm frm = new CourseGuard.Frontend.Forms.Student.OnlineClassForm();
-                frm.Show();
-            };
             // Tô màu theo trạng thái
             foreach (DataGridViewRow row in dgvSchedule.Rows)
             {
                 if (row.IsNewRow) continue;
                 string status = row.Cells["Trạng thái"].Value?.ToString() ?? "";
                 if (status.Contains("Đang"))
-                    row.DefaultCellStyle.ForeColor = Color.FromArgb(5, 150, 105);
+                    row.DefaultCellStyle.ForeColor = MetaTheme.Colors.Success;
                 else if (status.Contains("kết thúc"))
-                    row.DefaultCellStyle.ForeColor = Color.FromArgb(220, 38, 38);
+                    row.DefaultCellStyle.ForeColor = MetaTheme.Colors.Critical;
                 else if (status.Contains("Sắp"))
-                    row.DefaultCellStyle.ForeColor = Color.FromArgb(37, 99, 235);
+                    row.DefaultCellStyle.ForeColor = MetaTheme.Colors.Primary;
             }
+
+            dgvSchedule.ClearSelection();
+            dgvSchedule.CurrentCell = null;
         }
 
-        private void StyleDataGridView()
-        {
-            dgvSchedule.EnableHeadersVisualStyles = false;
-            dgvSchedule.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 58, 138);
-            dgvSchedule.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgvSchedule.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-            dgvSchedule.ColumnHeadersHeight = 40;
 
-            dgvSchedule.DefaultCellStyle.Font = new Font("Segoe UI", 10F);
-            dgvSchedule.DefaultCellStyle.SelectionBackColor = Color.FromArgb(219, 234, 254);
-            dgvSchedule.DefaultCellStyle.SelectionForeColor = Color.FromArgb(30, 58, 138);
-
-            dgvSchedule.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(248, 250, 252);
-            dgvSchedule.GridColor = Color.FromArgb(226, 232, 240);
-        }
     }
 }

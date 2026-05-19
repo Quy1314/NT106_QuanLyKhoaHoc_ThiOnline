@@ -2,8 +2,14 @@
  * AdminDashboard.cs
  * 
  * Layer: Presentation (Forms)
- * Vai trò: Form chính quản lý (Container), chứa menu và các UserControl con (Quản lý User, Khóa học, Báo cáo).
- * Phụ thuộc: Các UserControl con.
+ * Layout: Sidebar(Left) → RightPanel(Fill) → Topbar(Top) + mainboard(Fill)
+ * 
+ * UI/UX Rules applied:
+ *   Rule 01 (Layout Skeleton) — Sidebar fixed left, Header top, Content fills rest
+ *   Rule 09 — No pure black/white
+ *   Rule 40 — Single accent color in navigation
+ *   Rule 46 — Short navigation labels (1-2 words)
+ *   Rule 05 — Visual hierarchy
  */
 using System;
 using System.Collections.Generic;
@@ -18,83 +24,61 @@ namespace CourseGuard.Frontend.Forms.Admin
 {
     public partial class AdminDashboard : Form
     {
-        private Dictionary<Button, Func<UserControl>> _nav;
+        private Dictionary<string, Func<UserControl>> _nav;
         private UserModel? currentUser;
+        private SidebarPanel _sidebar;
+        private TopbarPanel _topbar;
+        private Panel _rightPanel;   // container: topbar + mainboard
 
         public AdminDashboard()
         {
             InitializeComponent();
-            ApplyTheme();
-            SetupButtonEvents();
-            InitializeNavigation();
-            // Bo góc tất cả buttons
-            RoundedButtonHelper.Apply(12, btnDashboard, btnUsers, btnCourses,
-                btnReports, btnDeviceMonitoring, btnAuditLogs, btnSettings, btnLogout);
+            SearchFocusManager.Install(this);
 
-            // Logout handler
-            btnLogout.Click += (s, e) =>
+            // ── 1. Build layout skeleton (Skill 01) ──────────────────
+            // Sidebar docks Left on Form
+            _sidebar = new SidebarPanel { Dock = DockStyle.Left };
+            _sidebar.SetNavItems(
+                new[] { "Tổng quan", "Người dùng", "Khóa học", "Báo cáo", "Thiết bị", "Nhật ký", "Cài đặt" },
+                new[] { "🏠", "👥", "📚", "📊", "💻", "📝", "⚙" }
+            );
+            _sidebar.NavItemClicked += Sidebar_NavItemClicked;
+
+            // Right container holds Topbar(Top) + mainboard(Fill)
+            _rightPanel = new Panel { Dock = DockStyle.Fill, Padding = Padding.Empty };
+            _topbar = new TopbarPanel
             {
-                var authService = new CourseGuard.Backend.Controllers.AuthController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
-                authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty);
-                this.DialogResult = DialogResult.OK;
-                this.Close();
+                Dock = DockStyle.Top,
+                PageTitle = "Tổng quan",
+                Subtitle = "Quản trị hệ thống CourseGuard"
             };
 
-            SetActiveButton(btnDashboard);
-            LoadUI(_nav[btnDashboard]());
+            // mainboard (from Designer) fills remaining space under topbar
+            mainboard.Dock = DockStyle.Fill;
+
+            // Assemble: topbar on top, mainboard fills below
+            _rightPanel.Controls.Add(mainboard);   // Fill goes first in Controls
+            _rightPanel.Controls.Add(_topbar);      // Top docks above Fill
+
+            // Sidebar on the left, right panel fills the rest
+            this.Controls.Add(_rightPanel);
+            this.Controls.Add(_sidebar);
+
+            // ── 2. Apply theme (Rule 09: no pure white/black) ────────
+            BackColor = AppColors.BgBase;
+            _rightPanel.BackColor = AppColors.BgBase;
+            mainboard.BackColor = AppColors.BgBase;
+
+            // ── 3. Navigation logic ──────────────────────────────────
+            InitializeNavigation();
+            LoadUI(_nav["Tổng quan"]());
         }
 
         public AdminDashboard(UserModel user) : this()
         {
             this.currentUser = user;
             this.Text = $"Admin Dashboard - {user.Username}";
-        }
-
-        private void ApplyTheme()
-        {
-            BackColor = AcademicTheme.AppBackground;
-            sidebar.BackColor = AcademicTheme.Surface;
-            mainboard.BackColor = AcademicTheme.AppBackground;
-
-            Button[] menuButtons = { btnDashboard, btnUsers, btnCourses, btnReports, btnDeviceMonitoring, btnAuditLogs, btnSettings };
-            foreach (var btn in menuButtons)
-            {
-                btn.FlatStyle = FlatStyle.Flat;
-                btn.FlatAppearance.BorderSize = 0;
-                btn.BackColor = Color.Transparent;
-                btn.ForeColor = AcademicTheme.TextSecondary;
-                btn.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
-                btn.TextAlign = ContentAlignment.MiddleLeft;
-                btn.Padding = new Padding(16, 0, 0, 0);
-            }
-
-            btnLogout.BackColor = Color.FromArgb(220, 38, 38);
-            btnLogout.ForeColor = Color.White;
-            btnLogout.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-        }
-
-        private void SetupButtonEvents()
-        {
-            // Gán sự kiện click và hover cho tất cả sidebar buttons (trừ Logout)
-            Button[] sidebarButtons = { btnDashboard, btnUsers, btnCourses, btnReports, btnDeviceMonitoring, btnAuditLogs, btnSettings };
-            Color activeColor = AcademicTheme.Primary;
-
-            foreach (var btn in sidebarButtons)
-            {
-                btn.Click += Sidebar_Click;
-
-                btn.MouseEnter += (s, e) =>
-                {
-                    if (btn.BackColor != activeColor)
-                        btn.BackColor = Color.FromArgb(222, 224, 255);
-                };
-
-                btn.MouseLeave += (s, e) =>
-                {
-                    if (btn.BackColor != activeColor)
-                        btn.BackColor = Color.Transparent;
-                };
-            }
+            _topbar.UserName = user.Username ?? "Admin";
         }
 
         private void InitializeNavigation()
@@ -106,73 +90,70 @@ namespace CourseGuard.Frontend.Forms.Admin
                 return uc;
             });
 
-            _nav = new Dictionary<Button, Func<UserControl>>
+            _nav = new Dictionary<string, Func<UserControl>>
             {
-                { btnDashboard, adminOverview },
-                { btnUsers, () => new UC_UsersManage() },
-                { btnCourses, () => new UC_CoursesManage() },
-                { btnReports, () => new UC_AdminReports() },
-                { btnDeviceMonitoring, () => CreateEmptyView("Giám sát thiết bị") },
-                { btnAuditLogs, () => new UC_AdminLogStatistics() },
-                { btnSettings, () => CreateEmptyView("Cài đặt") }
+                { "Tổng quan", adminOverview },
+                { "Người dùng", () => new UC_UsersManage() },
+                { "Khóa học", () => new UC_CoursesManage() },
+                { "Báo cáo", () => new UC_AdminReports() },
+                { "Thiết bị", () => CreateEmptyView("Giám sát thiết bị") },
+                { "Nhật ký", () => new UC_AdminLogStatistics() },
+                { "Cài đặt", () => CreateEmptyView("Cài đặt") }
             };
+        }
+
+        private void Sidebar_NavItemClicked(object sender, string pageName)
+        {
+            if (pageName == "Logout")
+            {
+                var authService = new CourseGuard.Backend.Controllers.AuthController(
+                    new CourseGuard.Backend.Data.CourseGuardDbContext(""));
+                authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty);
+                this.DialogResult = DialogResult.OK;
+                this.Close();
+                return;
+            }
+
+            if (_nav.ContainsKey(pageName))
+            {
+                _topbar.PageTitle = pageName;
+                LoadUI(_nav[pageName]());
+            }
         }
 
         private void AdminOverview_QuickActionRequested(string target)
         {
-            Button? targetBtn = null;
-            switch (target)
+            string targetPage = target switch
             {
-                case "USERS": targetBtn = btnUsers; break;
-                case "COURSES": targetBtn = btnCourses; break;
-                case "REPORTS": targetBtn = btnReports; break;
-                case "AUDIT": targetBtn = btnAuditLogs; break;
-            }
-            if (targetBtn != null && _nav.ContainsKey(targetBtn))
-            {
-                SetActiveButton(targetBtn);
-                LoadUI(_nav[targetBtn]());
-            }
-        }
+                "USERS"   => "Người dùng",
+                "COURSES" => "Khóa học",
+                "REPORTS" => "Báo cáo",
+                "AUDIT"   => "Nhật ký",
+                _         => null
+            };
 
-        private void Sidebar_Click(object sender, EventArgs e)
-        {
-            if (sender is Button btn && _nav.ContainsKey(btn))
+            if (targetPage != null && _nav.ContainsKey(targetPage))
             {
-                SetActiveButton(btn);
-                LoadUI(_nav[btn]());
-            }
-        }
-
-        private void SetActiveButton(Button activeBtn)
-        {
-            foreach (var key in _nav.Keys)
-            {
-                if (key == activeBtn)
-                {
-                    key.BackColor = AcademicTheme.Primary;
-                    key.ForeColor = Color.White;
-                    key.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-                }
-                else
-                {
-                    key.BackColor = Color.Transparent;
-                    key.ForeColor = AcademicTheme.TextSecondary;
-                    key.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
-                }
+                _sidebar.SetActiveByName(targetPage);
+                _topbar.PageTitle = targetPage;
+                LoadUI(_nav[targetPage]());
             }
         }
 
         private void LoadUI(UserControl uc)
         {
-            // Dispose UC cũ để tránh memory leak
+            // Dispose old UC to prevent memory leak
             foreach (Control ctrl in mainboard.Controls)
             {
                 ctrl.Dispose();
             }
             mainboard.Controls.Clear();
+
             uc.Dock = DockStyle.Fill;
+            uc.BackColor = AppColors.BgBase;
             mainboard.Controls.Add(uc);
+
+            AppColors.ApplyTheme(uc);
         }
 
         private static UserControl CreateEmptyView(string title)
@@ -180,7 +161,7 @@ namespace CourseGuard.Frontend.Forms.Admin
             var panel = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.White
+                BackColor = AppColors.BgBase
             };
 
             var label = new Label
@@ -188,12 +169,14 @@ namespace CourseGuard.Frontend.Forms.Admin
                 Dock = DockStyle.Fill,
                 Text = $"{title}\n(Chưa có logic)",
                 TextAlign = ContentAlignment.MiddleCenter,
-                Font = new Font("Segoe UI", 16F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(100, 116, 139)
+                Font = AppFonts.Title,
+                ForeColor = AppColors.TextMuted
             };
 
             panel.Controls.Add(label);
-            return new UserControl { Dock = DockStyle.Fill, BackColor = Color.White, Controls = { panel } };
+            var uc = new UserControl { Dock = DockStyle.Fill, BackColor = AppColors.BgBase };
+            uc.Controls.Add(panel);
+            return uc;
         }
     }
 }

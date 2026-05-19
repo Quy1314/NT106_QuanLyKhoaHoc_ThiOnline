@@ -351,6 +351,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         {
             SetStatus("⏳  Đang kết nối Supabase và tải dữ liệu...", ColorPalette.LightMode.TextSecondary);
             SetControlsEnabled(false);
+            this.ShowSkeleton(SkeletonType.TableWithToolbar);
 
             try
             {
@@ -373,6 +374,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             finally
             {
                 SetControlsEnabled(true);
+                this.HideSkeleton();
             }
         }
         // ── Import CSV ───────────────────────────────────────────────────

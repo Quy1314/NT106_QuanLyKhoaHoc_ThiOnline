@@ -176,6 +176,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
         private async Task LoadStatisticsAsync()
         {
+            this.ShowSkeleton(SkeletonType.DashboardOverview);
             try
             {
                 var summaryTask = Task.Run(() => _dashboardController.GetAccountSummaryStatistics());
@@ -205,6 +206,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
                     _courseStatsGrid.Rows.Clear();
                     _courseStatsGrid.Rows.Add("Lỗi", ex.Message, "-", "-", "-");
                 }
+            }
+            finally
+            {
+                this.HideSkeleton();
             }
         }
 

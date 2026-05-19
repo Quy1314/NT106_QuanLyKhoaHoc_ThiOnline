@@ -28,120 +28,27 @@ namespace CourseGuard.Frontend.Forms.Teacher
         /// </summary>
         private void InitializeComponent()
         {
-            pnlSidebar = new Panel();
-            pnlSidebarBottom = new Panel();
-            btnLogout = new Button();
-            pnlDivider = new Panel();
-            btnNotifications = new Button();
             pnlSubMenuMonitoring = new Panel();
             btnScoreManagement = new Button();
             btnEssayGrading = new Button();
             btnLiveMonitor = new Button();
-            btnGroupMonitoring = new Button();
             pnlSubMenuTesting = new Panel();
             btnExamList = new Button();
             btnExamConfig = new Button();
             btnQuestionBank = new Button();
-            btnGroupTesting = new Button();
             pnlSubMenuCourseDocs = new Panel();
             btnOnlineClasses = new Button();
             btnAssignedCourses = new Button();
-            btnGroupCourseDocs = new Button();
-            btnOverview = new Button();
-            pnlLogo = new Panel();
-            lblLogoIcon = new Label();
-            lblLogoText = new Label();
             pnlMainboard = new Panel();
-            pnlTopHeader = new Panel();
             btnMail = new Button();
             pnlEmailDropdown = new Panel();
             flpEmails = new FlowLayoutPanel();
             lblEmailHeader = new Label();
-            pnlSidebar.SuspendLayout();
-            pnlSidebarBottom.SuspendLayout();
             pnlSubMenuMonitoring.SuspendLayout();
             pnlSubMenuTesting.SuspendLayout();
             pnlSubMenuCourseDocs.SuspendLayout();
-            pnlLogo.SuspendLayout();
-            pnlTopHeader.SuspendLayout();
             pnlEmailDropdown.SuspendLayout();
             SuspendLayout();
-            // 
-            // pnlSidebar
-            // 
-            pnlSidebar.BackColor = Color.FromArgb(17, 24, 39);
-            pnlSidebar.Controls.Add(pnlSidebarBottom);
-            pnlSidebar.Controls.Add(btnNotifications);
-            pnlSidebar.Controls.Add(pnlSubMenuMonitoring);
-            pnlSidebar.Controls.Add(btnGroupMonitoring);
-            pnlSidebar.Controls.Add(pnlSubMenuTesting);
-            pnlSidebar.Controls.Add(btnGroupTesting);
-            pnlSidebar.Controls.Add(pnlSubMenuCourseDocs);
-            pnlSidebar.Controls.Add(btnGroupCourseDocs);
-            pnlSidebar.Controls.Add(btnOverview);
-            pnlSidebar.Controls.Add(pnlLogo);
-            pnlSidebar.Dock = DockStyle.Left;
-            pnlSidebar.Location = new Point(0, 0);
-            pnlSidebar.Name = "pnlSidebar";
-            pnlSidebar.Size = new Size(260, 860);
-            pnlSidebar.TabIndex = 0;
-            // 
-            // pnlSidebarBottom
-            // 
-            pnlSidebarBottom.BackColor = Color.FromArgb(17, 24, 39);
-            pnlSidebarBottom.Controls.Add(btnLogout);
-            pnlSidebarBottom.Controls.Add(pnlDivider);
-            pnlSidebarBottom.Dock = DockStyle.Bottom;
-            pnlSidebarBottom.Location = new Point(0, 795);
-            pnlSidebarBottom.Name = "pnlSidebarBottom";
-            pnlSidebarBottom.Size = new Size(260, 65);
-            pnlSidebarBottom.TabIndex = 9;
-            // 
-            // btnLogout
-            // 
-            btnLogout.Cursor = Cursors.Hand;
-            btnLogout.Dock = DockStyle.Fill;
-            btnLogout.FlatAppearance.BorderSize = 0;
-            btnLogout.FlatStyle = FlatStyle.Flat;
-            btnLogout.Font = new Font("Segoe UI", 10.5F);
-            btnLogout.ForeColor = Color.FromArgb(252, 165, 165);
-            btnLogout.Location = new Point(0, 1);
-            btnLogout.Name = "btnLogout";
-            btnLogout.Padding = new Padding(16, 0, 0, 0);
-            btnLogout.Size = new Size(260, 64);
-            btnLogout.TabIndex = 1;
-            btnLogout.Text = "🚪  Đăng Xuất";
-            btnLogout.TextAlign = ContentAlignment.MiddleLeft;
-            btnLogout.UseVisualStyleBackColor = true;
-            btnLogout.Click += btnLogout_Click;
-            // 
-            // pnlDivider
-            // 
-            pnlDivider.BackColor = Color.FromArgb(55, 65, 81);
-            pnlDivider.Dock = DockStyle.Top;
-            pnlDivider.Location = new Point(0, 0);
-            pnlDivider.Name = "pnlDivider";
-            pnlDivider.Size = new Size(260, 1);
-            pnlDivider.TabIndex = 0;
-            // 
-            // btnNotifications
-            // 
-            btnNotifications.BackColor = Color.Transparent;
-            btnNotifications.Cursor = Cursors.Hand;
-            btnNotifications.Dock = DockStyle.Top;
-            btnNotifications.FlatAppearance.BorderSize = 0;
-            btnNotifications.FlatStyle = FlatStyle.Flat;
-            btnNotifications.Font = new Font("Segoe UI", 10.5F);
-            btnNotifications.ForeColor = Color.FromArgb(209, 213, 219);
-            btnNotifications.Location = new Point(0, 597);
-            btnNotifications.Name = "btnNotifications";
-            btnNotifications.Padding = new Padding(16, 0, 0, 0);
-            btnNotifications.Size = new Size(260, 48);
-            btnNotifications.TabIndex = 8;
-            btnNotifications.Text = "🔔  Trung Tâm Thông Báo";
-            btnNotifications.TextAlign = ContentAlignment.MiddleLeft;
-            btnNotifications.UseVisualStyleBackColor = false;
-            btnNotifications.Click += btnNotifications_Click;
             // 
             // pnlSubMenuMonitoring
             // 
@@ -210,25 +117,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             btnLiveMonitor.TextAlign = ContentAlignment.MiddleLeft;
             btnLiveMonitor.UseVisualStyleBackColor = true;
             btnLiveMonitor.Click += btnLiveMonitor_Click;
-            // 
-            // btnGroupMonitoring
-            // 
-            btnGroupMonitoring.BackColor = Color.Transparent;
-            btnGroupMonitoring.Cursor = Cursors.Hand;
-            btnGroupMonitoring.Dock = DockStyle.Top;
-            btnGroupMonitoring.FlatAppearance.BorderSize = 0;
-            btnGroupMonitoring.FlatStyle = FlatStyle.Flat;
-            btnGroupMonitoring.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
-            btnGroupMonitoring.ForeColor = Color.White;
-            btnGroupMonitoring.Location = new Point(0, 429);
-            btnGroupMonitoring.Name = "btnGroupMonitoring";
-            btnGroupMonitoring.Padding = new Padding(16, 0, 0, 0);
-            btnGroupMonitoring.Size = new Size(260, 48);
-            btnGroupMonitoring.TabIndex = 6;
-            btnGroupMonitoring.Text = "⏱️ Giám sát && Chấm thi ›";
-            btnGroupMonitoring.TextAlign = ContentAlignment.MiddleLeft;
-            btnGroupMonitoring.UseVisualStyleBackColor = false;
-            btnGroupMonitoring.Click += btnGroupMonitoring_Click;
+
             // 
             // pnlSubMenuTesting
             // 
@@ -297,25 +186,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             btnQuestionBank.TextAlign = ContentAlignment.MiddleLeft;
             btnQuestionBank.UseVisualStyleBackColor = true;
             btnQuestionBank.Click += btnQuestionBank_Click;
-            // 
-            // btnGroupTesting
-            // 
-            btnGroupTesting.BackColor = Color.Transparent;
-            btnGroupTesting.Cursor = Cursors.Hand;
-            btnGroupTesting.Dock = DockStyle.Top;
-            btnGroupTesting.FlatAppearance.BorderSize = 0;
-            btnGroupTesting.FlatStyle = FlatStyle.Flat;
-            btnGroupTesting.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
-            btnGroupTesting.ForeColor = Color.White;
-            btnGroupTesting.Location = new Point(0, 261);
-            btnGroupTesting.Name = "btnGroupTesting";
-            btnGroupTesting.Padding = new Padding(16, 0, 0, 0);
-            btnGroupTesting.Size = new Size(260, 48);
-            btnGroupTesting.TabIndex = 4;
-            btnGroupTesting.Text = "📝 Khảo Thí && Đề Thi  ›";
-            btnGroupTesting.TextAlign = ContentAlignment.MiddleLeft;
-            btnGroupTesting.UseVisualStyleBackColor = false;
-            btnGroupTesting.Click += btnGroupTesting_Click;
+
             // 
             // pnlSubMenuCourseDocs
             // 
@@ -365,98 +236,16 @@ namespace CourseGuard.Frontend.Forms.Teacher
             btnAssignedCourses.TextAlign = ContentAlignment.MiddleLeft;
             btnAssignedCourses.UseVisualStyleBackColor = true;
             btnAssignedCourses.Click += btnAssignedCourses_Click;
-            // 
-            // btnGroupCourseDocs
-            // 
-            btnGroupCourseDocs.BackColor = Color.Transparent;
-            btnGroupCourseDocs.Cursor = Cursors.Hand;
-            btnGroupCourseDocs.Dock = DockStyle.Top;
-            btnGroupCourseDocs.FlatAppearance.BorderSize = 0;
-            btnGroupCourseDocs.FlatStyle = FlatStyle.Flat;
-            btnGroupCourseDocs.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
-            btnGroupCourseDocs.ForeColor = Color.White;
-            btnGroupCourseDocs.Location = new Point(0, 133);
-            btnGroupCourseDocs.Name = "btnGroupCourseDocs";
-            btnGroupCourseDocs.Padding = new Padding(16, 0, 0, 0);
-            btnGroupCourseDocs.Size = new Size(260, 48);
-            btnGroupCourseDocs.TabIndex = 2;
-            btnGroupCourseDocs.Text = "📚 Học Liệu && Lớp Học  ›";
-            btnGroupCourseDocs.TextAlign = ContentAlignment.MiddleLeft;
-            btnGroupCourseDocs.UseVisualStyleBackColor = false;
-            btnGroupCourseDocs.Click += btnGroupCourseDocs_Click;
-            // 
-            // btnOverview
-            // 
-            btnOverview.BackColor = Color.Transparent;
-            btnOverview.Cursor = Cursors.Hand;
-            btnOverview.Dock = DockStyle.Top;
-            btnOverview.FlatAppearance.BorderSize = 0;
-            btnOverview.FlatStyle = FlatStyle.Flat;
-            btnOverview.Font = new Font("Segoe UI", 10.5F);
-            btnOverview.ForeColor = Color.FromArgb(209, 213, 219);
-            btnOverview.Location = new Point(0, 85);
-            btnOverview.Name = "btnOverview";
-            btnOverview.Padding = new Padding(16, 0, 0, 0);
-            btnOverview.Size = new Size(260, 48);
-            btnOverview.TabIndex = 1;
-            btnOverview.Text = "🏠  Tổng Quan";
-            btnOverview.TextAlign = ContentAlignment.MiddleLeft;
-            btnOverview.UseVisualStyleBackColor = false;
-            btnOverview.Click += btnOverview_Click;
-            // 
-            // pnlLogo
-            // 
-            pnlLogo.BackColor = Color.FromArgb(11, 17, 28);
-            pnlLogo.Controls.Add(lblLogoIcon);
-            pnlLogo.Controls.Add(lblLogoText);
-            pnlLogo.Dock = DockStyle.Top;
-            pnlLogo.Location = new Point(0, 0);
-            pnlLogo.Name = "pnlLogo";
-            pnlLogo.Size = new Size(260, 85);
-            pnlLogo.TabIndex = 0;
-            // 
-            // lblLogoIcon
-            // 
-            lblLogoIcon.Dock = DockStyle.Left;
-            lblLogoIcon.Font = new Font("Segoe UI Emoji", 20F);
-            lblLogoIcon.ForeColor = Color.FromArgb(99, 179, 237);
-            lblLogoIcon.Location = new Point(0, 0);
-            lblLogoIcon.Name = "lblLogoIcon";
-            lblLogoIcon.Size = new Size(50, 85);
-            lblLogoIcon.TabIndex = 0;
-            lblLogoIcon.Text = "🛡";
-            lblLogoIcon.TextAlign = ContentAlignment.MiddleCenter;
-            // 
-            // lblLogoText
-            // 
-            lblLogoText.AutoSize = true;
-            lblLogoText.Font = new Font("Segoe UI", 14F, FontStyle.Bold);
-            lblLogoText.ForeColor = Color.White;
-            lblLogoText.Location = new Point(55, 28);
-            lblLogoText.Name = "lblLogoText";
-            lblLogoText.Size = new Size(163, 32);
-            lblLogoText.TabIndex = 1;
-            lblLogoText.Text = "CourseGuard";
-            lblLogoText.TextAlign = ContentAlignment.MiddleLeft;
+
             // 
             // pnlMainboard
             // 
-            pnlMainboard.BackColor = Color.FromArgb(243, 244, 246);
             pnlMainboard.Dock = DockStyle.Fill;
             pnlMainboard.Location = new Point(260, 70);
             pnlMainboard.Name = "pnlMainboard";
             pnlMainboard.Size = new Size(1120, 790);
             pnlMainboard.TabIndex = 1;
-            // 
-            // pnlTopHeader
-            // 
-            pnlTopHeader.BackColor = Color.White;
-            pnlTopHeader.Controls.Add(btnMail);
-            pnlTopHeader.Dock = DockStyle.Top;
-            pnlTopHeader.Location = new Point(260, 0);
-            pnlTopHeader.Name = "pnlTopHeader";
-            pnlTopHeader.Size = new Size(1120, 70);
-            pnlTopHeader.TabIndex = 2;
+
             // 
             // btnMail
             // 
@@ -479,7 +268,6 @@ namespace CourseGuard.Frontend.Forms.Teacher
             // pnlEmailDropdown
             // 
             pnlEmailDropdown.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            pnlEmailDropdown.BackColor = Color.White;
             pnlEmailDropdown.Controls.Add(flpEmails);
             pnlEmailDropdown.Controls.Add(lblEmailHeader);
             pnlEmailDropdown.Location = new Point(1020, 70);
@@ -521,22 +309,16 @@ namespace CourseGuard.Frontend.Forms.Teacher
             ClientSize = new Size(1380, 860);
             Controls.Add(pnlEmailDropdown);
             Controls.Add(pnlMainboard);
-            Controls.Add(pnlTopHeader);
-            Controls.Add(pnlSidebar);
+            Controls.Add(btnMail);
             Font = new Font("Segoe UI", 9F);
             MinimumSize = new Size(1000, 650);
             Name = "TeacherDashboard";
             StartPosition = FormStartPosition.CenterScreen;
             Text = "Teacher Dashboard — CourseGuard";
-            pnlSidebar.ResumeLayout(false);
-            pnlSidebar.PerformLayout();
-            pnlSidebarBottom.ResumeLayout(false);
+            WindowState = FormWindowState.Maximized;
             pnlSubMenuMonitoring.ResumeLayout(false);
             pnlSubMenuTesting.ResumeLayout(false);
             pnlSubMenuCourseDocs.ResumeLayout(false);
-            pnlLogo.ResumeLayout(false);
-            pnlLogo.PerformLayout();
-            pnlTopHeader.ResumeLayout(false);
             pnlEmailDropdown.ResumeLayout(false);
             ResumeLayout(false);
         }
@@ -546,31 +328,18 @@ namespace CourseGuard.Frontend.Forms.Teacher
         // ---------------------------------------------------------------
         //  Khai báo các control (bắt buộc để VS Designer nhận diện)
         // ---------------------------------------------------------------
-        private System.Windows.Forms.Panel pnlSidebar;
-        private System.Windows.Forms.Panel pnlLogo;
-        private System.Windows.Forms.Label lblLogoIcon;
-        private System.Windows.Forms.Label lblLogoText;
-        private System.Windows.Forms.Button btnOverview;
-        private System.Windows.Forms.Button btnGroupCourseDocs;
         private System.Windows.Forms.Panel pnlSubMenuCourseDocs;
         private System.Windows.Forms.Button btnAssignedCourses;
         private System.Windows.Forms.Button btnOnlineClasses;
-        private System.Windows.Forms.Button btnGroupTesting;
         private System.Windows.Forms.Panel pnlSubMenuTesting;
         private System.Windows.Forms.Button btnQuestionBank;
         private System.Windows.Forms.Button btnExamConfig;
         private System.Windows.Forms.Button btnExamList;
-        private System.Windows.Forms.Button btnGroupMonitoring;
         private System.Windows.Forms.Panel pnlSubMenuMonitoring;
         private System.Windows.Forms.Button btnLiveMonitor;
         private System.Windows.Forms.Button btnEssayGrading;
         private System.Windows.Forms.Button btnScoreManagement;
-        private System.Windows.Forms.Button btnNotifications;
-        private System.Windows.Forms.Panel pnlSidebarBottom;
-        private System.Windows.Forms.Panel pnlDivider;
-        private System.Windows.Forms.Button btnLogout;
         private System.Windows.Forms.Panel pnlMainboard;
-        private System.Windows.Forms.Panel pnlTopHeader;
         private System.Windows.Forms.Button btnMail;
         private System.Windows.Forms.Panel pnlEmailDropdown;
         private System.Windows.Forms.Label lblEmailHeader;

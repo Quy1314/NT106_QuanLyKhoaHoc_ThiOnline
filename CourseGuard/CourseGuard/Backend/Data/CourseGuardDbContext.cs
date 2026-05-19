@@ -446,16 +446,6 @@ namespace CourseGuard.Backend.Data
         public HashSet<int> GetStudentEnrolledCourseIds(int studentId)
         {
             var result = new HashSet<int>();
-        // ════════════════════════════════════════════════════════════════
-        //  STUDENT ENROLLMENT METHODS
-        // ════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Lấy danh sách khóa học mà sinh viên đã ghi danh (bất kể trạng thái).
-        /// </summary>
-        public List<EnrollmentModel> GetEnrollmentsByStudent(int studentId)
-        {
-            var list = new List<EnrollmentModel>();
             using var connection = CreateConnection();
             connection.Open();
 
@@ -474,6 +464,22 @@ namespace CourseGuard.Backend.Data
             }
 
             return result;
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  STUDENT ENROLLMENT METHODS
+        // ════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Lấy danh sách khóa học mà sinh viên đã ghi danh (bất kể trạng thái).
+        /// </summary>
+        public List<EnrollmentModel> GetEnrollmentsByStudent(int studentId)
+        {
+            var list = new List<EnrollmentModel>();
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"
                 SELECT e.id, e.course_id, e.student_id, e.status, e.joined_at,
                        c.name AS course_name, COALESCE(u.full_name, u.username) AS teacher_name,
                        c.status AS course_status, c.start_date, c.end_date, COALESCE(c.description, '') AS description

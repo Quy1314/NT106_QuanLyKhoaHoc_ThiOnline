@@ -46,15 +46,15 @@ namespace CourseGuard.Frontend.UserControls.Admin
             var titlePanel = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 80,
+                Height = 100,
                 BackColor = Color.Transparent
             };
 
             var title = new Label
             {
                 Text = "Bảng điều khiển Admin",
-                Font = new Font("Segoe UI", 20F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(15, 23, 42),
+                Font = MetaTheme.Fonts.DisplayLg(),
+                ForeColor = MetaTheme.Colors.TextPrimary,
                 AutoSize = true,
                 Location = new Point(4, 0)
             };
@@ -62,10 +62,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
             var subtitle = new Label
             {
                 Text = "Theo dõi người dùng, khóa học và phê duyệt tại một nơi",
-                Font = new Font("Segoe UI", 10F, FontStyle.Regular),
-                ForeColor = Color.FromArgb(100, 116, 139),
+                Font = MetaTheme.Fonts.SubtitleMd(),
+                ForeColor = MetaTheme.Colors.TextSecondary,
                 AutoSize = true,
-                Location = new Point(6, 46)
+                Location = new Point(8, 50)
             };
 
             titlePanel.Controls.Add(title);
@@ -116,9 +116,9 @@ namespace CourseGuard.Frontend.UserControls.Admin
             };
             AcademicTheme.StyleCard(card);
 
-            var title = new Label { Text = label, AutoSize = true, ForeColor = Color.FromArgb(100, 116, 139), Font = new Font("Segoe UI", 10F), Location = new Point(16, 16) };
-            var number = new Label { Text = value, AutoSize = true, ForeColor = Color.FromArgb(15, 23, 42), Font = new Font("Segoe UI", 22F, FontStyle.Bold), Location = new Point(14, 42) };
-            var chip = new Label { Text = delta, AutoSize = true, ForeColor = accent, Font = new Font("Segoe UI", 9F, FontStyle.Bold), Location = new Point(16, 96) };
+            var title = new Label { Text = label, AutoSize = true, ForeColor = MetaTheme.Colors.TextSecondary, Font = MetaTheme.Fonts.BodyMd(), Location = new Point(16, 16) };
+            var number = new Label { Text = value, AutoSize = true, ForeColor = MetaTheme.Colors.TextPrimary, Font = MetaTheme.Fonts.DisplayLg(), Location = new Point(14, 42) };
+            var chip = new Label { Text = delta, AutoSize = true, ForeColor = accent, Font = MetaTheme.Fonts.CaptionBold(), Location = new Point(16, 96) };
 
             if (label == "Tổng người dùng") _totalUsersValueLabel = number;
             else if (label == "Khóa học hoạt động") _activeCoursesValueLabel = number;
@@ -137,7 +137,8 @@ namespace CourseGuard.Frontend.UserControls.Admin
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 3,
-                RowCount = 1
+                RowCount = 1,
+                BackColor = Color.Transparent
             };
             container.ColumnStyles.Clear();
             container.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45F));
@@ -226,9 +227,13 @@ namespace CourseGuard.Frontend.UserControls.Admin
             {
                 Dock = DockStyle.Fill,
                 BorderStyle = BorderStyle.None,
-                Font = new Font("Segoe UI", 9F),
+                Font = MetaTheme.Fonts.BodyMd(),
                 IntegralHeight = false,
-                ItemHeight = 22
+                ItemHeight = 22,
+                BackColor = AppColors.BgCard,
+                ForeColor = AppColors.TextPrimary,
+                HorizontalScrollbar = true,
+                ScrollAlwaysVisible = true
             };
             list.Items.Add("Đang tải hoạt động...");
             _activitiesList = list;
@@ -238,6 +243,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
         private async Task LoadDashboardDataAsync()
         {
+            this.ShowSkeleton(SkeletonType.DashboardOverview);
             try
             {
                 var metricsTask = Task.Run(() => _userController.GetAdminDashboardMetrics());
@@ -281,6 +287,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
                     _activitiesList.Items.Add("Tải hoạt động thất bại: " + ex.Message);
                 }
             }
+            finally
+            {
+                this.HideSkeleton();
+            }
         }
 
         private Control CreateQuickActions()
@@ -291,7 +301,8 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
-                AutoScroll = true
+                AutoScroll = true,
+                BackColor = Color.Transparent
             };
             actions.Controls.Add(CreateActionButton("Thêm người dùng", AcademicTheme.Primary, "USERS"));
             actions.Controls.Add(CreateActionButton("Tạo khóa học", Color.FromArgb(34, 211, 238), "COURSES"));
@@ -301,24 +312,29 @@ namespace CourseGuard.Frontend.UserControls.Admin
             return panel;
         }
 
-        private Button CreateActionButton(string text, Color color, string target)
+        private Button CreateActionButton(string text, Color accentColor, string target)
         {
             var button = new Button
             {
                 Text = text,
                 Width = 230,
                 Height = 42,
-                BackColor = AcademicTheme.Surface,
-                ForeColor = color,
+                BackColor = AppColors.BgCard,
+                ForeColor = accentColor,
                 FlatStyle = FlatStyle.Flat,
                 Margin = new Padding(8),
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                Font = MetaTheme.Fonts.ButtonMd(),
                 TextAlign = ContentAlignment.MiddleCenter,
                 UseVisualStyleBackColor = false,
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                // Store accent color so ApplyTheme won't override it
+                Tag = accentColor
             };
-            button.FlatAppearance.BorderColor = AcademicTheme.BorderSoft;
+            button.FlatAppearance.BorderColor = AppColors.IsDarkMode
+                ? Color.FromArgb(50, 50, 70)
+                : Color.FromArgb(203, 213, 225);
             button.FlatAppearance.BorderSize = 1;
+            button.FlatAppearance.MouseOverBackColor = AppColors.BgCardHover;
             button.Click += (_, _) => QuickActionRequested?.Invoke(target);
 
             return button;
@@ -330,8 +346,9 @@ namespace CourseGuard.Frontend.UserControls.Admin
             {
                 Dock = DockStyle.Fill,
                 Margin = new Padding(8),
-                BackColor = AcademicTheme.Surface,
-                Padding = new Padding(12)
+                BackColor = AppColors.BgCard,
+                Padding = new Padding(12),
+                Tag = "card"   // Mark as card for AppColors.ApplyTheme
             };
             AcademicTheme.StyleCard(panel);
 
@@ -341,14 +358,15 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Dock = DockStyle.Top,
                 Height = 30,
                 Font = new Font("Segoe UI", 11F, FontStyle.Bold),
-                ForeColor = AcademicTheme.TextPrimary
+                ForeColor = AppColors.TextPrimary
             };
 
             var contentHost = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = AcademicTheme.Surface,
-                Padding = new Padding(0, 4, 0, 0)
+                BackColor = AppColors.BgCard,
+                Padding = new Padding(0, 4, 0, 0),
+                Tag = "card"
             };
 
             panel.Controls.Add(contentHost);

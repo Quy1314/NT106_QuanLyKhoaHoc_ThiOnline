@@ -7,6 +7,7 @@ using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
 {
@@ -68,17 +69,20 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         private async Task LoadTeacherCoursesAsync()
         {
-            int userId = UserSessionContext.CurrentUserId ?? 0;
-            if (userId <= 0)
+            this.ShowSkeleton(SkeletonType.ChatLayout);
+            try
             {
-                lstChat.Items.Clear();
-                lstChat.Items.Add("Bạn cần đăng nhập để sử dụng chat.");
-                return;
-            }
+                int userId = UserSessionContext.CurrentUserId ?? 0;
+                if (userId <= 0)
+                {
+                    lstChat.Items.Clear();
+                    lstChat.Items.Add("Bạn cần đăng nhập để sử dụng chat.");
+                    return;
+                }
 
-            List<ChatCourseModel> courses = await _chatController.GetMyCoursesAsync(userId);
-            _courses.Clear();
-            _courses.AddRange(courses);
+                List<ChatCourseModel> courses = await _chatController.GetMyCoursesAsync(userId);
+                _courses.Clear();
+                _courses.AddRange(courses);
 
             cboCourses.Items.Clear();
             foreach (ChatCourseModel course in _courses)
@@ -101,6 +105,11 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             }
 
             cboCourses.SelectedIndex = 0;
+            }
+            finally
+            {
+                this.HideSkeleton();
+            }
         }
 
         private async Task OnCourseChangedAsync()

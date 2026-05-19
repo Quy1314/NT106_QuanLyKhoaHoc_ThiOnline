@@ -24,6 +24,8 @@ namespace CourseGuard.Frontend.UserControls.Student
         public UC_Chat()
         {
             InitializeComponent();
+            BuildCardLayout();
+            ApplyCardStyle();
             _chatController = new ChatController(new CourseGuardDbContext(""));
             _pollTimer = new System.Windows.Forms.Timer { Interval = 3000 };
             _pollTimer.Tick += async (_, _) => await RefreshMessagesAsync();
@@ -68,6 +70,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             var attachItem = new ToolStripMenuItem("Gửi file...");
             attachItem.Click += async (_, _) => await SendFileAsync();
             sendMenu.Items.Add(attachItem);
+            StudentDropdownStyler.Apply(sendMenu);
             btnSend.ContextMenuStrip = sendMenu;
 
             txtInput.KeyDown += (s, e) =>
@@ -91,43 +94,142 @@ namespace CourseGuard.Frontend.UserControls.Student
             };
         }
 
+        private void BuildCardLayout()
+        {
+            btnSend.Text = "Gửi";
+            var root = StudentTabChrome.CreateRoot(this);
+            root.Controls.Add(StudentTabChrome.CreateHeader(
+                "Tin nhắn",
+                "Trao đổi với lớp học và giáo viên trong các khóa đã tham gia.",
+                btnSend), 0, 0);
+
+            var content = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = AppColors.BgBase,
+                ColumnCount = 2,
+                RowCount = 1
+            };
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32f));
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 68f));
+            content.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+
+            var contactsCard = StudentTabChrome.CreateDataCard("Khóa học", lstContacts);
+            contactsCard.Margin = new Padding(0, 0, 12, 0);
+
+            var messageShell = StudentTabChrome.CreateCard();
+            messageShell.Padding = new Padding(18);
+            messageShell.Margin = new Padding(12, 0, 0, 0);
+            var messageGrid = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 1,
+                RowCount = 3
+            };
+            messageGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 38f));
+            messageGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            messageGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 46f));
+            messageGrid.Controls.Add(new Label
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = false,
+                BackColor = Color.Transparent,
+                Font = new System.Drawing.Font("Segoe UI", 12f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppColors.TextPrimary,
+                Text = "Nội dung trao đổi",
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            }, 0, 0);
+            txtMessages.Dock = DockStyle.Fill;
+            txtMessages.Margin = Padding.Empty;
+            messageGrid.Controls.Add(txtMessages, 0, 1);
+
+            var composer = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 2,
+                RowCount = 1,
+                Margin = new Padding(0, 12, 0, 0)
+            };
+            composer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            composer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108f));
+            txtInput.Dock = DockStyle.Fill;
+            txtInput.Margin = new Padding(0, 0, 10, 0);
+            btnSend.Dock = DockStyle.Fill;
+            btnSend.Margin = Padding.Empty;
+            composer.Controls.Add(txtInput, 0, 0);
+            composer.Controls.Add(btnSend, 1, 0);
+            messageGrid.Controls.Add(composer, 0, 2);
+            messageShell.Controls.Add(messageGrid);
+
+            content.Controls.Add(contactsCard, 0, 0);
+            content.Controls.Add(messageShell, 1, 0);
+            root.Controls.Add(content, 0, 1);
+            StudentTabChrome.EnableNaturalFocusClear(this);
+        }
+
+        private void ApplyCardStyle()
+        {
+            BackColor = AppColors.BgBase;
+            StudentTabChrome.StylePrimaryButton(btnSend);
+            lstContacts.BorderStyle = BorderStyle.None;
+            lstContacts.BackColor = AppColors.BgCard;
+            lstContacts.ForeColor = AppColors.TextPrimary;
+            txtMessages.BorderStyle = BorderStyle.None;
+            txtMessages.BackColor = AppColors.BgCard;
+            txtMessages.ForeColor = AppColors.TextPrimary;
+            txtInput.BackColor = AppColors.BgCard;
+            txtInput.ForeColor = AppColors.TextPrimary;
+        }
+
         private async Task LoadCoursesAsync()
         {
-            // Xóa dữ liệu mock trên designer để tránh hiển thị sai trước khi query DB xong.
-            lstContacts.Items.Clear();
-            txtMessages.Text = "Đang tải danh sách chat...";
-
-            int userId = UserSessionContext.CurrentUserId ?? 0;
-            if (userId <= 0)
+            this.ShowSkeleton(SkeletonType.ChatLayout);
+            try
             {
-                txtMessages.Text = "Bạn cần đăng nhập để sử dụng chat.";
-                return;
-            }
+                // Xóa dữ liệu mock trên designer để tránh hiển thị sai trước khi query DB xong.
+                lstContacts.Items.Clear();
+                txtMessages.Text = "Đang tải danh sách chat...";
 
-            List<ChatCourseModel> courses = await _chatController.GetMyCoursesAsync(userId);
-            _courses.Clear();
-            _courses.AddRange(courses);
-
-            lstContacts.Items.Clear();
-            foreach (ChatCourseModel course in _courses)
-            {
-                string roleTag = course.IsTeacherCourse ? "GV" : "HV";
-                string display = $"[{roleTag}] {course.CourseName}";
-                if (!string.IsNullOrWhiteSpace(course.ClassCode))
+                int userId = UserSessionContext.CurrentUserId ?? 0;
+                if (userId <= 0)
                 {
-                    display += $" - {course.ClassCode}";
+                    txtMessages.Text = "Bạn cần đăng nhập để sử dụng chat.";
+                    return;
                 }
 
-                lstContacts.Items.Add(display);
-            }
+                List<ChatCourseModel> courses = await _chatController.GetMyCoursesAsync(userId);
+                _courses.Clear();
+                _courses.AddRange(courses);
 
-            if (lstContacts.Items.Count > 0)
-            {
-                lstContacts.SelectedIndex = 0;
+                lstContacts.Items.Clear();
+                foreach (ChatCourseModel course in _courses)
+                {
+                    string roleTag = course.IsTeacherCourse ? "GV" : "HV";
+                    string display = $"[{roleTag}] {course.CourseName}";
+                    if (!string.IsNullOrWhiteSpace(course.ClassCode))
+                    {
+                        display += $" - {course.ClassCode}";
+                    }
+
+                    lstContacts.Items.Add(display);
+                }
+
+                if (lstContacts.Items.Count > 0)
+                {
+                    lstContacts.ClearSelected();
+                    _selectedCourseId = 0;
+                    txtMessages.Text = "Chọn khóa học để xem tin nhắn.";
+                }
+                else
+                {
+                    txtMessages.Text = "Bạn chưa có khóa học nào để chat.";
+                }
             }
-            else
+            finally
             {
-                txtMessages.Text = "Bạn chưa có khóa học nào để chat.";
+                this.HideSkeleton();
             }
         }
 

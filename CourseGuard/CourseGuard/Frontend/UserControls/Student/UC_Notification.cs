@@ -10,8 +10,9 @@ namespace CourseGuard.Frontend.UserControls.Student
         public UC_Notification()
         {
             InitializeComponent();
+            BuildCardLayout();
             ApplyAcademicStyle();
-            LoadDummyData();
+            _ = LoadDataAsync();
 
             // Bo góc buttons
             RoundedButtonHelper.Apply(btnMarkAsRead, 10);
@@ -19,11 +20,35 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private void ApplyAcademicStyle()
         {
-            BackColor = AcademicTheme.AppBackground;
-            btnMarkAsRead.BackColor = AcademicTheme.Primary;
-            btnMarkAsRead.ForeColor = Color.White;
-            btnMarkAsRead.FlatAppearance.BorderSize = 0;
-            AcademicTheme.StyleGrid(dgvNotifications);
+            BackColor = AppColors.BgBase;
+            StudentTabChrome.StylePrimaryButton(btnMarkAsRead);
+            StudentTabChrome.StyleGrid(dgvNotifications);
+        }
+
+        private void BuildCardLayout()
+        {
+            btnMarkAsRead.Text = "Đánh dấu đã đọc";
+            var root = StudentTabChrome.CreateRoot(this);
+            root.Controls.Add(StudentTabChrome.CreateHeader(
+                "Thông báo",
+                "Các nhắc lịch, bài kiểm tra, tài liệu mới và phản hồi từ hệ thống.",
+                btnMarkAsRead), 0, 0);
+            root.Controls.Add(StudentTabChrome.CreateDataCard("Thông báo gần đây", dgvNotifications), 0, 1);
+            StudentTabChrome.EnableNaturalFocusClear(this, dgvNotifications);
+        }
+
+        private async System.Threading.Tasks.Task LoadDataAsync()
+        {
+            this.ShowSkeleton(SkeletonType.NotificationList);
+            try
+            {
+                await System.Threading.Tasks.Task.Delay(500);
+                LoadDummyData();
+            }
+            finally
+            {
+                this.HideSkeleton();
+            }
         }
 
         private void LoadDummyData()

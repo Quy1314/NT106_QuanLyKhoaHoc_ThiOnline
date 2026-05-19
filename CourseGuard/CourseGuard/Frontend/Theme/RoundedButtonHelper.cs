@@ -2,68 +2,102 @@
  * RoundedButtonHelper.cs
  * 
  * Layer: Presentation (Theme)
- * Vai trò: Helper class để bo góc (rounded corners) cho Button trong WinForms.
- * WinForms mặc định không hỗ trợ border-radius. Dùng GraphicsPath trong sự kiện Paint 
- * để vẽ button chống răng cưa (Anti-alias) thay cho Region.
+ * Draws pill-shaped buttons with anti-aliased corners for dark modern UI.
  */
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Collections.Generic;
 using System.Windows.Forms;
 
 namespace CourseGuard.Frontend.Theme
 {
     public static class RoundedButtonHelper
     {
+        private static readonly HashSet<Button> RoundedButtons = new();
+        private static readonly HashSet<Button> HoveredButtons = new();
+        private static readonly HashSet<Button> PressedButtons = new();
+        private static readonly Dictionary<Button, int> ButtonRadii = new();
+
         /// <summary>
-        /// Áp dụng bo góc cho một Button.
-        /// Gọi trong constructor hoặc Load event của Form/UserControl.
+        /// Apply pill-shaped rounding to a single Button.
+        /// Default radius = MetaTheme.Radius.Full (100px → true pill).
         /// </summary>
-        public static void Apply(Button btn, int radius = 15)
+        public static void Apply(Button btn, int radius = 100)
         {
+            if (RoundedButtons.Contains(btn))
+            {
+                ButtonRadii[btn] = radius;
+                btn.Invalidate();
+                return;
+            }
+
+            RoundedButtons.Add(btn);
+            ButtonRadii[btn] = radius;
             btn.FlatStyle = FlatStyle.Flat;
-            btn.FlatAppearance.BorderSize = 0;
+            btn.UseVisualStyleBackColor = false;
             btn.Cursor = Cursors.Hand;
-            
-            // Bỏ Region cũ nếu có
             btn.Region = null;
 
-            btn.Paint += (s, e) => 
+            btn.MouseEnter += (_, _) => { HoveredButtons.Add(btn); btn.Invalidate(); };
+            btn.MouseLeave += (_, _) => { HoveredButtons.Remove(btn); PressedButtons.Remove(btn); btn.Invalidate(); };
+            btn.MouseDown += (_, _) => { PressedButtons.Add(btn); btn.Invalidate(); };
+            btn.MouseUp += (_, _) => { PressedButtons.Remove(btn); btn.Invalidate(); };
+            btn.EnabledChanged += (_, _) => btn.Invalidate();
+            btn.BackColorChanged += (_, _) => btn.Invalidate();
+            btn.ForeColorChanged += (_, _) => btn.Invalidate();
+            btn.Disposed += (_, _) =>
             {
-                Button b = s as Button;
-                if (b == null) return;
+                RoundedButtons.Remove(btn);
+                HoveredButtons.Remove(btn);
+                PressedButtons.Remove(btn);
+                ButtonRadii.Remove(btn);
+            };
+
+            btn.Paint += (s, e) =>
+            {
+                if (s is not Button b)
+                    return;
 
                 Graphics g = e.Graphics;
                 g.SmoothingMode = SmoothingMode.AntiAlias;
 
-                // ── BƯỚC 1: Xóa nền bằng màu cha (ẩn đi nút hình chữ nhật gốc)
-                Color parentColor = b.Parent?.BackColor ?? Color.White;
+                // Step 1: Clear with the nearest visible parent background.
+                Color parentColor = ResolveParentBackColor(b);
                 g.Clear(parentColor);
 
-                // ── BƯỚC 2: Vẽ shape bo góc lên trên
-                Rectangle rect = new Rectangle(0, 0, b.Width - 1, b.Height - 1);
-                using (GraphicsPath path = GetRoundedRect(rect, radius))
+                // Step 2: Draw rounded shape
+                Rectangle rect = new Rectangle(1, 1, Math.Max(1, b.Width - 3), Math.Max(1, b.Height - 3));
+                int configuredRadius = ButtonRadii.TryGetValue(b, out int storedRadius) ? storedRadius : radius;
+                int effectiveRadius = Math.Min(configuredRadius, b.Height / 2);
+                using (GraphicsPath path = GetRoundedRect(rect, effectiveRadius))
                 {
-                    // Lấy màu nền, nếu Transparent thì dùng nguyên màu cha để giả vờ
-                    Color bgColor = b.BackColor == Color.Transparent ? parentColor : b.BackColor;
-
+                    Color bgColor = ResolveButtonBackColor(b, parentColor);
                     using (SolidBrush brush = new SolidBrush(bgColor))
                     {
                         g.FillPath(brush, path);
                     }
 
-                    // ── BƯỚC 3: Vẽ viền ngoài cùng màu cha để làm mịn phần pixels bao ngoài
-                    using (Pen pen = new Pen(parentColor, 1.5f))
+                    int borderSize = b.FlatAppearance.BorderSize;
+                    Color borderColor = borderSize > 0
+                        ? ResolveButtonBorderColor(b)
+                        : bgColor;
+                    using (Pen pen = new Pen(borderColor, Math.Max(1f, borderSize)))
                     {
                         g.DrawPath(pen, path);
                     }
                 }
 
-                // ── BƯỚC 4: Vẽ lại định dạng chữ và ảnh
+                // Step 4: Redraw text & image
                 if (!string.IsNullOrEmpty(b.Text))
                 {
-                    TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak;
-                    TextRenderer.DrawText(g, b.Text, b.Font, rect, b.ForeColor, flags);
+                    TextFormatFlags flags = TextFormatFlags.HorizontalCenter
+                        | TextFormatFlags.VerticalCenter
+                        | TextFormatFlags.EndEllipsis
+                        | TextFormatFlags.SingleLine;
+                    Rectangle textRect = Rectangle.Inflate(rect, -8, 0);
+                    Color textColor = b.Enabled ? b.ForeColor : AppColors.TextMuted;
+                    TextRenderer.DrawText(g, b.Text, b.Font, textRect, textColor, flags);
                 }
 
                 if (b.Image != null)
@@ -75,8 +109,49 @@ namespace CourseGuard.Frontend.Theme
             };
         }
 
+        private static Color ResolveParentBackColor(Control control)
+        {
+            Control? parent = control.Parent;
+            while (parent != null)
+            {
+                if (parent is RoundedPanel roundedPanel)
+                    return roundedPanel.FillColor;
+
+                if (parent.BackColor != Color.Transparent)
+                    return parent.BackColor;
+
+                parent = parent.Parent;
+            }
+
+            return AppColors.BgBase;
+        }
+
+        private static Color ResolveButtonBackColor(Button button, Color parentColor)
+        {
+            if (!button.Enabled)
+                return AppColors.IsDarkMode
+                    ? ColorTranslator.FromHtml("#2A2A3A")
+                    : ColorTranslator.FromHtml("#E2E8F0");
+
+            if (PressedButtons.Contains(button) && button.FlatAppearance.MouseDownBackColor != Color.Empty)
+                return button.FlatAppearance.MouseDownBackColor;
+
+            if (HoveredButtons.Contains(button) && button.FlatAppearance.MouseOverBackColor != Color.Empty)
+                return button.FlatAppearance.MouseOverBackColor;
+
+            return button.BackColor == Color.Transparent ? parentColor : button.BackColor;
+        }
+
+        private static Color ResolveButtonBorderColor(Button button)
+        {
+            if (!button.Enabled)
+                return AppColors.BorderStrong;
+
+            return button.FlatAppearance.BorderColor;
+        }
+
         /// <summary>
-        /// Áp dụng bo góc cho nhiều buttons cùng lúc.
+        /// Apply pill-shaped rounding to multiple buttons at once.
         /// </summary>
         public static void Apply(int radius, params Button[] buttons)
         {

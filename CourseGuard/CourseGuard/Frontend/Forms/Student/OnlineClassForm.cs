@@ -47,11 +47,11 @@ namespace CourseGuard.Frontend.Forms.Student
             SetupEventHandlers();
             SetupVideoOverlay();
 
-            // Bo góc lớn kiểu Apple (16px radius)
-            RoundedButtonHelper.Apply(16, btnMic, btnSpeaker, btnCam,
+            // Bo góc đồng bộ (10px radius)
+            RoundedButtonHelper.Apply(10, btnMic, btnSpeaker, btnCam,
                 btnShareScreen, btnRaiseHand, btnToggleChat, btnSettings);
-            RoundedButtonHelper.Apply(btnLeave, 16);
-            RoundedButtonHelper.Apply(8, btnMicDrop, btnSpeakerDrop);
+            RoundedButtonHelper.Apply(btnLeave, 10);
+            RoundedButtonHelper.Apply(10, btnMicDrop, btnSpeakerDrop);
 
             // Strikethrough khi tắt
             AddStrikethroughPaint(btnMic, () => !isMicOn);

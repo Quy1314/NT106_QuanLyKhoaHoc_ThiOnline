@@ -88,6 +88,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
         {
             if (_isBusy) return;
             _isBusy = true;
+            this.ShowSkeleton(SkeletonType.FormWithTable);
             try
             {
                 // Avoid parallel loading on shared services to prevent race/dispose issues.
@@ -100,6 +101,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 BindTeachers(teachers);
                 BindStudents(students);
                 BindCourses(courses);
+
                 ClearInputs();
             }
             catch (ObjectDisposedException)
@@ -108,11 +110,12 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi tải dữ liệu: " + ex.Message);
+                MessageBox.Show("Lỗi tải dữ liệu: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
                 _isBusy = false;
+                this.HideSkeleton();
             }
         }
 

@@ -1,3 +1,16 @@
+/*
+ * StudentDashboard.cs
+ * 
+ * Layer: Presentation (Forms)
+ * Layout: Sidebar(Left) → RightPanel(Fill) → Topbar(Top) + mainboard(Fill)
+ * 
+ * UI/UX Rules applied:
+ *   Rule 01 (Layout Skeleton) — Sidebar fixed left, Header top, Content fills rest
+ *   Rule 09 — No pure black/white
+ *   Rule 40 — Single accent color in navigation
+ *   Rule 46 — Short navigation labels (1-2 words max)
+ *   Rule 05 — Visual hierarchy
+ */
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -10,141 +23,144 @@ namespace CourseGuard.Frontend.Forms.Student
 {
     public partial class StudentDashboard : Form
     {
-        private Dictionary<Button, Func<UserControl>> _nav = new();
+        private Dictionary<string, Func<UserControl>> _nav = new();
         private CourseGuard.Backend.Models.UserModel currentUser;
+        private SidebarPanel _sidebar;
+        private TopbarPanel _topbar;
+        private Panel _rightPanel;   // container: topbar + mainboard
+        private string _currentPageName = "Tổng quan";
 
         public StudentDashboard(CourseGuard.Backend.Models.UserModel user)
         {
             currentUser = user;
+            AppColors.IsDarkMode = false;
             InitializeComponent();
-            ApplyAdminLikeTheme();
-            SetupButtonEvents();
+            SearchFocusManager.Install(this);
+
+            // ── 1. Build layout skeleton (Skill 01) ──────────────────
+            // Sidebar docks Left on Form
+            _sidebar = new SidebarPanel { Dock = DockStyle.Left };
+            _sidebar.SetNavItems(
+                new[] { "Tổng quan", "Tìm khóa học", "Khóa học của tôi", "Bài kiểm tra", "Kết quả", "Tài liệu", "Lịch học", "Tin nhắn", "Thông báo", "Hồ sơ" },
+                new[] { "home", "search", "folder-check", "clipboard-check", "chart", "document", "calendar", "message", "bell", "user" }
+            );
+            _sidebar.NavItemClicked += Sidebar_NavItemClicked;
+
+            // Right container holds Topbar(Top) + mainboard(Fill)
+            _rightPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 8, 12, 0) };
+            _topbar = new TopbarPanel
+            {
+                Dock = DockStyle.Top,
+                PageTitle = "Tổng quan",
+                Subtitle = string.Empty,
+                UserName = user.Username ?? "student",
+                UseStudentTopbar = true,
+                QuickSearchPlaceholder = "Tìm khóa học, bài kiểm tra, tài liệu...",
+                OpenExamCount = 2,
+                IsOnline = true,
+                NotificationCount = 3
+            };
+            _topbar.ThemeToggled += (_, _) => ReloadCurrentPage();
+            _topbar.LogoutRequested += (_, _) => LogoutCurrentUser();
+
+            // mainboard (from Designer) fills remaining space under topbar
+            mainboard.Dock = DockStyle.Fill;
+
+            // Assemble: mainboard Fill first, then topbar Top docks above
+            _rightPanel.Controls.Add(mainboard);
+            _rightPanel.Controls.Add(_topbar);
+
+            // Sidebar left, right panel fills rest
+            this.Controls.Add(_rightPanel);
+            this.Controls.Add(_sidebar);
+
+            // ── 2. Apply theme (Rule 09: no pure white/black) ────────
+            BackColor = AppColors.BgBase;
+            _rightPanel.BackColor = AppColors.BgBase;
+            mainboard.BackColor = AppColors.BgBase;
+
+            // ── 3. Navigation logic ──────────────────────────────────
             InitializeNavigation();
 
-            // Bo góc tất cả buttons
-            RoundedButtonHelper.Apply(12, btnDashboard, btnCourses, btnMyCourses, btnExam,
-                btnResult, btnSchedule, btnChat, btnNotify, btnProfile, btnLogout);
-
-            // Logout handler
-            btnLogout.Click += (s, e) => 
-            { 
-                var authService = new CourseGuard.Backend.Controllers.AuthController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
-                string ipAddress = GetLocalIpAddress();
-                authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty, ipAddress);
-                this.DialogResult = DialogResult.OK; // Assuming Parent form handles return to Login
-                this.Close(); 
-            };
-
-            SetActiveButton(btnDashboard);
-            if (_nav.TryGetValue(btnDashboard, out Func<UserControl>? defaultFactory))
+            if (_nav.TryGetValue("Tổng quan", out var defaultFactory))
             {
+                _currentPageName = "Tổng quan";
                 LoadUI(defaultFactory());
-            }
-        }
-
-        private void ApplyAdminLikeTheme()
-        {
-            BackColor = AcademicTheme.AppBackground;
-            sidebar.BackColor = AcademicTheme.Surface;
-            mainboard.BackColor = AcademicTheme.AppBackground;
-
-            Button[] menuButtons = { btnDashboard, btnCourses, btnMyCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile };
-            foreach (var btn in menuButtons)
-            {
-                btn.FlatStyle = FlatStyle.Flat;
-                btn.FlatAppearance.BorderSize = 0;
-                btn.BackColor = Color.Transparent;
-                btn.ForeColor = AcademicTheme.TextSecondary;
-                btn.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
-                btn.TextAlign = ContentAlignment.MiddleLeft;
-                btn.Padding = new Padding(16, 0, 0, 0);
-            }
-
-            btnLogout.BackColor = Color.FromArgb(220, 38, 38);
-            btnLogout.ForeColor = Color.White;
-            btnLogout.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-        }
-
-        private void SetupButtonEvents()
-        {
-            // Gán sự kiện click và hover cho tất cả sidebar buttons (trừ Logout)
-            Button[] sidebarButtons = { btnDashboard, btnCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile };
-            Color activeColor = AcademicTheme.Primary;
-            Button[] sidebarButtons = { btnDashboard, btnCourses, btnMyCourses, btnExam, btnResult, btnSchedule, btnChat, btnNotify, btnProfile };
-            Color activeColor = Color.FromArgb(37, 99, 235);
-
-            foreach (var btn in sidebarButtons)
-            {
-                btn.Click += Sidebar_Click;
-
-                btn.MouseEnter += (s, e) =>
-                {
-                    if (btn.BackColor != activeColor)
-                        btn.BackColor = Color.FromArgb(222, 224, 255);
-                };
-
-                btn.MouseLeave += (s, e) =>
-                {
-                    if (btn.BackColor != activeColor)
-                        btn.BackColor = Color.Transparent;
-                };
             }
         }
 
         private void InitializeNavigation()
         {
-            _nav = new Dictionary<Button, Func<UserControl>>
+            _nav = new Dictionary<string, Func<UserControl>>
             {
-                { btnDashboard, () => new UC_StudentDashboard() },
-                { btnCourses, () => new UC_CourseList() },
-                { btnMyCourses, () => new UC_MyCourses() },
-                { btnExam, () => new UC_TakeExam() },
-                { btnResult, () => new UC_Result() },
-                { btnSchedule, () => new UC_Schedule() },
-                { btnChat, () => new UC_Chat() },
-                { btnNotify, () => new UC_Notification() },
-                { btnProfile, () => new UC_Profile() }
+                { "Tổng quan",    () => new UC_StudentDashboard() },
+                { "Tìm khóa học", () => new UC_CourseList() },
+                { "Khóa học của tôi", () => new UC_MyCourses() },
+                { "Bài kiểm tra", () => new UC_TakeExam() },
+                { "Kết quả",      () => new UC_Result() },
+                { "Tài liệu",     () => new UC_Documents() },
+                { "Lịch học",     () => new UC_Schedule() },
+                { "Tin nhắn",     () => new UC_Chat() },
+                { "Thông báo",    () => new UC_Notification() },
+                { "Hồ sơ",        () => new UC_Profile() }
             };
         }
 
-        private void Sidebar_Click(object? sender, EventArgs e)
+        private void Sidebar_NavItemClicked(object? sender, string pageName)
         {
-            if (sender is Button btn && _nav.ContainsKey(btn))
+            if (pageName == "Logout")
             {
-                SetActiveButton(btn);
-                LoadUI(_nav[btn]());
+                LogoutCurrentUser();
+                return;
+            }
+
+            if (_nav.ContainsKey(pageName))
+            {
+                _currentPageName = pageName;
+                _topbar.PageTitle = pageName;
+                LoadUI(_nav[pageName]());
             }
         }
 
-        private void SetActiveButton(Button activeBtn)
+        private void ReloadCurrentPage()
         {
-            foreach (var key in _nav.Keys)
-            {
-                if (key == activeBtn)
-                {
-                    key.BackColor = AcademicTheme.Primary;
-                    key.ForeColor = Color.White;
-                    key.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-                }
-                else
-                {
-                    key.BackColor = Color.Transparent;
-                    key.ForeColor = AcademicTheme.TextSecondary;
-                    key.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
-                }
-            }
+            BackColor = AppColors.BgBase;
+            _rightPanel.BackColor = AppColors.BgBase;
+            mainboard.BackColor = AppColors.BgBase;
+            _topbar.BackColor = AppColors.BgCard;
+            _topbar.PageTitle = _currentPageName;
+
+            if (_nav.TryGetValue(_currentPageName, out var factory))
+                LoadUI(factory());
+
+            _sidebar.Invalidate();
+            _topbar.Invalidate();
+        }
+
+        private void LogoutCurrentUser()
+        {
+            var authService = new CourseGuard.Backend.Controllers.AuthController(
+                new CourseGuard.Backend.Data.CourseGuardDbContext(""));
+            string ipAddress = GetLocalIpAddress();
+            authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty, ipAddress);
+            DialogResult = DialogResult.OK;
+            Close();
         }
 
         private void LoadUI(UserControl uc)
         {
-            // Dispose UC cũ để tránh memory leak
+            // Dispose old UCs to prevent memory leak
             foreach (Control ctrl in mainboard.Controls)
             {
                 ctrl.Dispose();
             }
             mainboard.Controls.Clear();
+
             uc.Dock = DockStyle.Fill;
+            uc.BackColor = AppColors.BgBase;
             mainboard.Controls.Add(uc);
+
+            AppColors.ApplyTheme(uc);
         }
 
         private static string GetLocalIpAddress()
@@ -154,25 +170,16 @@ namespace CourseGuard.Frontend.Forms.Student
                 foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
                 {
                     if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up)
-                    {
                         continue;
-                    }
-
                     foreach (var ip in ni.GetIPProperties().UnicastAddresses)
                     {
                         if (ip.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
                             !System.Net.IPAddress.IsLoopback(ip.Address))
-                        {
                             return ip.Address.ToString();
-                        }
                     }
                 }
             }
-            catch
-            {
-                // Fallback below.
-            }
-
+            catch { }
             return "127.0.0.1";
         }
     }
