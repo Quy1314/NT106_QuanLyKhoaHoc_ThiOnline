@@ -22,7 +22,8 @@ namespace CourseGuard.Frontend.Theme
                 }
                 catch { /* ignore */ }
             }
-            return new Font(SystemFonts.MessageBoxFont.FontFamily, size, style);
+            var fallbackFont = SystemFonts.MessageBoxFont;
+            return new Font(fallbackFont?.FontFamily ?? FontFamily.GenericSansSerif, size, style);
         }
 
         public static GraphicsPath CreateRoundedRect(RectangleF rect, float radius)

@@ -13,6 +13,7 @@ namespace CourseGuard.Frontend.Theme
         private const int ComboItemHeight = 34;
         private const int ComboRadius = 10;
         private const int ComboHeight = 36;
+        private const long PopupReopenSuppressMs = 150;
         private static readonly ConditionalWeakTable<ComboBox, ComboPopupState> ComboStates = new();
 
         public static void Apply(ContextMenuStrip menu, int minimumWidth = MenuMinWidth)
@@ -28,20 +29,24 @@ namespace CourseGuard.Frontend.Theme
             menu.BackColor = MenuBackColor;
             menu.ForeColor = AppColors.TextPrimary;
             menu.Cursor = Cursors.Hand;
+            menu.DropShadowEnabled = false;
             menu.Renderer = StudentDropdownRenderer.Instance;
             menu.Opened -= Menu_Opened;
             menu.Opened += Menu_Opened;
+            menu.SizeChanged -= Menu_SizeChanged;
+            menu.SizeChanged += Menu_SizeChanged;
 
             int itemMinWidth = Math.Max(MenuMinWidth, minimumWidth);
             foreach (ToolStripItem item in menu.Items)
                 StyleItem(item, itemMinWidth);
         }
 
-        public static void StyleComboBox(ComboBox combo, bool? useCustomPopup = null)
+        public static void StyleComboBox(ComboBox combo, bool? useCustomPopup = null, bool blendWithCard = false)
         {
             ComboPopupState state = ComboStates.GetOrCreateValue(combo);
             if (useCustomPopup.HasValue)
                 state.UseCustomPopup = useCustomPopup.Value;
+            state.BlendWithCard = blendWithCard;
 
             combo.FlatStyle = FlatStyle.Flat;
             combo.DrawMode = DrawMode.OwnerDrawFixed;
@@ -52,7 +57,7 @@ namespace CourseGuard.Frontend.Theme
             combo.MinimumSize = new Size(Math.Max(combo.MinimumSize.Width, 160), ComboHeight);
             combo.DropDownHeight = state.UseCustomPopup ? 1 : 250;
             combo.Font = AppFonts.Body;
-            combo.BackColor = AppColors.BgInput;
+            combo.BackColor = blendWithCard ? AppColors.BgCard : AppColors.BgInput;
             combo.ForeColor = AppColors.TextPrimary;
             combo.Cursor = Cursors.Hand;
 
@@ -62,14 +67,23 @@ namespace CourseGuard.Frontend.Theme
             combo.DropDown += Combo_DropDown;
             combo.KeyDown -= Combo_KeyDown;
             combo.MouseDown -= Combo_MouseDown;
+            combo.MouseEnter -= Combo_MouseEnter;
+            combo.MouseLeave -= Combo_MouseLeave;
+            combo.GotFocus -= Combo_FocusChanged;
+            combo.LostFocus -= Combo_FocusChanged;
             combo.SizeChanged -= Combo_SizeChanged;
             combo.SizeChanged += Combo_SizeChanged;
+            combo.MouseEnter += Combo_MouseEnter;
+            combo.MouseLeave += Combo_MouseLeave;
+            combo.GotFocus += Combo_FocusChanged;
+            combo.LostFocus += Combo_FocusChanged;
+
+            state.Attach(combo);
 
             if (state.UseCustomPopup)
             {
                 combo.KeyDown += Combo_KeyDown;
                 combo.MouseDown += Combo_MouseDown;
-                state.Attach(combo);
             }
 
             ApplyComboRegion(combo);
@@ -79,7 +93,56 @@ namespace CourseGuard.Frontend.Theme
             ? ColorTranslator.FromHtml("#1B1B1F")
             : AppColors.BgCard;
 
-        private static Color HoverBackColor => AppColors.AccentBlue;
+        private static Color HoverBackColor => MetaTheme.Colors.AccentSoft;
+
+        private static Color ComboBorderColor => AppColors.IsDarkMode
+            ? Color.FromArgb(115, 148, 163, 184)
+            : ColorTranslator.FromHtml("#CBD5E1");
+
+        private static Color ComboHoverBorderColor => AppColors.IsDarkMode
+            ? Color.FromArgb(160, 148, 163, 184)
+            : ColorTranslator.FromHtml("#94A3B8");
+
+        private static GraphicsPath RoundedRectF(RectangleF bounds, float radius)
+        {
+            var path = new GraphicsPath();
+            float maxRadius = Math.Min(bounds.Width, bounds.Height) / 2f;
+            radius = Math.Min(radius, maxRadius);
+
+            if (radius <= 0f)
+            {
+                if (bounds.Width > 0f && bounds.Height > 0f)
+                    path.AddRectangle(bounds);
+                return path;
+            }
+
+            float d = radius * 2f;
+            path.AddArc(bounds.X, bounds.Y, d, d, 180, 90);
+            path.AddArc(bounds.Right - d, bounds.Y, d, d, 270, 90);
+            path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
+            path.AddArc(bounds.X, bounds.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        private static void FillSmoothRoundedRect(Graphics graphics, RectangleF bounds, float radius, Color color)
+        {
+            using var path = RoundedRectF(bounds, radius);
+            using var brush = new SolidBrush(color);
+            graphics.FillPath(brush, path);
+        }
+
+        private static void DrawSmoothRoundedBorder(Graphics graphics, RectangleF bounds, float radius, Color color, float width)
+        {
+            using var path = RoundedRectF(bounds, radius);
+            using var pen = new Pen(color, width)
+            {
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round,
+                LineJoin = LineJoin.Round
+            };
+            graphics.DrawPath(pen, path);
+        }
 
         private static void StyleItem(ToolStripItem item, int minimumWidth)
         {
@@ -115,7 +178,19 @@ namespace CourseGuard.Frontend.Theme
             menu.BackColor = MenuBackColor;
             menu.ForeColor = AppColors.TextPrimary;
             menu.Cursor = Cursors.Hand;
+            menu.DropShadowEnabled = false;
 
+            ApplyRoundedRegion(menu);
+        }
+
+        private static void Menu_SizeChanged(object? sender, System.EventArgs e)
+        {
+            if (sender is ContextMenuStrip menu && !menu.IsDisposed && menu.Width > 0 && menu.Height > 0)
+                ApplyRoundedRegion(menu);
+        }
+
+        private static void ApplyRoundedRegion(ContextMenuStrip menu)
+        {
             menu.Region?.Dispose();
             using var path = GraphicsHelpers.RoundedRect(new Rectangle(0, 0, menu.Width, menu.Height), MenuRadius);
             menu.Region = new Region(path);
@@ -166,24 +241,62 @@ namespace CourseGuard.Frontend.Theme
         private static void Combo_SizeChanged(object? sender, System.EventArgs e)
         {
             if (sender is ComboBox combo)
+            {
                 ApplyComboRegion(combo);
+                combo.Invalidate();
+            }
         }
 
         private static void ApplyComboRegion(ComboBox combo)
         {
-            if (combo.Width <= 0 || combo.Height <= 0)
+            if (combo.Width <= 0 || combo.Height <= 0 || combo.IsDisposed)
                 return;
 
             combo.Region?.Dispose();
             using var path = GraphicsHelpers.RoundedRect(new Rectangle(0, 0, combo.Width, combo.Height), ComboRadius);
             combo.Region = new Region(path);
-            combo.Invalidate();
         }
+
+        private static void Combo_MouseEnter(object? sender, System.EventArgs e)
+        {
+            if (sender is ComboBox combo)
+            {
+                ComboPopupState state = ComboStates.GetOrCreateValue(combo);
+                state.IsHovered = true;
+                combo.Invalidate();
+            }
+        }
+
+        private static void Combo_MouseLeave(object? sender, System.EventArgs e)
+        {
+            if (sender is ComboBox combo)
+            {
+                ComboPopupState state = ComboStates.GetOrCreateValue(combo);
+                state.IsHovered = false;
+                combo.Invalidate();
+            }
+        }
+
+        private static void Combo_FocusChanged(object? sender, System.EventArgs e)
+        {
+            if (sender is ComboBox combo)
+            {
+                ComboPopupState state = ComboStates.GetOrCreateValue(combo);
+                state.IsFocused = combo.Focused;
+                combo.Invalidate();
+            }
+        }
+
+
 
         private static void ShowComboPopup(ComboBox combo)
         {
             ComboPopupState state = ComboStates.GetOrCreateValue(combo);
             if (!state.UseCustomPopup || state.IsOpen || combo.IsDisposed)
+                return;
+
+            long elapsedSinceClose = System.Environment.TickCount64 - state.LastCloseTick;
+            if (state.LastCloseTick > 0 && elapsedSinceClose >= 0 && elapsedSinceClose < PopupReopenSuppressMs)
                 return;
 
             state.IsOpen = true;
@@ -220,7 +333,9 @@ namespace CourseGuard.Frontend.Theme
             Apply(menu, combo.Width);
             menu.Closed += (_, _) =>
             {
+                state.LastCloseTick = System.Environment.TickCount64;
                 state.IsOpen = false;
+                combo.Invalidate();
             };
 
             if (!combo.IsDisposed && combo.IsHandleCreated && !menu.IsDisposed)
@@ -236,8 +351,10 @@ namespace CourseGuard.Frontend.Theme
 
             bool isEditArea = (e.State & DrawItemState.ComboBoxEdit) == DrawItemState.ComboBoxEdit;
             bool selected = !isEditArea && (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            Color bg = isEditArea ? AppColors.BgInput : selected ? HoverBackColor : MenuBackColor;
-            Color fg = selected ? Color.White : AppColors.TextPrimary;
+            ComboPopupState state = ComboStates.GetOrCreateValue(combo);
+            Color editBackColor = state.BlendWithCard ? AppColors.BgCard : AppColors.BgInput;
+            Color bg = isEditArea ? editBackColor : selected ? HoverBackColor : MenuBackColor;
+            Color fg = AppColors.TextPrimary;
 
             using (SolidBrush bgBrush = new SolidBrush(bg))
                 e.Graphics.FillRectangle(bgBrush, e.Bounds);
@@ -245,13 +362,16 @@ namespace CourseGuard.Frontend.Theme
             if (e.Index >= 0)
             {
                 string text = combo.GetItemText(combo.Items[e.Index]) ?? string.Empty;
-                TextRenderer.DrawText(
-                    e.Graphics,
-                    text,
-                    AppFonts.Body,
-                    new Rectangle(e.Bounds.Left + 14, e.Bounds.Top, e.Bounds.Width - 24, e.Bounds.Height),
-                    fg,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                using StringFormat sf = new StringFormat
+                {
+                    Alignment = StringAlignment.Near,
+                    LineAlignment = StringAlignment.Center,
+                    Trimming = StringTrimming.EllipsisCharacter
+                };
+                using SolidBrush textBrush = new SolidBrush(fg);
+                Rectangle textRect = new Rectangle(e.Bounds.Left + 14, e.Bounds.Top, e.Bounds.Width - 24, e.Bounds.Height);
+                e.Graphics.DrawString(text, AppFonts.Body, textBrush, textRect, sf);
             }
         }
 
@@ -261,6 +381,10 @@ namespace CourseGuard.Frontend.Theme
 
             public bool UseCustomPopup { get; set; }
             public bool IsOpen { get; set; }
+            public bool IsHovered { get; set; }
+            public bool IsFocused { get; set; }
+            public long LastCloseTick { get; set; }
+            public bool BlendWithCard { get; set; }
 
             public void Attach(ComboBox combo)
             {
@@ -303,7 +427,10 @@ namespace CourseGuard.Frontend.Theme
             private void Combo_HandleCreated(object? sender, System.EventArgs e)
             {
                 if (sender is ComboBox combo)
+                {
                     AssignHandle(combo.Handle);
+                    ApplyComboRegion(combo);
+                }
             }
 
             private void Combo_HandleDestroyed(object? sender, System.EventArgs e)
@@ -311,37 +438,71 @@ namespace CourseGuard.Frontend.Theme
                 ReleaseHandle();
             }
 
+            private static Color GetEffectiveBackColor(Control? control)
+            {
+                return RoundedPanel.ResolveParentBackground(control);
+            }
+
             private static void PaintComboChrome(ComboBox combo)
             {
                 using Graphics g = Graphics.FromHwnd(combo.Handle);
                 g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.PixelOffsetMode = PixelOffsetMode.Half;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-                Rectangle fullRect = new Rectangle(0, 0, combo.Width - 1, combo.Height - 1);
-                Rectangle fillRect = new Rectangle(1, 1, Math.Max(1, combo.Width - 2), Math.Max(1, combo.Height - 2));
-                GraphicsHelpers.FillRoundedRect(g, fillRect, ComboRadius - 1, AppColors.BgInput);
+                Color parentBg = GetEffectiveBackColor(combo.Parent);
+                using (SolidBrush parentBrush = new SolidBrush(parentBg))
+                {
+                    g.FillRectangle(parentBrush, 0, 0, combo.Width, combo.Height);
+                }
+
+                ComboPopupState state = ComboStates.GetOrCreateValue(combo);
+                Color bgColor = state.BlendWithCard ? AppColors.BgCard : MetaTheme.Colors.InputBg;
+                Color borderColor = state.IsFocused || state.IsOpen
+                    ? MetaTheme.Colors.BorderFocus
+                    : state.IsHovered
+                        ? ComboHoverBorderColor
+                        : ComboBorderColor;
+
+                RectangleF chromeRect = new RectangleF(0.5f, 0.5f, combo.Width - 1f, combo.Height - 1f);
+                float borderWidth = state.IsFocused || state.IsOpen ? 1.35f : 1f;
+                FillSmoothRoundedRect(g, chromeRect, ComboRadius, bgColor);
 
                 string text = combo.SelectedIndex >= 0
                     ? combo.GetItemText(combo.SelectedItem) ?? string.Empty
                     : combo.Text;
-                TextRenderer.DrawText(
-                    g,
-                    text,
-                    AppFonts.Body,
-                    new Rectangle(14, 1, Math.Max(1, combo.Width - 48), Math.Max(1, combo.Height - 2)),
-                    AppColors.TextPrimary,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                
+                using StringFormat sf = new StringFormat
+                {
+                    Alignment = StringAlignment.Near,
+                    LineAlignment = StringAlignment.Center,
+                    Trimming = StringTrimming.EllipsisCharacter
+                };
+                using SolidBrush textBrush = new SolidBrush(AppColors.TextPrimary);
+                Rectangle textRect = new Rectangle(14, 1, Math.Max(1, combo.Width - 48), Math.Max(1, combo.Height - 2));
+                g.DrawString(text, AppFonts.Body, textBrush, textRect, sf);
 
                 Point center = new Point(combo.Width - 15, combo.Height / 2);
-                using Pen pen = new Pen(AppColors.TextSecondary, 1.8f)
+                Color arrowColor = state.IsFocused || state.IsOpen ? MetaTheme.Colors.Accent : AppColors.TextSecondary;
+                using Pen pen = new Pen(arrowColor, 1.8f)
                 {
                     StartCap = LineCap.Round,
                     EndCap = LineCap.Round,
                     LineJoin = LineJoin.Round
                 };
-                g.DrawLine(pen, center.X - 4, center.Y - 2, center.X, center.Y + 2);
-                g.DrawLine(pen, center.X, center.Y + 2, center.X + 4, center.Y - 2);
+                
+                if (state.IsOpen)
+                {
+                    g.DrawLine(pen, center.X - 4, center.Y + 2, center.X, center.Y - 2);
+                    g.DrawLine(pen, center.X, center.Y - 2, center.X + 4, center.Y + 2);
+                }
+                else
+                {
+                    g.DrawLine(pen, center.X - 4, center.Y - 2, center.X, center.Y + 2);
+                    g.DrawLine(pen, center.X, center.Y + 2, center.X + 4, center.Y - 2);
+                }
 
-                GraphicsHelpers.DrawRoundedBorder(g, fullRect, ComboRadius, AppColors.BorderStrong, 1f);
+                DrawSmoothRoundedBorder(g, chromeRect, ComboRadius, borderColor, borderWidth);
             }
         }
 
@@ -356,9 +517,21 @@ namespace CourseGuard.Frontend.Theme
 
             protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
             {
-                using Pen pen = new Pen(AppColors.BorderStrong);
-                Rectangle rect = new Rectangle(Point.Empty, new Size(e.ToolStrip.Width - 1, e.ToolStrip.Height - 1));
-                GraphicsHelpers.DrawRoundedBorder(e.Graphics, rect, MenuRadius, AppColors.BorderStrong, 1f);
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                e.Graphics.PixelOffsetMode = PixelOffsetMode.Half;
+                RectangleF rect = new RectangleF(0.5f, 0.5f, e.ToolStrip.Width - 1f, e.ToolStrip.Height - 1f);
+                DrawSmoothRoundedBorder(e.Graphics, rect, MenuRadius, ComboBorderColor, 1f);
+            }
+
+            protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
+            {
+                if (e.ToolStrip == null)
+                    return;
+
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                e.Graphics.PixelOffsetMode = PixelOffsetMode.Half;
+                RectangleF rect = new RectangleF(0.5f, 0.5f, e.ToolStrip.Width - 1f, e.ToolStrip.Height - 1f);
+                FillSmoothRoundedRect(e.Graphics, rect, MenuRadius, MenuBackColor);
             }
 
             protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
@@ -366,9 +539,11 @@ namespace CourseGuard.Frontend.Theme
                 if (e.Item == null)
                     return;
 
-                Rectangle rect = new Rectangle(5, 2, e.Item.Width - 10, e.Item.Height - 4);
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                e.Graphics.PixelOffsetMode = PixelOffsetMode.Half;
+                RectangleF rect = new RectangleF(5.5f, 2.5f, e.Item.Width - 11f, e.Item.Height - 5f);
                 Color bg = e.Item.Selected ? HoverBackColor : MenuBackColor;
-                GraphicsHelpers.FillRoundedRect(e.Graphics, rect, 6, bg);
+                FillSmoothRoundedRect(e.Graphics, rect, 6, bg);
             }
 
             protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
@@ -379,7 +554,7 @@ namespace CourseGuard.Frontend.Theme
 
             protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
             {
-                e.ArrowColor = e.Item?.Selected == true ? Color.White : AppColors.TextSecondary;
+                e.ArrowColor = AppColors.TextSecondary;
                 base.OnRenderArrow(e);
             }
 
@@ -388,15 +563,18 @@ namespace CourseGuard.Frontend.Theme
                 if (e.Item == null)
                     return;
 
-                Color textColor = e.Item.Selected ? Color.White : AppColors.TextPrimary;
+                Color textColor = AppColors.TextPrimary;
                 Rectangle textRect = new Rectangle(20, 0, e.Item.Width - 40, e.Item.Height);
-                TextRenderer.DrawText(
-                    e.Graphics,
-                    e.Text,
-                    AppFonts.Body,
-                    textRect,
-                    textColor,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                
+                using StringFormat sf = new StringFormat
+                {
+                    Alignment = StringAlignment.Near,
+                    LineAlignment = StringAlignment.Center,
+                    Trimming = StringTrimming.EllipsisCharacter
+                };
+                using SolidBrush textBrush = new SolidBrush(textColor);
+                e.Graphics.DrawString(e.Text, AppFonts.Body, textBrush, textRect, sf);
             }
         }
 

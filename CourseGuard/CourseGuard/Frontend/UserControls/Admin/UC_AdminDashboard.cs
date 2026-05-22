@@ -408,7 +408,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 "ADMIN_REJECT_USER_REQUEST" => "Admin từ chối yêu cầu",
                 "ADMIN_RESET_PASSWORD" => "Admin đặt lại mật khẩu",
                 "FORGOT_PASSWORD_APPROVED" => "Admin duyệt quên mật khẩu",
-                _ => action
+                _ => action ?? string.Empty
             };
         }
     }

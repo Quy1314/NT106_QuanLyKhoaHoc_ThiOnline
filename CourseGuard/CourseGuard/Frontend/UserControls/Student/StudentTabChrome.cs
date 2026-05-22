@@ -71,7 +71,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 Padding = new Padding(0, 0, 0, 3),
                 Text = title,
                 TextAlign = ContentAlignment.MiddleLeft,
-                UseCompatibleTextRendering = true
+                UseCompatibleTextRendering = false
             }, 0, 0);
 
             textStack.Controls.Add(new Label
@@ -83,7 +83,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 ForeColor = AppColors.TextSecondary,
                 Text = subtitle,
                 TextAlign = ContentAlignment.MiddleLeft,
-                UseCompatibleTextRendering = true
+                UseCompatibleTextRendering = false
             }, 0, 1);
 
             var actionPanel = new FlowLayoutPanel
@@ -100,7 +100,10 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             foreach (Control action in actions)
             {
-                action.Margin = new Padding(8, 0, 0, 0);
+                if (action is Label)
+                    action.Margin = new Padding(8, 7, 0, 0);
+                else
+                    action.Margin = new Padding(8, 0, 0, 0);
                 actionPanel.Controls.Add(action);
             }
 
@@ -135,7 +138,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 Padding = new Padding(0, 0, 0, 3),
                 Text = title,
                 TextAlign = ContentAlignment.MiddleLeft,
-                UseCompatibleTextRendering = true
+                UseCompatibleTextRendering = false
             }, 0, 0);
 
             content.Dock = DockStyle.Fill;

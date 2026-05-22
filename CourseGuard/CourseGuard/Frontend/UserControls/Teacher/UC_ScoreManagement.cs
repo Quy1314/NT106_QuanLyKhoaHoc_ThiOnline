@@ -179,7 +179,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         /// <summary>
         /// Lọc danh sách theo MSSV hoặc Họ Tên mỗi khi nội dung TextBox thay đổi.
         /// </summary>
-        private void TxtSearch_TextChanged(object sender, EventArgs e)
+        private void TxtSearch_TextChanged(object? sender, EventArgs e)
         {
             ApplyFilters();
         }
@@ -189,7 +189,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         /// <summary>
         /// Toggle chế độ lọc "Không đạt". Đổi màu và text nút theo trạng thái.
         /// </summary>
-        private void BtnFilterFailed_Click(object sender, EventArgs e)
+        private void BtnFilterFailed_Click(object? sender, EventArgs e)
         {
             _isFilteringFailed = !_isFilteringFailed;
 
@@ -252,7 +252,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
             if (scores.Count > 0)
             {
-                var bindingSource = new BindingSource(scores, null);
+                var bindingSource = new BindingSource(scores, string.Empty);
                 dgvScores.DataSource = bindingSource;
                 ConfigureColumns();
             }
@@ -311,8 +311,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             }
 
             // Ẩn cột ID nếu có
-            if (dgvScores.Columns.Contains("Id"))
-                dgvScores.Columns["Id"].Visible = false;
+            if (dgvScores.Columns["Id"] is DataGridViewColumn idColumn)
+                idColumn.Visible = false;
         }
 
         // ── Tô màu dòng theo trạng thái ─────────────────────────────────
@@ -320,7 +320,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         /// <summary>
         /// Tô nền đỏ nhạt cho các dòng sinh viên "Không đạt".
         /// </summary>
-        private void DgvScores_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        private void DgvScores_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
         {
             if (e.RowIndex < 0) return;
 
@@ -383,7 +383,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         /// Import danh sách điểm từ file CSV và Upsert lên Supabase.
         /// Nếu MSSV đã tồn tại → cập nhật. Nếu chưa → thêm mới.
         /// </summary>
-        private void BtnImport_Click(object sender, EventArgs e)
+        private void BtnImport_Click(object? sender, EventArgs e)
         {
             using (OpenFileDialog ofd = new OpenFileDialog())
             {
@@ -477,7 +477,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         /// <summary>
         /// Xuất dữ liệu đang hiển thị trên DataGridView (đã lọc) ra file CSV.
         /// </summary>
-        private void BtnExport_Click(object sender, EventArgs e)
+        private void BtnExport_Click(object? sender, EventArgs e)
         {
             using (SaveFileDialog sfd = new SaveFileDialog())
             {
@@ -500,7 +500,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             {
                 var currentSource = dgvScores.DataSource as BindingSource;
                 if (currentSource == null)
-                    currentSource = new BindingSource(new List<StudentScoreModel>(), null);
+                    currentSource = new BindingSource(new List<StudentScoreModel>(), string.Empty);
 
                 var data = currentSource.DataSource as List<StudentScoreModel>;
                 if (data == null || data.Count == 0)

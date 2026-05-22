@@ -51,14 +51,14 @@ namespace CourseGuard.Frontend.UserControls.Student
                 int userId = UserSessionContext.CurrentUserId ?? 0;
                 if (userId <= 0 || _selectedCourseId <= 0)
                 {
-                    MessageBox.Show("Không tìm thấy phòng chat hợp lệ.", "Chat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MetaTheme.ShowModernDialog("Không tìm thấy phòng chat hợp lệ.", "Chat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
                 bool sent = await _chatController.SendMessageAsync(userId, _selectedCourseId, content);
                 if (!sent)
                 {
-                    MessageBox.Show(_chatController.LastErrorMessage, "Gửi tin nhắn thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MetaTheme.ShowModernDialog(_chatController.LastErrorMessage, "Gửi tin nhắn thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
@@ -316,7 +316,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             int userId = UserSessionContext.CurrentUserId ?? 0;
             if (userId <= 0 || _selectedCourseId <= 0)
             {
-                MessageBox.Show("Không tìm thấy phòng chat hợp lệ.", "Chat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MetaTheme.ShowModernDialog("Không tìm thấy phòng chat hợp lệ.", "Chat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -335,7 +335,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             bool sent = await _chatController.SendFileMessageAsync(userId, _selectedCourseId, dialog.FileName, caption);
             if (!sent)
             {
-                MessageBox.Show(_chatController.LastErrorMessage, "Gửi file thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MetaTheme.ShowModernDialog(_chatController.LastErrorMessage, "Gửi file thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 

@@ -53,7 +53,9 @@ namespace CourseGuard.Frontend.Theme
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             base.OnPaint(e);
-            DrawSearchIcon(e.Graphics, new Rectangle(11, 9, 17, 17), AppColors.TextMuted);
+            int iconSize = 17;
+            int iconY = (Height - iconSize) / 2;
+            DrawSearchIcon(e.Graphics, new Rectangle(11, iconY, iconSize, iconSize), AppColors.TextMuted);
         }
 
         private void LayoutInput()
@@ -61,7 +63,9 @@ namespace CourseGuard.Frontend.Theme
             if (_input.IsDisposed)
                 return;
 
-            _input.SetBounds(36, 9, Math.Max(40, Width - 48), 18);
+            int inputHeight = Math.Min(_input.PreferredHeight, Height - 8);
+            int inputTop = (Height - inputHeight) / 2;
+            _input.SetBounds(36, inputTop, Math.Max(40, Width - 48), inputHeight);
         }
 
         private static void DrawSearchIcon(Graphics g, Rectangle bounds, Color color)

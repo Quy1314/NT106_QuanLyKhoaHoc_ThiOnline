@@ -210,7 +210,7 @@ namespace CourseGuard.Frontend.Theme
             base.OnPaint(e);
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             g.Clear(Parent?.BackColor ?? AppColors.BgBase);
             Rectangle moduleRect = new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1));
             using (GraphicsPath sidebarPath = GraphicsHelpers.RightRoundedRect(moduleRect, 18))

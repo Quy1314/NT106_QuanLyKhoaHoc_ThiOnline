@@ -9,9 +9,6 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using System.Linq;
-using System.Windows.Forms;
-using CourseGuard.Backend.Controllers;
-using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Frontend.Theme;
@@ -82,7 +79,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi tải lịch học: " + ex.Message,
+                MetaTheme.ShowModernDialog("Lỗi tải lịch học: " + ex.Message,
                     "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally

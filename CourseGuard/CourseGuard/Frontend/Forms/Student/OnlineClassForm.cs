@@ -261,7 +261,7 @@ namespace CourseGuard.Frontend.Forms.Student
             // ── Rời phòng ──
             btnLeave.Click += (s, e) =>
             {
-                var res = MessageBox.Show("Bạn có muốn rời phòng chứ?", "Xác nhận",
+                var res = MetaTheme.ShowModernDialog("Bạn có muốn rời phòng chứ?", "Xác nhận",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (res == DialogResult.Yes)
                 {
@@ -342,7 +342,7 @@ namespace CourseGuard.Frontend.Forms.Student
             // ── Settings ──
             btnSettings.Click += (s, e) =>
             {
-                MessageBox.Show("Tính năng Cài đặt sẽ được cập nhật trong phiên bản tiếp theo.",
+                MetaTheme.ShowModernDialog("Tính năng Cài đặt sẽ được cập nhật trong phiên bản tiếp theo.",
                     "Cài đặt", MessageBoxButtons.OK, MessageBoxIcon.Information);
             };
 

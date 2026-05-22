@@ -135,8 +135,8 @@ namespace CourseGuard.Backend.Data
             {
                 Id = Convert.ToInt32(row["id"]),
                 UserId = Convert.ToInt32(row["user_id"]),
-                Title = row["title"] == DBNull.Value ? string.Empty : row["title"].ToString(),
-                Content = row["content"] == DBNull.Value ? string.Empty : row["content"].ToString(),
+                Title = row["title"] == DBNull.Value ? string.Empty : Convert.ToString(row["title"]) ?? string.Empty,
+                Content = row["content"] == DBNull.Value ? string.Empty : Convert.ToString(row["content"]) ?? string.Empty,
                 IsRead = Convert.ToBoolean(row["is_read"]),
                 CreatedAt = Convert.ToDateTime(row["created_at"])
             };

@@ -9,6 +9,7 @@
  * Usage: MetaTheme.Colors.FormBg, MetaTheme.Fonts.BodyMd(), MetaTheme.Radius.Full, etc.
  */
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
@@ -134,7 +135,7 @@ namespace CourseGuard.Frontend.Theme
                         }
                         catch { /* skip */ }
                     }
-                    return SystemFonts.MessageBoxFont.FontFamily.Name;
+                    return SystemFonts.MessageBoxFont?.FontFamily?.Name ?? "Segoe UI";
                 }
             }
 
@@ -244,6 +245,18 @@ namespace CourseGuard.Frontend.Theme
 
             // Alternating
             grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(16, 16, 28);
+
+            grid.CellPainting -= Grid_CellPainting;
+            grid.CellPainting += Grid_CellPainting;
+        }
+
+        private static void Grid_CellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
+        {
+            if (e.Graphics != null)
+            {
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            }
         }
 
         /// <summary>
@@ -416,7 +429,7 @@ namespace CourseGuard.Frontend.Theme
 
             if (e.Index >= 0)
             {
-                string text = cb.Items[e.Index].ToString() ?? "";
+                string text = cb.Items[e.Index]?.ToString() ?? "";
                 
                 StringFormat sf = new StringFormat
                 {
@@ -566,62 +579,323 @@ namespace CourseGuard.Frontend.Theme
             return path;
         }
         /// <summary>
-        /// Shows a modern dark dialog to replace standard MessageBox.
+        /// Shows an app-themed dialog to replace standard Windows MessageBox.
         /// </summary>
         public static void ShowModernDialog(string content, string title = "Thông báo")
         {
-            Form dialog = new Form
+            ShowModernDialog(content, title, MessageBoxButtons.OK, MessageBoxIcon.None);
+        }
+
+        public static DialogResult ShowModernDialog(
+            string content,
+            string title,
+            MessageBoxButtons buttons,
+            MessageBoxIcon icon = MessageBoxIcon.None)
+        {
+            using var dialog = new ThemedMessageDialog(content, title, buttons, icon);
+            Form? owner = Form.ActiveForm;
+            return owner != null && !owner.IsDisposed
+                ? dialog.ShowDialog(owner)
+                : dialog.ShowDialog();
+        }
+
+        private sealed class ThemedMessageDialog : Form
+        {
+            private const int CornerRadius = 18;
+            private readonly MessageBoxButtons _buttons;
+            private readonly MessageBoxIcon _icon;
+
+            public ThemedMessageDialog(string content, string title, MessageBoxButtons buttons, MessageBoxIcon icon)
             {
-                Text = title,
-                Size = new Size(450, 300),
-                StartPosition = FormStartPosition.CenterParent,
-                FormBorderStyle = FormBorderStyle.FixedDialog,
-                MaximizeBox = false,
-                MinimizeBox = false,
-                BackColor = Colors.FormBg,
-                ForeColor = Colors.TextPrimary,
-                Font = Fonts.BodyMd()
-            };
+                _buttons = buttons;
+                _icon = icon;
 
-            Panel header = new Panel { Dock = DockStyle.Top, Height = 50, BackColor = Colors.SidebarBg };
-            Label lblTitle = new Label 
-            { 
-                Text = title, 
-                Dock = DockStyle.Fill, 
-                TextAlign = ContentAlignment.MiddleLeft, 
-                Padding = new Padding(20, 0, 0, 0),
-                Font = Fonts.HeadingMd(),
-                ForeColor = Colors.TextPrimary
-            };
-            header.Controls.Add(lblTitle);
+                Text = title;
+                StartPosition = FormStartPosition.CenterParent;
+                FormBorderStyle = FormBorderStyle.None;
+                ShowInTaskbar = false;
+                BackColor = AppColors.BgCard;
+                ForeColor = AppColors.TextPrimary;
+                Font = AppFonts.Body;
+                DoubleBuffered = true;
+                Padding = new Padding(1);
 
-            Panel body = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20) };
-            Label lblContent = new Label 
-            { 
-                Text = content, 
-                Dock = DockStyle.Fill, 
-                TextAlign = ContentAlignment.TopLeft,
-                Font = Fonts.BodyMd(),
-                ForeColor = Colors.TextSecondary
-            };
-            body.Controls.Add(lblContent);
+                int width = 460;
+                int measuredHeight = TextRenderer.MeasureText(
+                    content,
+                    AppFonts.Body,
+                    new Size(width - 140, 0),
+                    TextFormatFlags.WordBreak).Height;
+                Size = new Size(width, Math.Clamp(measuredHeight + 154, 220, 360));
 
-            Panel footer = new Panel { Dock = DockStyle.Bottom, Height = 60, Padding = new Padding(10) };
-            Button btnOk = new Button 
-            { 
-                Text = "Đồng ý", 
-                DialogResult = DialogResult.OK, 
-                Dock = DockStyle.Right, 
-                Width = 100
-            };
-            StylePrimaryButton(btnOk);
-            footer.Controls.Add(btnOk);
+                Controls.Add(BuildRoot(content, title));
+                Paint += (_, e) =>
+                {
+                    e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                    GraphicsHelpers.DrawRoundedBorder(
+                        e.Graphics,
+                        new Rectangle(0, 0, Width - 1, Height - 1),
+                        CornerRadius,
+                        AppColors.BorderStrong,
+                        1f);
+                };
+            }
 
-            dialog.Controls.Add(body);
-            dialog.Controls.Add(header);
-            dialog.Controls.Add(footer);
+            protected override void OnShown(EventArgs e)
+            {
+                base.OnShown(e);
+                ApplyRoundedRegion();
+            }
 
-            dialog.ShowDialog();
+            protected override void OnResize(EventArgs e)
+            {
+                base.OnResize(e);
+                ApplyRoundedRegion();
+            }
+
+            private Control BuildRoot(string content, string title)
+            {
+                var root = new TableLayoutPanel
+                {
+                    Dock = DockStyle.Fill,
+                    BackColor = AppColors.BgCard,
+                    ColumnCount = 1,
+                    RowCount = 3
+                };
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56f));
+                root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70f));
+
+                root.Controls.Add(BuildHeader(title), 0, 0);
+                root.Controls.Add(BuildBody(content), 0, 1);
+                root.Controls.Add(BuildFooter(), 0, 2);
+                return root;
+            }
+
+            private Control BuildHeader(string title)
+            {
+                var header = new Panel
+                {
+                    Dock = DockStyle.Fill,
+                    BackColor = AppColors.BgCard,
+                    Padding = new Padding(22, 0, 14, 0)
+                };
+                header.MouseDown += (_, e) =>
+                {
+                    if (e.Button == MouseButtons.Left)
+                        NativeMethods.ReleaseCaptureAndDrag(Handle);
+                };
+
+                var closeButton = new Button
+                {
+                    Dock = DockStyle.Right,
+                    Width = 36,
+                    Text = "×",
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = AppColors.BgCard,
+                    ForeColor = AppColors.TextSecondary,
+                    Font = AppFonts.Semibold(10f),
+                    Cursor = Cursors.Hand,
+                    TabStop = false
+                };
+                closeButton.FlatAppearance.BorderSize = 0;
+                closeButton.FlatAppearance.MouseOverBackColor = AppColors.BgCardHover;
+                closeButton.FlatAppearance.MouseDownBackColor = AppColors.BgElevated;
+                closeButton.Click += (_, _) =>
+                {
+                    DialogResult = DialogResult.Cancel;
+                    Close();
+                };
+
+                var lblTitle = new Label
+                {
+                    Text = title,
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Font = AppFonts.Semibold(13f),
+                    ForeColor = AppColors.TextPrimary,
+                    BackColor = AppColors.BgCard,
+                    AutoEllipsis = true,
+                    UseCompatibleTextRendering = false
+                };
+
+                header.Controls.Add(lblTitle);
+                header.Controls.Add(closeButton);
+                return header;
+            }
+
+            private Control BuildBody(string content)
+            {
+                var body = new TableLayoutPanel
+                {
+                    Dock = DockStyle.Fill,
+                    BackColor = AppColors.BgCard,
+                    ColumnCount = 2,
+                    RowCount = 1,
+                    Padding = new Padding(22, 4, 24, 8)
+                };
+                body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 54f));
+                body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+
+                body.Controls.Add(new DialogIconView(_icon), 0, 0);
+                body.Controls.Add(new Label
+                {
+                    Text = content,
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Font = AppFonts.Body,
+                    ForeColor = AppColors.TextSecondary,
+                    BackColor = AppColors.BgCard,
+                    UseCompatibleTextRendering = false
+                }, 1, 0);
+
+                return body;
+            }
+
+            private Control BuildFooter()
+            {
+                var footer = new FlowLayoutPanel
+                {
+                    Dock = DockStyle.Fill,
+                    BackColor = AppColors.BgCard,
+                    FlowDirection = FlowDirection.RightToLeft,
+                    WrapContents = false,
+                    Padding = new Padding(20, 14, 22, 18)
+                };
+
+                foreach (Button button in CreateButtons())
+                    footer.Controls.Add(button);
+
+                return footer;
+            }
+
+            private IEnumerable<Button> CreateButtons()
+            {
+                if (_buttons == MessageBoxButtons.YesNo)
+                {
+                    Button yes = CreateButton("Đồng ý", DialogResult.Yes, primary: true);
+                    Button no = CreateButton("Hủy", DialogResult.No, primary: false);
+                    AcceptButton = yes;
+                    CancelButton = no;
+                    return new[] { yes, no };
+                }
+
+                Button ok = CreateButton("Đồng ý", DialogResult.OK, primary: true);
+                AcceptButton = ok;
+                CancelButton = ok;
+                return new[] { ok };
+            }
+
+            private Button CreateButton(string text, DialogResult result, bool primary)
+            {
+                var button = new Button
+                {
+                    Text = text,
+                    DialogResult = result,
+                    Width = 112,
+                    Height = 38,
+                    Margin = new Padding(8, 0, 0, 0),
+                    UseVisualStyleBackColor = false
+                };
+
+                if (primary)
+                    StylePrimaryButton(button);
+                else
+                    StyleSecondaryButton(button);
+
+                button.Click += (_, _) =>
+                {
+                    DialogResult = result;
+                    Close();
+                };
+                return button;
+            }
+
+            private void ApplyRoundedRegion()
+            {
+                if (Width <= 0 || Height <= 0)
+                    return;
+
+                Region?.Dispose();
+                using var path = GraphicsHelpers.RoundedRect(new Rectangle(0, 0, Width, Height), CornerRadius);
+                Region = new Region(path);
+            }
+        }
+
+        private sealed class DialogIconView : Control
+        {
+            private readonly MessageBoxIcon _icon;
+
+            public DialogIconView(MessageBoxIcon icon)
+            {
+                _icon = icon;
+                Dock = DockStyle.Fill;
+                BackColor = AppColors.BgCard;
+                DoubleBuffered = true;
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                base.OnPaint(e);
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+                Color color = _icon switch
+                {
+                    MessageBoxIcon.Warning => AppColors.Warning,
+                    MessageBoxIcon.Error => AppColors.Danger,
+                    MessageBoxIcon.Question => AppColors.AccentBlue,
+                    MessageBoxIcon.Information => AppColors.AccentBlue,
+                    _ => AppColors.AccentBlue
+                };
+                Color soft = _icon switch
+                {
+                    MessageBoxIcon.Warning => AppColors.WarningSoft,
+                    MessageBoxIcon.Error => AppColors.DangerSoft,
+                    _ => AppColors.AccentSoft
+                };
+
+                Rectangle circle = new Rectangle(5, Math.Max(8, (Height - 40) / 2), 40, 40);
+                using SolidBrush bg = new SolidBrush(soft);
+                using SolidBrush fg = new SolidBrush(color);
+                using Pen pen = new Pen(color, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+                e.Graphics.FillEllipse(bg, circle);
+
+                int cx = circle.Left + circle.Width / 2;
+                int cy = circle.Top + circle.Height / 2;
+                if (_icon == MessageBoxIcon.Error)
+                {
+                    e.Graphics.DrawLine(pen, cx - 8, cy - 8, cx + 8, cy + 8);
+                    e.Graphics.DrawLine(pen, cx + 8, cy - 8, cx - 8, cy + 8);
+                }
+                else if (_icon == MessageBoxIcon.Question)
+                {
+                    using Font font = AppFonts.Semibold(16f);
+                    e.Graphics.DrawString("?", font, fg, circle, new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center });
+                }
+                else
+                {
+                    e.Graphics.DrawLine(pen, cx, cy - 10, cx, cy + 3);
+                    e.Graphics.FillEllipse(fg, cx - 2, cy + 9, 4, 4);
+                }
+            }
+        }
+
+        private static class NativeMethods
+        {
+            private const int WmNclButtonDown = 0xA1;
+            private const int HtCaption = 0x2;
+
+            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            private static extern bool ReleaseCapture();
+
+            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
+
+            public static void ReleaseCaptureAndDrag(IntPtr handle)
+            {
+                ReleaseCapture();
+                SendMessage(handle, WmNclButtonDown, HtCaption, 0);
+            }
         }
     }
 

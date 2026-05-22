@@ -16,11 +16,12 @@ using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Student
 {
-    public partial class UC_MyCourses : UserControl
+    public partial class UC_MyCourses : UserControl, IStudentSearchTarget
     {
         private readonly CourseController _controller;
         private List<EnrollmentModel> _allEnrollments = new();
         private bool _isLoadingEnrollments;
+        private string _globalSearchKeyword = string.Empty;
 
         public UC_MyCourses()
         {
@@ -104,7 +105,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 int studentId = UserSessionContext.CurrentUserId ?? 0;
                 if (studentId == 0)
                 {
-                    MessageBox.Show("Không xác định được tài khoản. Vui lòng đăng nhập lại.",
+                    MetaTheme.ShowModernDialog("Không xác định được tài khoản. Vui lòng đăng nhập lại.",
                         "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
@@ -114,7 +115,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi tải dữ liệu: " + ex.Message,
+                MetaTheme.ShowModernDialog("Lỗi tải dữ liệu: " + ex.Message,
                     "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -142,7 +143,23 @@ namespace CourseGuard.Frontend.UserControls.Student
                     // 0 = Tất cả → không lọc
             }
 
+            if (!string.IsNullOrWhiteSpace(_globalSearchKeyword))
+            {
+                string keyword = _globalSearchKeyword.Trim().ToLowerInvariant();
+                filtered = filtered.Where(e =>
+                    e.CourseName.ToLowerInvariant().Contains(keyword) ||
+                    e.TeacherName.ToLowerInvariant().Contains(keyword) ||
+                    e.CourseDescription.ToLowerInvariant().Contains(keyword) ||
+                    e.Status.ToLowerInvariant().Contains(keyword));
+            }
+
             BindToGrid(filtered.ToList());
+        }
+
+        public void ApplyGlobalSearch(string keyword)
+        {
+            _globalSearchKeyword = keyword ?? string.Empty;
+            ApplyFilter();
         }
 
         // ── Bind dữ liệu vào DataGridView ───────────────────────────────
@@ -319,7 +336,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         {
             if (dgvMyCourses.CurrentRow == null || dgvMyCourses.CurrentRow.IsNewRow)
             {
-                MessageBox.Show("Vui lòng chọn một khóa học.", "Thông báo",
+                MetaTheme.ShowModernDialog("Vui lòng chọn một khóa học.", "Thông báo",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -355,7 +372,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // Không cho rút nếu đã rút hoặc hoàn thành
             if (statusText.Contains("Đã rút") || statusText.Contains("Hoàn thành"))
             {
-                MessageBox.Show("Không thể thực hiện thao tác này trên khóa học đã rút/hoàn thành.",
+                MetaTheme.ShowModernDialog("Không thể thực hiện thao tác này trên khóa học đã rút/hoàn thành.",
                     "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
@@ -364,14 +381,14 @@ namespace CourseGuard.Frontend.UserControls.Student
                 ? $"Bạn có muốn HỦY yêu cầu tham gia khóa học \"{courseName}\"?"
                 : $"Bạn có muốn RÚT khỏi khóa học \"{courseName}\"?\n\nLưu ý: Thao tác này không thể hoàn tác.";
 
-            var result = MessageBox.Show(confirmMsg, "Xác nhận",
+            var result = MetaTheme.ShowModernDialog(confirmMsg, "Xác nhận",
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
             if (result != DialogResult.Yes) return;
 
             int studentId = UserSessionContext.CurrentUserId ?? 0;
             string message = _controller.DropCourse(courseId, studentId);
-            MessageBox.Show(message, "Kết quả", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MetaTheme.ShowModernDialog(message, "Kết quả", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
             // Reload
             _ = LoadEnrollments();

@@ -24,7 +24,7 @@ namespace CourseGuard.Frontend.Forms.Admin
 {
     public partial class AdminDashboard : Form
     {
-        private Dictionary<string, Func<UserControl>> _nav;
+        private Dictionary<string, Func<UserControl>> _nav = new();
         private UserModel? currentUser;
         private SidebarPanel _sidebar;
         private TopbarPanel _topbar;
@@ -102,7 +102,7 @@ namespace CourseGuard.Frontend.Forms.Admin
             };
         }
 
-        private void Sidebar_NavItemClicked(object sender, string pageName)
+        private void Sidebar_NavItemClicked(object? sender, string pageName)
         {
             if (pageName == "Logout")
             {
@@ -123,7 +123,7 @@ namespace CourseGuard.Frontend.Forms.Admin
 
         private void AdminOverview_QuickActionRequested(string target)
         {
-            string targetPage = target switch
+            string? targetPage = target switch
             {
                 "USERS"   => "Người dùng",
                 "COURSES" => "Khóa học",

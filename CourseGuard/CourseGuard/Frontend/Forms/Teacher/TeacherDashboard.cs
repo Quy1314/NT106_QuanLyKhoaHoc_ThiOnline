@@ -26,7 +26,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
     public partial class TeacherDashboard : Form
     {
         private Dictionary<string, Func<UserControl>> _nav = new();
-        private UserControl activeUserControl = null;
+        private UserControl? activeUserControl;
         private int _currentTeacherId = 0;
         private string _currentTeacherUsername = string.Empty;
         private SidebarPanel _sidebar;
@@ -136,7 +136,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             };
         }
 
-        private void Sidebar_NavItemClicked(object sender, string pageName)
+        private void Sidebar_NavItemClicked(object? sender, string pageName)
         {
             if (pageName == "Logout")
             {
@@ -330,7 +330,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             pnlEmailDropdown.BackColor = AppColors.BgCard;
             pnlEmailDropdown.Paint += (s, e) =>
             {
-                Panel pnl = (Panel)s;
+                if (s is not Panel pnl) return;
                 // Rule 26: nested border radii — inner = outer - padding
                 int radius = 16;
                 System.Drawing.Drawing2D.GraphicsPath path = new System.Drawing.Drawing2D.GraphicsPath();

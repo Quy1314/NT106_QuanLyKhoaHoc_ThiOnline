@@ -17,7 +17,7 @@ using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Student
 {
-    public partial class UC_CourseList : UserControl
+    public partial class UC_CourseList : UserControl, IStudentSearchTarget
     {
         private readonly AuthController _authController = new(new CourseGuardDbContext(""));
         private readonly CourseController _courseController = new(new CourseGuardDbContext(""));
@@ -136,18 +136,20 @@ namespace CourseGuard.Frontend.UserControls.Student
                 int studentId = UserSessionContext.CurrentUserId ?? 0;
                 if (studentId == 0)
                 {
-                    MessageBox.Show("Không xác định được tài khoản. Vui lòng đăng nhập lại.",
+                    MetaTheme.ShowModernDialog("Không xác định được tài khoản. Vui lòng đăng nhập lại.",
                         "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
                 _allCourses = await Task.Run(() => _controller.GetAvailableCourses(studentId));
-                txtSearch.Clear();
-                BindToGrid(_allCourses);
+                if (string.IsNullOrWhiteSpace(txtSearch.Text))
+                    BindToGrid(_allCourses);
+                else
+                    ApplySearch();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi tải dữ liệu: " + ex.Message,
+                MetaTheme.ShowModernDialog("Lỗi tải dữ liệu: " + ex.Message,
                     "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -174,6 +176,13 @@ namespace CourseGuard.Frontend.UserControls.Student
             ).ToList();
 
             BindToGrid(filtered);
+        }
+
+        public void ApplyGlobalSearch(string keyword)
+        {
+            txtSearch.Text = keyword ?? string.Empty;
+            if (_allCourses.Count > 0)
+                ApplySearch();
         }
 
         // ── Bind dữ liệu vào DataGridView ───────────────────────────────
@@ -372,7 +381,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             CourseModel? course = GetActiveCourse();
             if (course == null)
             {
-                MessageBox.Show("Vui lòng chọn một khóa học.", "Thông báo",
+                MetaTheme.ShowModernDialog("Vui lòng chọn một khóa học.", "Thông báo",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -404,7 +413,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             int courseId = course.Id;
             string courseName = course.Name;
 
-            var confirm = MessageBox.Show(
+            var confirm = MetaTheme.ShowModernDialog(
                 $"Bạn muốn đăng ký tham gia khóa học \"{courseName}\"?\n\n" +
                 $"Yêu cầu sẽ được gửi đến Admin/Giảng viên để duyệt.",
                 "Xác nhận đăng ký",
@@ -416,7 +425,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             int studentId = UserSessionContext.CurrentUserId ?? 0;
             string result = _controller.RequestEnrollment(courseId, studentId);
 
-            MessageBox.Show(result, "Kết quả", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MetaTheme.ShowModernDialog(result, "Kết quả", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
             // Reload để loại bỏ khóa học đã đăng ký khỏi danh sách
             LoadAvailableCourses();

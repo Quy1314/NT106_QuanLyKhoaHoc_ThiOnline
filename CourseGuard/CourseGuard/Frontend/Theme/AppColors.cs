@@ -260,7 +260,7 @@ namespace CourseGuard.Frontend.Theme
             }
             else if (c is ComboBox cb)
             {
-                StudentDropdownStyler.StyleComboBox(cb);
+                StudentDropdownStyler.StyleComboBox(cb, null, cb.Tag?.ToString() == "card-input");
             }
             else if (c is FlowLayoutPanel flp)
             {
@@ -293,7 +293,7 @@ namespace CourseGuard.Frontend.Theme
             }
             else if (c is TextBox tb)
             {
-                tb.BackColor = BgInput;
+                tb.BackColor = tb.Tag?.ToString() == "card-input" ? BgCard : BgInput;
                 tb.ForeColor = TextPrimary;
             }
             else if (c is RichTextBox rtb)

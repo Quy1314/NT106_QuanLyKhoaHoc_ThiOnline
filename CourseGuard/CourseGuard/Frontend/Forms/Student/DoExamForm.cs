@@ -18,7 +18,7 @@ namespace CourseGuard.Frontend.Forms.Student
             ApplyAcademicExamTheme();
             LoadDummyQuestionsBox();
             btnSubmit.Click += (s, e) => {
-                var res = MessageBox.Show("Bạn có chắc chắn muốn nộp bài không?", "Xác nhận", MessageBoxButtons.YesNo);
+                var res = MetaTheme.ShowModernDialog("Bạn có chắc chắn muốn nộp bài không?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (res == DialogResult.Yes)
                 {
                     int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;

@@ -367,26 +367,145 @@ namespace CourseGuard.Frontend.Theme
         private static void AddProfileForm(List<SkeletonShape> shapes, Rectangle c)
         {
             AddLine(shapes, c.Left, c.Top, Math.Min(220, c.Width), 30);
+            AddLine(shapes, c.Left, c.Top + 42, Math.Min(420, c.Width), 14);
 
-            int formTop = c.Top + 58;
-            int formWidth = Math.Min(400, c.Width);
-            int y = formTop;
+            int top = c.Top + 90;
+            if (top >= c.Bottom)
+                return;
+
+            bool twoColumns = c.Width >= 760;
+            int colWidth = twoColumns ? (c.Width - Gap) / 2 : c.Width;
+            int left = c.Left;
+            int right = twoColumns ? c.Left + colWidth + Gap : c.Left;
+
+            if (twoColumns)
+            {
+                Rectangle personal = new Rectangle(left, top, colWidth, Math.Min(420, Math.Max(240, c.Bottom - top)));
+                Rectangle academic = new Rectangle(right, top, colWidth, Math.Min(260, Math.Max(210, c.Bottom - top)));
+                AddProfilePersonalCard(shapes, personal);
+                AddProfileAcademicCard(shapes, academic);
+
+                int lowerTop = top + Math.Max(personal.Height, academic.Height) + Gap;
+                if (lowerTop < c.Bottom - 80)
+                {
+                    int lowerHeight = Math.Max(160, c.Bottom - lowerTop);
+                    Rectangle activity = new Rectangle(left, lowerTop, colWidth, lowerHeight);
+                    Rectangle security = new Rectangle(right, lowerTop, colWidth, lowerHeight);
+                    AddProfileActivityCard(shapes, activity);
+                    AddProfileSecurityCard(shapes, security);
+                }
+                return;
+            }
+
+            int y = top;
+            Rectangle personalCard = new Rectangle(left, y, colWidth, 390);
+            AddProfilePersonalCard(shapes, personalCard);
+            y = personalCard.Bottom + Gap;
+
+            if (y < c.Bottom - 120)
+            {
+                Rectangle academicCard = new Rectangle(left, y, colWidth, 250);
+                AddProfileAcademicCard(shapes, academicCard);
+                y = academicCard.Bottom + Gap;
+            }
+
+            if (y < c.Bottom - 100)
+                AddProfileSecurityCard(shapes, new Rectangle(left, y, colWidth, Math.Max(160, c.Bottom - y)));
+        }
+
+        private static void AddProfilePersonalCard(List<SkeletonShape> shapes, Rectangle card)
+        {
+            if (card.Width <= 0 || card.Height <= 0)
+                return;
+
+            shapes.Add(new SkeletonShape(card, RadiusLg));
+            int pad = 22;
+            Rectangle avatar = new Rectangle(card.Left + pad, card.Top + pad, 78, 78);
+            shapes.Add(new SkeletonShape(avatar, 39, SkeletonShapeType.Circle));
+            AddLine(shapes, avatar.Right + 18, card.Top + pad + 12, Math.Min(220, card.Right - avatar.Right - 40), 20);
+            AddLine(shapes, avatar.Right + 18, card.Top + pad + 46, Math.Min(140, card.Right - avatar.Right - 40), 14);
+            shapes.Add(new SkeletonShape(new Rectangle(avatar.Right + 18, card.Top + pad + 72, Math.Min(150, card.Right - avatar.Right - 40), 34), RadiusMd));
+
+            int y = card.Top + pad + 122;
+            for (int i = 0; i < 7 && y + 24 <= card.Bottom - 60; i++)
+            {
+                AddLine(shapes, card.Left + pad, y + 5, 110, 12);
+                AddLine(shapes, card.Left + pad + 140, y, Math.Min(230, card.Right - card.Left - pad * 2 - 140), 18);
+                y += 34;
+            }
+
+            if (card.Bottom - y > 48)
+                shapes.Add(new SkeletonShape(new Rectangle(card.Left + pad, card.Bottom - pad - 40, 170, 40), RadiusMd));
+        }
+
+        private static void AddProfileAcademicCard(List<SkeletonShape> shapes, Rectangle card)
+        {
+            if (card.Width <= 0 || card.Height <= 0)
+                return;
+
+            shapes.Add(new SkeletonShape(card, RadiusLg));
+            int pad = 22;
+            AddLine(shapes, card.Left + pad, card.Top + pad, Math.Min(190, card.Width - pad * 2), 20);
+
+            int metricTop = card.Top + pad + 52;
+            int metricGap = 12;
+            int metricWidth = Math.Max(80, (card.Width - pad * 2 - metricGap) / 2);
+            int metricHeight = 82;
             for (int i = 0; i < 4; i++)
             {
-                AddLine(shapes, c.Left, y, 120 + i * 8, 14);
-                shapes.Add(new SkeletonShape(new Rectangle(c.Left, y + 28, formWidth, 34), RadiusMd));
-                y += 80;
+                int col = i % 2;
+                int row = i / 2;
+                Rectangle metric = new Rectangle(card.Left + pad + col * (metricWidth + metricGap), metricTop + row * (metricHeight + metricGap), metricWidth, metricHeight);
+                if (metric.Bottom > card.Bottom - pad)
+                    continue;
+
+                shapes.Add(new SkeletonShape(metric, RadiusMd));
+                shapes.Add(new SkeletonShape(new Rectangle(metric.Left + 12, metric.Top + 14, 32, 32), 16, SkeletonShapeType.Circle));
+                AddLine(shapes, metric.Left + 54, metric.Top + 12, Math.Min(90, metric.Width - 68), 12);
+                AddLine(shapes, metric.Left + 54, metric.Top + 34, Math.Min(60, metric.Width - 68), 22);
+                AddLine(shapes, metric.Left + 54, metric.Top + 62, Math.Min(100, metric.Width - 68), 10);
             }
+        }
 
-            shapes.Add(new SkeletonShape(new Rectangle(c.Left, y + 20, Math.Min(150, formWidth), 40), RadiusMd));
+        private static void AddProfileActivityCard(List<SkeletonShape> shapes, Rectangle card)
+        {
+            if (card.Width <= 0 || card.Height <= 0)
+                return;
 
-            if (c.Width >= 660)
+            shapes.Add(new SkeletonShape(card, RadiusLg));
+            int pad = 22;
+            AddLine(shapes, card.Left + pad, card.Top + pad, Math.Min(190, card.Width - pad * 2), 20);
+
+            int y = card.Top + pad + 50;
+            for (int i = 0; i < 4 && y + 42 <= card.Bottom - pad; i++)
             {
-                int profileLeft = c.Left + formWidth + 96;
-                shapes.Add(new SkeletonShape(new Rectangle(profileLeft, formTop, 78, 78), 39, SkeletonShapeType.Circle));
-                AddLine(shapes, profileLeft, formTop + 100, Math.Min(220, c.Right - profileLeft), 20);
-                AddLine(shapes, profileLeft, formTop + 134, Math.Min(180, c.Right - profileLeft), 14);
+                shapes.Add(new SkeletonShape(new Rectangle(card.Left + pad, y + 6, 10, 10), 5, SkeletonShapeType.Circle));
+                AddLine(shapes, card.Left + pad + 24, y, Math.Min(260, card.Width - pad * 2 - 24), 14);
+                AddLine(shapes, card.Left + pad + 24, y + 24, Math.Min(130, card.Width - pad * 2 - 24), 10);
+                y += 52;
             }
+        }
+
+        private static void AddProfileSecurityCard(List<SkeletonShape> shapes, Rectangle card)
+        {
+            if (card.Width <= 0 || card.Height <= 0)
+                return;
+
+            shapes.Add(new SkeletonShape(card, RadiusLg));
+            int pad = 22;
+            AddLine(shapes, card.Left + pad, card.Top + pad, Math.Min(210, card.Width - pad * 2), 20);
+
+            int inputWidth = Math.Min(320, card.Width - pad * 2);
+            int y = card.Top + pad + 52;
+            for (int i = 0; i < 3 && y + 58 <= card.Bottom - pad; i++)
+            {
+                AddLine(shapes, card.Left + pad, y, Math.Min(170, inputWidth), 12);
+                shapes.Add(new SkeletonShape(new Rectangle(card.Left + pad, y + 24, inputWidth, 38), RadiusMd));
+                y += 76;
+            }
+
+            if (y + 40 <= card.Bottom - pad)
+                shapes.Add(new SkeletonShape(new Rectangle(card.Left + pad, y, Math.Min(150, inputWidth), 38), RadiusMd));
         }
 
         private static void AddCourseCard(List<SkeletonShape> shapes, Rectangle card)

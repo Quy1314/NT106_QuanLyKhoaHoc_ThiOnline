@@ -163,13 +163,13 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         // ── Tìm kiếm thời gian thực & Áp dụng lọc ──────────────────────────────
 
-        private void TxtSearch_TextChanged(object sender, EventArgs e)
+        private void TxtSearch_TextChanged(object? sender, EventArgs e)
         {
             if (txtSearch.Text.Contains("🔍")) return; // Skip giả định placeholder
             ApplyFilters();
         }
 
-        private void BtnFilterUnread_Click(object sender, EventArgs e)
+        private void BtnFilterUnread_Click(object? sender, EventArgs e)
         {
             _isFilteringUnread = !_isFilteringUnread;
 
@@ -337,7 +337,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             {
                 ctrl.MouseEnter += (s, e) =>
                 {
-                    NotificationModel notif = (NotificationModel)card.Tag;
+                    if (card.Tag is not NotificationModel notif) return;
                     if (notif.Id != _selectedNotificationId)
                         card.BackColor = ColorPalette.LightMode.Base; // Hover color
                 };
@@ -347,7 +347,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     Point clientPoint = card.PointToClient(Cursor.Position);
                     if (!card.ClientRectangle.Contains(clientPoint))
                     {
-                        NotificationModel notif = (NotificationModel)card.Tag;
+                        if (card.Tag is not NotificationModel notif) return;
                         card.BackColor = notif.Id == _selectedNotificationId 
                             ? ColorPalette.LightMode.Border 
                             : ColorPalette.LightMode.Secondary;
@@ -394,7 +394,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         private async System.Threading.Tasks.Task BtnMarkAsReadDetail_ClickAsync()
         {
-            NotificationModel notification = _allNotifications.FirstOrDefault(n => n.Id == _selectedNotificationId);
+            NotificationModel? notification = _allNotifications.FirstOrDefault(n => n.Id == _selectedNotificationId);
             if (notification == null) return;
 
             try
@@ -416,7 +416,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         private async System.Threading.Tasks.Task BtnDeleteDetail_ClickAsync()
         {
-            NotificationModel notification = _allNotifications.FirstOrDefault(n => n.Id == _selectedNotificationId);
+            NotificationModel? notification = _allNotifications.FirstOrDefault(n => n.Id == _selectedNotificationId);
             if (notification == null) return;
 
             var confirm = MessageBox.Show(

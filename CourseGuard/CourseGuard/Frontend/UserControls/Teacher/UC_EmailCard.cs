@@ -46,13 +46,13 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             }
         }
 
-        private void OnCardMouseEnter(object sender, EventArgs e)
+        private void OnCardMouseEnter(object? sender, EventArgs e)
         {
             this.BackColor = ColorPalette.LightMode.Base; // Slightly gray indicating hover
             this.Cursor = Cursors.Hand;
         }
 
-        private void OnCardMouseLeave(object sender, EventArgs e)
+        private void OnCardMouseLeave(object? sender, EventArgs e)
         {
             this.BackColor = ColorPalette.LightMode.Secondary;
             this.Cursor = Cursors.Default;

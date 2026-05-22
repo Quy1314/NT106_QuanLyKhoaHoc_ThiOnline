@@ -6,6 +6,7 @@
  */
 using System.ComponentModel;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
 namespace CourseGuard.Frontend.Theme
@@ -20,7 +21,12 @@ namespace CourseGuard.Frontend.Theme
         public int CornerRadius
         {
             get => _cornerRadius;
-            set { _cornerRadius = value; Invalidate(); }
+            set
+            {
+                _cornerRadius = value;
+                ApplyRoundedRegion();
+                Invalidate();
+            }
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -30,8 +36,9 @@ namespace CourseGuard.Frontend.Theme
             set { _borderColor = value; Invalidate(); }
         }
 
-        // We use FillColor instead of BackColor for the rounded interior
-        // because BackColor is set to Transparent to hide the rectangle corners.
+        // We use FillColor instead of BackColor for the rounded interior.
+        // BackColor stays opaque because some WinForms controls throw when
+        // placed under transparent parents during theme updates.
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color FillColor
         {
@@ -44,24 +51,84 @@ namespace CourseGuard.Frontend.Theme
             SetStyle(ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.AllPaintingInWmPaint |
                      ControlStyles.UserPaint |
-                     ControlStyles.SupportsTransparentBackColor, true);
-                     
-            this.BackColor = Color.Transparent;
+                     ControlStyles.ResizeRedraw, true);
+
+            BackColor = AppColors.BgBase;
             this.Tag = "custom"; // Prevents AppColors.ApplyTheme from overwriting BackColor
+        }
+
+        protected override void OnSizeChanged(System.EventArgs e)
+        {
+            base.OnSizeChanged(e);
+            ApplyRoundedRegion();
+        }
+
+        private void ApplyRoundedRegion()
+        {
+            if (Width <= 0 || Height <= 0 || IsDisposed)
+                return;
+
+            Region?.Dispose();
+            using var path = GraphicsHelpers.RoundedRect(new Rectangle(0, 0, Width, Height), _cornerRadius);
+            Region = new Region(path);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            // Completely skip base — we handle everything in OnPaint.
+            // This prevents WinForms from filling the rect with black.
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            base.OnPaint(e);
-            
-            // Deflate bounds by 1 pixel to ensure the 1px border is fully visible inside the control bounds
+            // DO NOT call base.OnPaint — it triggers the default background fill
+            // which paints black/Control color in the rectangular area, causing
+            // the corner artifact visible in dark mode.
+
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+            // Step 1: Fill the ENTIRE control rect with the parent's actual background.
+            // This ensures the corner areas outside the rounded rect match the parent.
+            Color parentBg = ResolveParentBackground(this.Parent);
+            using (var parentBrush = new SolidBrush(parentBg))
+                e.Graphics.FillRectangle(parentBrush, this.ClientRectangle);
+
+            // Step 2: Draw the rounded filled rectangle on top.
             Rectangle bounds = new Rectangle(0, 0, this.Width - 1, this.Height - 1);
-            
-            // Fill the rounded background
             GraphicsHelpers.FillRoundedRect(e.Graphics, bounds, _cornerRadius, _fillColor);
-            
-            // Draw the border
+
+            // Step 3: Draw the border.
             GraphicsHelpers.DrawRoundedBorder(e.Graphics, bounds, _cornerRadius, _borderColor, 1f);
+
+            // Step 4: Raise the Paint event so child controls can still subscribe.
+            // Use the protected OnPaint pattern without calling base.
+            // (We skip base.OnPaint to avoid the default background repaint.)
+        }
+
+        /// <summary>
+        /// Walk up the parent chain to find the actual visible background color,
+        /// skipping Transparent, SystemColors.Control, etc.
+        /// </summary>
+        internal static Color ResolveParentBackground(Control? control)
+        {
+            while (control != null)
+            {
+                if (control is RoundedPanel rp)
+                    return rp.FillColor;
+
+                var bg = control.BackColor;
+                if (!bg.IsEmpty && bg != Color.Transparent && bg.A == 255
+                    && bg.ToArgb() != SystemColors.Control.ToArgb()
+                    && bg.ToKnownColor() != KnownColor.Control
+                    && bg.ToArgb() != SystemColors.Window.ToArgb()
+                    && bg.ToKnownColor() != KnownColor.Window)
+                {
+                    return bg;
+                }
+                control = control.Parent;
+            }
+            return AppColors.BgBase;
         }
     }
 }

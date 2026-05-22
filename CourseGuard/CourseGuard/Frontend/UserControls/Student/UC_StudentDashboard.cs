@@ -1,20 +1,35 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Globalization;
+using System.Linq;
 using System.Windows.Forms;
+using CourseGuard.Backend.Data;
+using CourseGuard.Backend.Models;
+using CourseGuard.Backend.Security;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Student
 {
     public partial class UC_StudentDashboard : UserControl
     {
+        private readonly CourseGuardDbContext _dbContext = new("");
+        private readonly NotificationRepository _notificationRepository = new();
+
         private TableLayoutPanel _rootGrid = null!;
         private TableLayoutPanel _statsGrid = null!;
         private TableLayoutPanel _contentGrid = null!;
         private RoundedPanel _noticePanel = null!;
         private RoundedPanel _activityPanel = null!;
+        private RoundedPanel _noticeBody = null!;
+        private Label _noticeEmptyLabel = null!;
         private FlowLayoutPanel _activityList = null!;
+        private StatCard _courseCard = null!;
+        private StatCard _examCard = null!;
+        private StatCard _notificationCard = null!;
+        private StatCard _averageScoreCard = null!;
 
         public UC_StudentDashboard()
         {
@@ -28,14 +43,57 @@ namespace CourseGuard.Frontend.UserControls.Student
             this.ShowSkeleton(SkeletonType.StudentOverviewDashboard);
             try
             {
-                await System.Threading.Tasks.Task.Delay(600);
-                LoadDummyData();
-                ApplyAcademicStyle();
+                DashboardData data = await System.Threading.Tasks.Task.Run(LoadDashboardData);
+                ApplyDashboardData(data);
+            }
+            catch (Exception ex)
+            {
+                ApplyDashboardData(DashboardData.Error($"Không thể tải dữ liệu: {ex.Message}"));
             }
             finally
             {
                 this.HideSkeleton();
             }
+        }
+
+        private DashboardData LoadDashboardData()
+        {
+            int userId = UserSessionContext.CurrentUserId ?? 0;
+            if (userId <= 0)
+                return DashboardData.Error("Không xác định được tài khoản học sinh.");
+
+            int courseCount = SafeCount(() => _dbContext.CountActiveEnrollments(userId));
+            int openOrUpcomingExamCount = SafeCount(() => _dbContext.CountAvailableExamsForStudent(userId));
+            int completedExamCount = SafeCount(() => _dbContext.CountCompletedExamsForStudent(userId));
+            double? averageScore = SafeNullableDouble(() => _dbContext.GetStudentExamAverageScore(userId));
+
+            List<NotificationModel> notifications = SafeList(() => _notificationRepository
+                .LoadByUserId(userId)
+                .OrderByDescending(n => n.CreatedAt)
+                .Take(6)
+                .ToList());
+            int unreadNotificationCount = notifications.Count(n => !n.IsRead);
+
+            List<RecentUserActivityModel> logs = SafeList(() => _dbContext.GetRecentUserActivitiesByUser(userId, 8));
+            List<EnrollmentModel> enrollments = SafeList(() => _dbContext.GetEnrollmentsByStudent(userId));
+
+            List<ActivityRow> activities = logs
+                .Select(ToActivityRow)
+                .Concat(DeriveActivities(enrollments, notifications))
+                .OrderByDescending(a => a.CreatedAt)
+                .Take(6)
+                .ToList();
+
+            return new DashboardData
+            {
+                CourseCount = courseCount,
+                ExamCount = openOrUpcomingExamCount > 0 ? openOrUpcomingExamCount : completedExamCount,
+                HasOpenOrUpcomingExams = openOrUpcomingExamCount > 0,
+                NotificationCount = unreadNotificationCount,
+                AverageScore = averageScore,
+                Notifications = notifications,
+                Activities = activities
+            };
         }
 
         private void BuildOverviewLayout()
@@ -62,6 +120,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             lblTitle.AutoSize = false;
             lblTitle.Dock = DockStyle.Fill;
             lblTitle.Margin = Padding.Empty;
+            lblTitle.Text = "Tổng quan cá nhân";
             lblTitle.TextAlign = ContentAlignment.MiddleLeft;
             lblTitle.Font = new Font("Segoe UI", 18f, FontStyle.Bold);
             lblTitle.ForeColor = AppColors.TextPrimary;
@@ -78,10 +137,10 @@ namespace CourseGuard.Frontend.UserControls.Student
                 _statsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
             _statsGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
-            AddStatCard(0, "Khóa học", "4", "course", "Đang tham gia", true);
-            AddStatCard(1, "Bài thi", "2", "exam", "Sắp tới", true);
-            AddStatCard(2, "Thông báo", "3", "notice", "Mới gần đây", true);
-            AddStatCard(3, "Điểm TB", "8.4", "score", "Học kỳ này", true);
+            _courseCard = AddStatCard(0, "Khóa học", "0", "course", "Đang tham gia");
+            _examCard = AddStatCard(1, "Bài thi", "0", "exam", "Đang/sắp mở");
+            _notificationCard = AddStatCard(2, "Thông báo", "0", "notice", "Chưa đọc");
+            _averageScoreCard = AddStatCard(3, "Điểm TB", "N/A", "score", "Bài đã chấm");
 
             _contentGrid = new TableLayoutPanel
             {
@@ -116,7 +175,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             ResumeLayout(true);
         }
 
-        private void AddStatCard(int column, string title, string value, string icon, string caption, bool trendUp)
+        private StatCard AddStatCard(int column, string title, string value, string icon, string caption)
         {
             var card = new StatCard
             {
@@ -125,12 +184,15 @@ namespace CourseGuard.Frontend.UserControls.Student
                 Title = title,
                 Value = value,
                 IconChar = icon,
-                TrendPercent = trendUp ? "Ổn định" : "Cần chú ý",
-                TrendUp = trendUp,
-                Caption = caption
+                TrendPercent = caption,
+                ShowStatusArrow = false,
+                StatusTone = StatCardStatusTone.Neutral,
+                Caption = string.Empty,
+                MiniChartValues = null
             };
 
             _statsGrid.Controls.Add(card, column, 0);
+            return card;
         }
 
         private void BuildNoticePanel()
@@ -151,6 +213,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             lblRecentNotices.AutoSize = false;
             lblRecentNotices.Dock = DockStyle.Fill;
             lblRecentNotices.Margin = Padding.Empty;
+            lblRecentNotices.Text = "Thông báo gần đây";
             lblRecentNotices.TextAlign = ContentAlignment.MiddleLeft;
             lblRecentNotices.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
             lblRecentNotices.ForeColor = AppColors.TextPrimary;
@@ -165,8 +228,33 @@ namespace CourseGuard.Frontend.UserControls.Student
             dgvRecentNotices.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvRecentNotices.MultiSelect = false;
 
+            _noticeBody = new RoundedPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                FillColor = AppColors.IsDarkMode ? AppColors.BgCardHover : ColorTranslator.FromHtml("#F8FAFC"),
+                BorderColor = AppColors.Border,
+                CornerRadius = 12,
+                Padding = new Padding(18)
+            };
+
+            _noticeEmptyLabel = new Label
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ForeColor = AppColors.TextMuted,
+                Font = AppFonts.Body,
+                Text = "Chưa có thông báo gần đây",
+                TextAlign = ContentAlignment.MiddleCenter,
+                Visible = false,
+                UseCompatibleTextRendering = false
+            };
+
+            _noticeBody.Controls.Add(dgvRecentNotices);
+            _noticeBody.Controls.Add(_noticeEmptyLabel);
+
             panelGrid.Controls.Add(lblRecentNotices, 0, 0);
-            panelGrid.Controls.Add(dgvRecentNotices, 0, 1);
+            panelGrid.Controls.Add(_noticeBody, 0, 1);
             _noticePanel.Controls.Add(panelGrid);
         }
 
@@ -204,22 +292,134 @@ namespace CourseGuard.Frontend.UserControls.Student
                 BackColor = Color.Transparent,
                 Padding = new Padding(0)
             };
-
-            AddActivityItem("Nộp bài OOP", "Hôm nay", AppColors.Success);
-            AddActivityItem("Lịch thi Mạng máy tính", "01/04/2026", AppColors.Warning);
-            AddActivityItem("Tài liệu C# mới", "28/03/2026", AppColors.AccentBlue);
+            _activityList.Resize += (_, _) => ResizeActivityItems();
 
             panelGrid.Controls.Add(title, 0, 0);
             panelGrid.Controls.Add(_activityList, 0, 1);
             _activityPanel.Controls.Add(panelGrid);
         }
 
+        private void ApplyDashboardData(DashboardData data)
+        {
+            _courseCard.Value = data.CourseCount.ToString(CultureInfo.InvariantCulture);
+            ApplyCardState(_courseCard, "Đang tham gia", data.CourseCount > 0 ? StatCardStatusTone.Positive : StatCardStatusTone.Neutral);
+
+            _examCard.Value = data.ExamCount.ToString(CultureInfo.InvariantCulture);
+            string examStatus = data.ExamCount <= 0
+                ? "Không có bài mở"
+                : data.HasOpenOrUpcomingExams ? "Sắp tới" : "Đã làm";
+            ApplyCardState(_examCard, examStatus, data.HasOpenOrUpcomingExams ? StatCardStatusTone.Warning : data.ExamCount > 0 ? StatCardStatusTone.Positive : StatCardStatusTone.Neutral);
+
+            _notificationCard.Value = data.NotificationCount.ToString(CultureInfo.InvariantCulture);
+            ApplyCardState(_notificationCard,
+                data.NotificationCount > 0 ? $"Có {data.NotificationCount} thông báo mới" : "Không có thông báo mới",
+                data.NotificationCount > 0 ? StatCardStatusTone.Warning : StatCardStatusTone.Neutral);
+
+            _averageScoreCard.Value = data.AverageScore.HasValue
+                ? data.AverageScore.Value.ToString("0.0", CultureInfo.InvariantCulture)
+                : "N/A";
+            ApplyCardState(_averageScoreCard,
+                data.AverageScore.HasValue ? "Bài đã chấm" : "Chưa có điểm",
+                data.AverageScore.HasValue ? StatCardStatusTone.Positive : StatCardStatusTone.Neutral);
+
+            BindNotifications(data);
+            BindActivities(data);
+            ApplyAcademicStyle();
+        }
+
+        private static void ApplyCardState(StatCard card, string statusText, StatCardStatusTone tone)
+        {
+            card.TrendPercent = statusText;
+            card.ShowStatusArrow = false;
+            card.StatusTone = tone;
+            card.Caption = string.Empty;
+            card.MiniChartValues = null;
+        }
+
+        private void BindNotifications(DashboardData data)
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("Thời gian", typeof(string));
+            dt.Columns.Add("Tiêu đề", typeof(string));
+            dt.Columns.Add("Nguồn", typeof(string));
+
+            if (!string.IsNullOrWhiteSpace(data.ErrorMessage))
+            {
+                ShowNoticeEmptyState(data.ErrorMessage, AppColors.Warning);
+                return;
+            }
+            else if (data.Notifications.Count == 0)
+            {
+                ShowNoticeEmptyState("Chưa có thông báo gần đây", AppColors.TextMuted);
+                return;
+            }
+            else
+            {
+                foreach (NotificationModel notification in data.Notifications)
+                {
+                    dt.Rows.Add(
+                        FormatDateTime(notification.CreatedAt),
+                        notification.Title,
+                        InferNotificationSource(notification));
+                }
+            }
+
+            dgvRecentNotices.DataSource = dt;
+            dgvRecentNotices.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            _noticeBody.Padding = Padding.Empty;
+            _noticeBody.FillColor = AppColors.BgCard;
+            _noticeBody.BorderColor = Color.Transparent;
+            dgvRecentNotices.Visible = true;
+            _noticeEmptyLabel.Visible = false;
+            dgvRecentNotices.BringToFront();
+            dgvRecentNotices.ClearSelection();
+            dgvRecentNotices.CurrentCell = null;
+        }
+
+        private void ShowNoticeEmptyState(string message, Color color)
+        {
+            dgvRecentNotices.DataSource = null;
+            dgvRecentNotices.Visible = false;
+            _noticeBody.Padding = new Padding(18);
+            _noticeBody.FillColor = AppColors.IsDarkMode ? AppColors.BgCardHover : ColorTranslator.FromHtml("#F8FAFC");
+            _noticeBody.BorderColor = AppColors.Border;
+            _noticeBody.Invalidate();
+            _noticeEmptyLabel.Text = message;
+            _noticeEmptyLabel.ForeColor = color;
+            _noticeEmptyLabel.Visible = true;
+            _noticeEmptyLabel.BringToFront();
+        }
+
+        private void BindActivities(DashboardData data)
+        {
+            _activityList.SuspendLayout();
+            _activityList.Controls.Clear();
+
+            if (!string.IsNullOrWhiteSpace(data.ErrorMessage))
+            {
+                AddActivityItem("Không thể tải hoạt động gần đây", "", AppColors.Warning);
+            }
+            else if (data.Activities.Count == 0)
+            {
+                AddActivityItem("Chưa có hoạt động gần đây", "", AppColors.TextMuted);
+            }
+            else
+            {
+                foreach (ActivityRow activity in data.Activities)
+                    AddActivityItem(activity.Title, FormatDateTime(activity.CreatedAt), activity.Accent);
+            }
+
+            _activityList.ResumeLayout(true);
+            ResizeActivityItems();
+        }
+
         private void AddActivityItem(string title, string time, Color accent)
         {
+            int itemWidth = Math.Max(180, _activityList.ClientSize.Width - 18);
             var item = new Panel
             {
-                Width = 280,
-                Height = 58,
+                Width = itemWidth,
+                Height = string.IsNullOrWhiteSpace(time) ? 44 : 58,
                 Margin = new Padding(0, 0, 0, 12),
                 BackColor = Color.Transparent
             };
@@ -234,24 +434,41 @@ namespace CourseGuard.Frontend.UserControls.Student
             {
                 Text = title,
                 Location = new Point(22, 4),
-                Size = new Size(240, 24),
+                Size = new Size(Math.Max(120, itemWidth - 34), 24),
                 Font = AppFonts.Button,
                 ForeColor = AppColors.TextPrimary,
-                BackColor = Color.Transparent
+                BackColor = Color.Transparent,
+                AutoEllipsis = true
             };
             var meta = new Label
             {
                 Text = time,
                 Location = new Point(22, 30),
-                Size = new Size(240, 20),
+                Size = new Size(Math.Max(120, itemWidth - 34), 20),
                 Font = AppFonts.Caption,
                 ForeColor = AppColors.TextSecondary,
-                BackColor = Color.Transparent
+                BackColor = Color.Transparent,
+                AutoEllipsis = true
             };
 
             item.Controls.Add(lbl);
-            item.Controls.Add(meta);
+            if (!string.IsNullOrWhiteSpace(time))
+                item.Controls.Add(meta);
             _activityList.Controls.Add(item);
+        }
+
+        private void ResizeActivityItems()
+        {
+            if (_activityList == null)
+                return;
+
+            int itemWidth = Math.Max(180, _activityList.ClientSize.Width - 18);
+            foreach (Control item in _activityList.Controls)
+            {
+                item.Width = itemWidth;
+                foreach (Control child in item.Controls)
+                    child.Width = Math.Max(120, itemWidth - 34);
+            }
         }
 
         private static RoundedPanel CreatePanelCard()
@@ -284,6 +501,16 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             lblTitle.ForeColor = AppColors.TextPrimary;
             lblRecentNotices.ForeColor = AppColors.TextPrimary;
+            if (_noticeEmptyLabel != null)
+                _noticeEmptyLabel.ForeColor = AppColors.TextMuted;
+            if (_noticeBody != null)
+            {
+                _noticeBody.FillColor = dgvRecentNotices.Visible
+                    ? AppColors.BgCard
+                    : (AppColors.IsDarkMode ? AppColors.BgCardHover : ColorTranslator.FromHtml("#F8FAFC"));
+                _noticeBody.BorderColor = dgvRecentNotices.Visible ? Color.Transparent : AppColors.Border;
+                _noticeBody.Invalidate();
+            }
             AcademicTheme.StyleGrid(dgvRecentNotices);
             AppColors.ApplyTheme(this);
             dgvRecentNotices.ClearSelection();
@@ -298,6 +525,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             RebuildColumnStyles(_statsGrid, compact ? 2 : 4);
             RebuildContentGrid(compact);
+            ResizeActivityItems();
         }
 
         private void RebuildContentGrid(bool compact)
@@ -356,20 +584,177 @@ namespace CourseGuard.Frontend.UserControls.Student
             grid.ResumeLayout(true);
         }
 
-        private void LoadDummyData()
+        private static List<ActivityRow> DeriveActivities(
+            List<EnrollmentModel> enrollments,
+            List<NotificationModel> notifications)
         {
-            DataTable dt = new DataTable();
-            dt.Columns.Add("Thời gian", typeof(string));
-            dt.Columns.Add("Tiêu đề", typeof(string));
-            dt.Columns.Add("Khóa học", typeof(string));
+            var rows = new List<ActivityRow>();
 
-            dt.Rows.Add("02/04/2026", "Bài tập mới: OOP Cơ bản", "Lập trình C#");
-            dt.Rows.Add("01/04/2026", "Nhắc nhở: Lịch thi giữa kỳ", "Mạng máy tính");
-            dt.Rows.Add("28/03/2026", "Cập nhật tài liệu mới", "Lập trình C#");
+            rows.AddRange(enrollments
+                .Where(e => e.JoinedAt != DateTime.MinValue)
+                .Select(e => new ActivityRow
+                {
+                    CreatedAt = e.JoinedAt,
+                    Title = BuildEnrollmentActivityTitle(e),
+                    Accent = IsActiveEnrollment(e.Status) ? AppColors.Success : AppColors.Warning
+                }));
 
-            dgvRecentNotices.DataSource = dt;
-            dgvRecentNotices.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            dgvRecentNotices.ClearSelection();
+            rows.AddRange(notifications.Select(n => new ActivityRow
+            {
+                CreatedAt = n.CreatedAt,
+                Title = $"Nhận thông báo: {n.Title}",
+                Accent = AppColors.AccentBlue
+            }));
+
+            return rows
+                .OrderByDescending(a => a.CreatedAt)
+                .ToList();
+        }
+
+        private static ActivityRow ToActivityRow(RecentUserActivityModel activity)
+        {
+            return new ActivityRow
+            {
+                CreatedAt = activity.CreatedAt,
+                Title = TranslateActivity(activity),
+                Accent = GetActivityAccent(activity.Action)
+            };
+        }
+
+        private static string BuildEnrollmentActivityTitle(EnrollmentModel enrollment)
+        {
+            string courseName = string.IsNullOrWhiteSpace(enrollment.CourseName)
+                ? "khóa học"
+                : enrollment.CourseName.Trim();
+
+            return IsActiveEnrollment(enrollment.Status)
+                ? $"Được duyệt vào khóa học {courseName}"
+                : $"Gửi yêu cầu tham gia khóa học {courseName}";
+        }
+
+        private static bool IsActiveEnrollment(string? status)
+        {
+            return string.Equals(status, "ACTIVE", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(status, "APPROVED", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string TranslateActivity(RecentUserActivityModel activity)
+        {
+            string title = (activity.Action ?? string.Empty).ToUpperInvariant() switch
+            {
+                "LOGIN" => "Đăng nhập hệ thống",
+                "LOGOUT" => "Đăng xuất hệ thống",
+                "COURSE_ENROLL_REQUEST" => "Gửi yêu cầu tham gia khóa học",
+                "COURSE_ENROLL" => "Được duyệt vào khóa học",
+                "ONLINE_SESSION_JOIN" => "Tham gia lớp học trực tuyến",
+                "ONLINE_SESSION_EXIT" => "Rời lớp học trực tuyến",
+                "EXAM_JOIN" => "Bắt đầu làm bài kiểm tra",
+                "EXAM_SUBMIT" => "Nộp bài kiểm tra",
+                "EXAM_EXIT" => "Thoát màn hình làm bài kiểm tra",
+                "CHANGE_PASSWORD" => "Đổi mật khẩu",
+                "CHAT_USE" => "Trao đổi trong lớp học",
+                _ => "Cập nhật hoạt động"
+            };
+
+            string details = CleanDetails(activity.Details);
+            return string.IsNullOrWhiteSpace(details) ? title : $"{title} - {details}";
+        }
+
+        private static string CleanDetails(string? details)
+        {
+            if (string.IsNullOrWhiteSpace(details))
+                return string.Empty;
+
+            string value = details.Trim();
+            return value.Length > 72 ? value[..72] + "..." : value;
+        }
+
+        private static Color GetActivityAccent(string? action)
+        {
+            return (action ?? string.Empty).ToUpperInvariant() switch
+            {
+                "LOGIN" or "COURSE_ENROLL" or "EXAM_SUBMIT" => AppColors.Success,
+                "COURSE_ENROLL_REQUEST" or "EXAM_JOIN" or "ONLINE_SESSION_JOIN" => AppColors.Warning,
+                "LOGOUT" or "EXAM_EXIT" or "ONLINE_SESSION_EXIT" => AppColors.TextMuted,
+                _ => AppColors.AccentBlue
+            };
+        }
+
+        private static string InferNotificationSource(NotificationModel notification)
+        {
+            string text = $"{notification.Title} {notification.Content}".ToLowerInvariant();
+            if (text.Contains("bài") || text.Contains("thi") || text.Contains("kiểm tra"))
+                return "Bài kiểm tra";
+            if (text.Contains("khóa") || text.Contains("lớp") || text.Contains("course"))
+                return "Khóa học";
+            if (text.Contains("tài liệu"))
+                return "Tài liệu";
+            return "Hệ thống";
+        }
+
+        private static string FormatDateTime(DateTime value)
+        {
+            return value == DateTime.MinValue ? "" : value.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+        }
+
+        private static int SafeCount(Func<int> getter)
+        {
+            try
+            {
+                return Math.Max(0, getter());
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static double? SafeNullableDouble(Func<double?> getter)
+        {
+            try
+            {
+                return getter();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static List<T> SafeList<T>(Func<List<T>> getter)
+        {
+            try
+            {
+                return getter() ?? new List<T>();
+            }
+            catch
+            {
+                return new List<T>();
+            }
+        }
+
+        private sealed class DashboardData
+        {
+            public int CourseCount { get; set; }
+            public int ExamCount { get; set; }
+            public bool HasOpenOrUpcomingExams { get; set; }
+            public int NotificationCount { get; set; }
+            public double? AverageScore { get; set; }
+            public List<NotificationModel> Notifications { get; set; } = new();
+            public List<ActivityRow> Activities { get; set; } = new();
+            public string ErrorMessage { get; set; } = string.Empty;
+
+            public static DashboardData Error(string message)
+            {
+                return new DashboardData { ErrorMessage = message };
+            }
+        }
+
+        private sealed class ActivityRow
+        {
+            public DateTime CreatedAt { get; set; }
+            public string Title { get; set; } = string.Empty;
+            public Color Accent { get; set; }
         }
     }
 }

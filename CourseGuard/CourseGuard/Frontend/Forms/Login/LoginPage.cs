@@ -797,7 +797,7 @@ namespace CourseGuard.Frontend.Forms.Login
                 // Login Success
                 finalUser.Role = normalizedRole;
                 CurrentUser = finalUser;
-                UserSessionContext.SetCurrentUser(finalUser.Id, finalUser.Role, finalUser.Username);
+                UserSessionContext.SetCurrentUser(finalUser.Id, finalUser.Role, finalUser.Username, finalUser.FullName);
 
                 // Non-blocking post-login tasks
                 _ = RunPostLoginTasksAsync(finalUser, ipAddress);

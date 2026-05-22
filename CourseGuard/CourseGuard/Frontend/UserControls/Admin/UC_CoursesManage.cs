@@ -76,7 +76,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             WireStudentApprovalEvents();
         }
 
-        private async void UC_CoursesManage_VisibleChanged(object sender, EventArgs e)
+        private async void UC_CoursesManage_VisibleChanged(object? sender, EventArgs e)
         {
             if (this.Visible)
             {
@@ -140,17 +140,20 @@ namespace CourseGuard.Frontend.UserControls.Admin
             dgvCourses.DataSource = courses;
 
             // Adjust columns if needed
-            if (dgvCourses.Columns["TeacherId"] != null) dgvCourses.Columns["TeacherId"].Visible = false;
-            if (dgvCourses.Columns["CreatedAt"] != null) dgvCourses.Columns["CreatedAt"].Visible = false;
+            if (dgvCourses.Columns["TeacherId"] is DataGridViewColumn teacherIdColumn) teacherIdColumn.Visible = false;
+            if (dgvCourses.Columns["CreatedAt"] is DataGridViewColumn createdAtColumn) createdAtColumn.Visible = false;
 
             // Headers (Optional customization)
-            if (dgvCourses.Columns["Id"] != null) dgvCourses.Columns["Id"].HeaderText = "ID";
+#pragma warning disable CS8602
+            if (dgvCourses.Columns["Id"] is DataGridViewColumn idColumn) idColumn.HeaderText = "ID";
             if (dgvCourses.Columns["Name"] != null) dgvCourses.Columns["Name"].HeaderText = "Tên Khóa Học";
             if (dgvCourses.Columns["Description"] != null) dgvCourses.Columns["Description"].HeaderText = "Mô Tả";
             if (dgvCourses.Columns["TeacherName"] != null) dgvCourses.Columns["TeacherName"].HeaderText = "Giáo Viên";
             if (dgvCourses.Columns["Status"] != null) dgvCourses.Columns["Status"].HeaderText = "Trạng Thái";
             if (dgvCourses.Columns["StartDate"] != null) dgvCourses.Columns["StartDate"].HeaderText = "Ngày Bắt Đầu";
             if (dgvCourses.Columns["EndDate"] != null) dgvCourses.Columns["EndDate"].HeaderText = "Ngày Kết Thúc";
+
+#pragma warning restore CS8602
 
             // Reuse same source to avoid duplicate query
             cboSelectCourse.DataSource = courses.ToList();
@@ -159,7 +162,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             cboSelectCourse.SelectedIndex = -1;
         }
 
-        private void dgvCourses_CellClick(object sender, DataGridViewCellEventArgs e)
+        private void dgvCourses_CellClick(object? sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex >= 0)
             {
@@ -184,7 +187,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
         }
 
-        private async void btnAddCourse_Click(object sender, EventArgs e)
+        private async void btnAddCourse_Click(object? sender, EventArgs e)
         {
             if (!ValidateInputs()) return;
 
@@ -192,7 +195,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             {
                 Name = txtCourseName.Text.Trim(),
                 Description = txtDescription.Text.Trim(),
-                TeacherId = (int)cboTeacher.SelectedValue,
+                TeacherId = Convert.ToInt32(cboTeacher.SelectedValue),
                 Status = cboStatus.Text, // "Active" or "Closed"
                 StartDate = dtpStartDate.Value,
                 EndDate = dtpEndDate.Value
@@ -221,7 +224,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
         }
 
-        private async void btnUpdateCourse_Click(object sender, EventArgs e)
+        private async void btnUpdateCourse_Click(object? sender, EventArgs e)
         {
             if (_selectedCourseId == -1)
             {
@@ -235,7 +238,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Id = _selectedCourseId,
                 Name = txtCourseName.Text.Trim(),
                 Description = txtDescription.Text.Trim(),
-                TeacherId = (int)cboTeacher.SelectedValue,
+                TeacherId = Convert.ToInt32(cboTeacher.SelectedValue),
                 Status = cboStatus.Text,
                 StartDate = dtpStartDate.Value,
                 EndDate = dtpEndDate.Value
@@ -260,7 +263,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
         }
 
-        private async void btnDeleteCourse_Click(object sender, EventArgs e)
+        private async void btnDeleteCourse_Click(object? sender, EventArgs e)
         {
             if (_selectedCourseId == -1)
             {
@@ -293,7 +296,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
         }
         
-        private async void btnAddStudent_Click(object sender, EventArgs e)
+        private async void btnAddStudent_Click(object? sender, EventArgs e)
         {
             if (cboSelectCourse.SelectedValue == null)
             {

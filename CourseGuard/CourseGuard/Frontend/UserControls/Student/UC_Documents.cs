@@ -14,7 +14,7 @@ using Npgsql;
 
 namespace CourseGuard.Frontend.UserControls.Student
 {
-    public class UC_Documents : UserControl
+    public class UC_Documents : UserControl, IStudentSearchTarget
     {
         private readonly CourseGuardDbContext _dbContext = new("");
         private readonly BindingSource _bindingSource = new();
@@ -205,7 +205,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 int studentId = UserSessionContext.CurrentUserId ?? 0;
                 if (studentId == 0)
                 {
-                    MessageBox.Show("Không xác định được tài khoản. Vui lòng đăng nhập lại.",
+                    MetaTheme.ShowModernDialog("Không xác định được tài khoản. Vui lòng đăng nhập lại.",
                         "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
@@ -219,7 +219,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi tải tài liệu: " + ex.Message,
+                MetaTheme.ShowModernDialog("Lỗi tải tài liệu: " + ex.Message,
                     "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -314,6 +314,13 @@ namespace CourseGuard.Frontend.UserControls.Student
             BindToGrid(filtered.ToList());
         }
 
+        public void ApplyGlobalSearch(string keyword)
+        {
+            txtSearch.Text = keyword ?? string.Empty;
+            if (_documents.Count > 0)
+                ApplyFilter();
+        }
+
         private void BindToGrid(List<StudentDocumentRow> rows)
         {
             DataTable table = new();
@@ -370,7 +377,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Không thể mở hoặc tải tài liệu: " + ex.Message,
+                MetaTheme.ShowModernDialog("Không thể mở hoặc tải tài liệu: " + ex.Message,
                     "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }

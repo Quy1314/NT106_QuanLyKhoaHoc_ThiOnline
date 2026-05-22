@@ -152,6 +152,698 @@ namespace CourseGuard.Backend.Data
             command.ExecuteNonQuery();
         }
 
+        private static void EnsureStudentProfileSchema(NpgsqlConnection connection)
+        {
+            const string sql = @"
+                CREATE TABLE IF NOT EXISTS student_profiles (
+                    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                    phone TEXT,
+                    address TEXT,
+                    major TEXT,
+                    gender TEXT,
+                    birth_date DATE,
+                    bio TEXT,
+                    avatar_path TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );";
+
+            using var command = new NpgsqlCommand(sql, connection);
+            command.ExecuteNonQuery();
+        }
+
+        public StudentProfileModel? GetStudentProfile(int userId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureStudentProfileSchema(connection);
+
+            const string query = @"
+                SELECT u.id,
+                       COALESCE(u.full_name, ''),
+                       COALESCE(u.email, ''),
+                       COALESCE(sp.phone, ''),
+                       COALESCE(sp.address, ''),
+                       COALESCE(sp.major, ''),
+                       COALESCE(sp.gender, ''),
+                       sp.birth_date,
+                       COALESCE(sp.bio, ''),
+                       COALESCE(sp.avatar_path, '')
+                FROM users u
+                LEFT JOIN student_profiles sp ON sp.user_id = u.id
+                WHERE u.id = @user_id";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+
+            using var reader = command.ExecuteReader(CommandBehavior.SingleRow);
+            if (!reader.Read())
+                return null;
+
+            return new StudentProfileModel
+            {
+                UserId = reader.GetInt32(0),
+                FullName = reader.GetString(1),
+                Email = reader.GetString(2),
+                Phone = reader.GetString(3),
+                Address = reader.GetString(4),
+                Major = reader.GetString(5),
+                Gender = reader.GetString(6),
+                BirthDate = reader.IsDBNull(7) ? null : reader.GetDateTime(7),
+                Bio = reader.GetString(8),
+                AvatarPath = reader.GetString(9)
+            };
+        }
+
+        public bool UpsertStudentProfile(StudentProfileModel profile)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureStudentProfileSchema(connection);
+
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                const string updateUserSql = @"
+                    UPDATE users
+                    SET full_name = @full_name,
+                        email = @email
+                    WHERE id = @user_id";
+
+                using (var updateUser = new NpgsqlCommand(updateUserSql, connection, transaction))
+                {
+                    updateUser.Parameters.AddWithValue("@user_id", profile.UserId);
+                    updateUser.Parameters.AddWithValue("@full_name", string.IsNullOrWhiteSpace(profile.FullName) ? DBNull.Value : profile.FullName);
+                    updateUser.Parameters.AddWithValue("@email", string.IsNullOrWhiteSpace(profile.Email) ? DBNull.Value : profile.Email);
+                    updateUser.ExecuteNonQuery();
+                }
+
+                const string upsertProfileSql = @"
+                    INSERT INTO student_profiles (user_id, phone, address, major, gender, birth_date, bio, avatar_path, updated_at)
+                    VALUES (@user_id, @phone, @address, @major, @gender, @birth_date, @bio, @avatar_path, CURRENT_TIMESTAMP)
+                    ON CONFLICT (user_id)
+                    DO UPDATE SET phone = EXCLUDED.phone,
+                                  address = EXCLUDED.address,
+                                  major = EXCLUDED.major,
+                                  gender = EXCLUDED.gender,
+                                  birth_date = EXCLUDED.birth_date,
+                                  bio = EXCLUDED.bio,
+                                  avatar_path = EXCLUDED.avatar_path,
+                                  updated_at = CURRENT_TIMESTAMP";
+
+                using (var upsertProfile = new NpgsqlCommand(upsertProfileSql, connection, transaction))
+                {
+                    upsertProfile.Parameters.AddWithValue("@user_id", profile.UserId);
+                    upsertProfile.Parameters.AddWithValue("@phone", string.IsNullOrWhiteSpace(profile.Phone) ? DBNull.Value : profile.Phone);
+                    upsertProfile.Parameters.AddWithValue("@address", string.IsNullOrWhiteSpace(profile.Address) ? DBNull.Value : profile.Address);
+                    upsertProfile.Parameters.AddWithValue("@major", string.IsNullOrWhiteSpace(profile.Major) ? DBNull.Value : profile.Major);
+                    upsertProfile.Parameters.AddWithValue("@gender", string.IsNullOrWhiteSpace(profile.Gender) ? DBNull.Value : profile.Gender);
+                    upsertProfile.Parameters.AddWithValue("@birth_date", profile.BirthDate.HasValue ? profile.BirthDate.Value.Date : DBNull.Value);
+                    upsertProfile.Parameters.AddWithValue("@bio", string.IsNullOrWhiteSpace(profile.Bio) ? DBNull.Value : profile.Bio);
+                    upsertProfile.Parameters.AddWithValue("@avatar_path", string.IsNullOrWhiteSpace(profile.AvatarPath) ? DBNull.Value : profile.AvatarPath);
+                    upsertProfile.ExecuteNonQuery();
+                }
+
+                transaction.Commit();
+                return true;
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
+        }
+
+        private static string GetStudentCodeFromUserId(int userId)
+        {
+            return $"HS{userId:00000}";
+        }
+
+        private static void EnsureStudentScoreSchema(NpgsqlConnection connection)
+        {
+            const string createTable = @"
+                CREATE TABLE IF NOT EXISTS public.student_scores (
+                    id      BIGSERIAL PRIMARY KEY,
+                    mssv    TEXT   NOT NULL UNIQUE,
+                    ho_ten  TEXT   NOT NULL DEFAULT '',
+                    lop     TEXT   NOT NULL DEFAULT '',
+                    diem_gk FLOAT8 NOT NULL DEFAULT 0,
+                    diem_ck FLOAT8 NOT NULL DEFAULT 0
+                );";
+
+            using var command = new NpgsqlCommand(createTable, connection);
+            command.ExecuteNonQuery();
+        }
+
+        private static bool TableExists(NpgsqlConnection connection, string tableName)
+        {
+            const string query = @"
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                      AND LOWER(table_name) = LOWER(@table_name)
+                )";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@table_name", tableName);
+            object? result = command.ExecuteScalar();
+            return result is bool exists && exists;
+        }
+
+        public int CountActiveEnrollments(int studentId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"
+                SELECT COUNT(*)
+                FROM enrollments
+                WHERE student_id = @student_id
+                  AND UPPER(status) IN ('ACTIVE', 'APPROVED')";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@student_id", studentId);
+            return Convert.ToInt32(command.ExecuteScalar());
+        }
+
+        public int CountUnreadNotifications(int userId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"
+                SELECT COUNT(*)
+                FROM notifications
+                WHERE user_id = @user_id
+                  AND is_read = false";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            return Convert.ToInt32(command.ExecuteScalar());
+        }
+
+        public int CountStudentScoreRecords(int userId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureStudentScoreSchema(connection);
+
+            const string query = @"
+                SELECT COUNT(*)
+                FROM public.student_scores
+                WHERE mssv = @mssv";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@mssv", GetStudentCodeFromUserId(userId));
+            return Convert.ToInt32(command.ExecuteScalar());
+        }
+
+        public double? GetStudentAverageScore(int userId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureStudentScoreSchema(connection);
+
+            const string query = @"
+                SELECT AVG((diem_gk * 0.3) + (diem_ck * 0.7))
+                FROM public.student_scores
+                WHERE mssv = @mssv";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@mssv", GetStudentCodeFromUserId(userId));
+            object? result = command.ExecuteScalar();
+            return result == null || result == DBNull.Value ? null : Convert.ToDouble(result);
+        }
+
+        public double? GetStudentExamAverageScore(int studentId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            if (TableExists(connection, "exam_attempts"))
+            {
+                const string attemptAverageQuery = @"
+                    SELECT AVG(score)
+                    FROM exam_attempts
+                    WHERE student_id = @student_id
+                      AND score IS NOT NULL";
+
+                using var attemptCommand = new NpgsqlCommand(attemptAverageQuery, connection);
+                attemptCommand.Parameters.AddWithValue("@student_id", studentId);
+                object? attemptAverage = attemptCommand.ExecuteScalar();
+                if (attemptAverage != null && attemptAverage != DBNull.Value)
+                    return Convert.ToDouble(attemptAverage);
+            }
+
+            EnsureStudentScoreSchema(connection);
+            const string scoreAverageQuery = @"
+                SELECT AVG((diem_gk * 0.3) + (diem_ck * 0.7))
+                FROM public.student_scores
+                WHERE mssv = @mssv";
+
+            using var scoreCommand = new NpgsqlCommand(scoreAverageQuery, connection);
+            scoreCommand.Parameters.AddWithValue("@mssv", GetStudentCodeFromUserId(studentId));
+            object? scoreAverage = scoreCommand.ExecuteScalar();
+            return scoreAverage == null || scoreAverage == DBNull.Value ? null : Convert.ToDouble(scoreAverage);
+        }
+
+        public int CountOpenExamsForStudent(int studentId)
+        {
+            return CountStudentExamsByAvailability(studentId, openNowOnly: true);
+        }
+
+        public int CountAvailableExamsForStudent(int studentId)
+        {
+            return CountStudentExamsByAvailability(studentId, openNowOnly: false);
+        }
+
+        public int CountCompletedExamsForStudent(int studentId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            if (TableExists(connection, "exam_attempts"))
+            {
+                const string attemptQuery = @"
+                    SELECT COUNT(*)
+                    FROM exam_attempts
+                    WHERE student_id = @student_id
+                      AND score IS NOT NULL";
+
+                using var attemptCommand = new NpgsqlCommand(attemptQuery, connection);
+                attemptCommand.Parameters.AddWithValue("@student_id", studentId);
+                int attemptCount = Convert.ToInt32(attemptCommand.ExecuteScalar());
+                if (attemptCount > 0)
+                    return attemptCount;
+            }
+
+            EnsureStudentScoreSchema(connection);
+            const string scoreQuery = @"
+                SELECT COUNT(*)
+                FROM public.student_scores
+                WHERE mssv = @mssv";
+
+            using var scoreCommand = new NpgsqlCommand(scoreQuery, connection);
+            scoreCommand.Parameters.AddWithValue("@mssv", GetStudentCodeFromUserId(studentId));
+            return Convert.ToInt32(scoreCommand.ExecuteScalar());
+        }
+
+        public List<StudentExamListItemModel> GetAvailableExamsForStudent(int studentId, int limit = 100)
+        {
+            var result = new List<StudentExamListItemModel>();
+            int safeLimit = limit <= 0 ? 100 : limit;
+
+            using var connection = CreateConnection();
+            connection.Open();
+
+            if (!TableExists(connection, "exams") || !TableExists(connection, "enrollments"))
+                return result;
+
+            bool hasAttempts = TableExists(connection, "exam_attempts");
+            bool hasQuestions = TableExists(connection, "exam_questions");
+
+            string attemptsExpression = hasAttempts
+                ? @"(
+                    SELECT COUNT(*)
+                    FROM exam_attempts ea
+                    WHERE ea.exam_id = ex.id
+                      AND ea.student_id = @student_id
+                )"
+                : "0";
+
+            string questionExpression = hasQuestions
+                ? @"(
+                    SELECT COUNT(*)
+                    FROM exam_questions eq
+                    WHERE eq.exam_id = ex.id
+                )"
+                : "0";
+
+            string query = $@"
+                SELECT ex.id,
+                       ex.course_id,
+                       COALESCE(ex.title, '') AS title,
+                       COALESCE(c.name, '') AS course_name,
+                       ex.open_time,
+                       ex.close_time,
+                       COALESCE(ex.duration_minutes, 0) AS duration_minutes,
+                       COALESCE(ex.max_attempts, 1) AS max_attempts,
+                       {attemptsExpression}::int AS attempt_count,
+                       {questionExpression}::int AS question_count
+                FROM exams ex
+                JOIN enrollments en ON en.course_id = ex.course_id
+                LEFT JOIN courses c ON c.id = ex.course_id
+                WHERE en.student_id = @student_id
+                  AND UPPER(COALESCE(en.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
+                  AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)
+                  AND (COALESCE(ex.max_attempts, 1) <= 0 OR {attemptsExpression} < COALESCE(ex.max_attempts, 1))
+                ORDER BY
+                  CASE
+                    WHEN (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
+                     AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP) THEN 0
+                    WHEN ex.open_time > CURRENT_TIMESTAMP THEN 1
+                    ELSE 2
+                  END,
+                  ex.open_time NULLS FIRST,
+                  ex.close_time NULLS LAST
+                LIMIT @limit";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@student_id", studentId);
+            command.Parameters.AddWithValue("@limit", safeLimit);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(new StudentExamListItemModel
+                {
+                    Id = reader.GetInt32(0),
+                    CourseId = reader.GetInt32(1),
+                    Title = reader.GetString(2),
+                    CourseName = reader.GetString(3),
+                    OpenTime = reader.IsDBNull(4) ? null : reader.GetDateTime(4),
+                    CloseTime = reader.IsDBNull(5) ? null : reader.GetDateTime(5),
+                    DurationMinutes = reader.GetInt32(6),
+                    MaxAttempts = reader.GetInt32(7),
+                    AttemptCount = reader.GetInt32(8),
+                    QuestionCount = reader.GetInt32(9)
+                });
+            }
+
+            return result;
+        }
+
+        public List<StudentResultListItemModel> GetStudentResultItems(int studentId, int limit = 100)
+        {
+            var result = new List<StudentResultListItemModel>();
+            int safeLimit = limit <= 0 ? 100 : limit;
+
+            using var connection = CreateConnection();
+            connection.Open();
+
+            if (TableExists(connection, "exam_attempts") && TableExists(connection, "exams"))
+            {
+                bool hasQuestions = TableExists(connection, "exam_questions");
+                string questionExpression = hasQuestions
+                    ? @"(
+                        SELECT COUNT(*)
+                        FROM exam_questions eq
+                        WHERE eq.exam_id = ex.id
+                    )"
+                    : "0";
+
+                string query = $@"
+                    SELECT COALESCE(ex.title, '') AS exam_title,
+                           COALESCE(c.name, '') AS course_name,
+                           COALESCE(a.score, 0)::float8 AS score,
+                           COALESCE(a.status, '') AS status,
+                           {questionExpression}::int AS question_count
+                    FROM exam_attempts a
+                    JOIN exams ex ON ex.id = a.exam_id
+                    LEFT JOIN courses c ON c.id = ex.course_id
+                    WHERE a.student_id = @student_id
+                      AND a.score IS NOT NULL
+                    ORDER BY COALESCE(a.submit_time, a.start_time) DESC
+                    LIMIT @limit";
+
+                using var command = new NpgsqlCommand(query, connection);
+                command.Parameters.AddWithValue("@student_id", studentId);
+                command.Parameters.AddWithValue("@limit", safeLimit);
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    double score = reader.GetDouble(2);
+                    int questionCount = reader.GetInt32(4);
+                    result.Add(new StudentResultListItemModel
+                    {
+                        ExamTitle = reader.GetString(0),
+                        CourseName = reader.GetString(1),
+                        CorrectAnswersText = questionCount > 0 ? $"N/A/{questionCount}" : "N/A",
+                        Score = score,
+                        StatusText = BuildResultStatus(score, reader.GetString(3))
+                    });
+                }
+            }
+
+            if (result.Count > 0)
+                return result;
+
+            EnsureStudentScoreSchema(connection);
+            const string fallbackQuery = @"
+                SELECT lop, diem_gk, diem_ck
+                FROM public.student_scores
+                WHERE mssv = @mssv
+                LIMIT @limit";
+
+            using var fallbackCommand = new NpgsqlCommand(fallbackQuery, connection);
+            fallbackCommand.Parameters.AddWithValue("@mssv", GetStudentCodeFromUserId(studentId));
+            fallbackCommand.Parameters.AddWithValue("@limit", safeLimit);
+            using var fallbackReader = fallbackCommand.ExecuteReader();
+            while (fallbackReader.Read())
+            {
+                double midterm = fallbackReader.GetDouble(1);
+                double final = fallbackReader.GetDouble(2);
+                double score = Math.Round((midterm * 0.3) + (final * 0.7), 1);
+                result.Add(new StudentResultListItemModel
+                {
+                    ExamTitle = "Bảng điểm tổng hợp",
+                    CourseName = fallbackReader.IsDBNull(0) ? string.Empty : fallbackReader.GetString(0),
+                    CorrectAnswersText = "N/A",
+                    Score = score,
+                    StatusText = score < 5.0 ? "Không đạt" : "Đạt"
+                });
+            }
+
+            return result;
+        }
+
+        public List<StudentSearchResultModel> SearchStudentGlobal(int studentId, string keyword, int limitPerGroup = 5)
+        {
+            var results = new List<StudentSearchResultModel>();
+            string term = (keyword ?? string.Empty).Trim();
+            if (studentId <= 0 || string.IsNullOrWhiteSpace(term))
+                return results;
+
+            int safeLimit = Math.Clamp(limitPerGroup, 1, 20);
+            string pattern = $"%{term}%";
+
+            using var connection = CreateConnection();
+            connection.Open();
+
+            if (TableExists(connection, "courses") && TableExists(connection, "enrollments"))
+            {
+                const string courseQuery = @"
+                    SELECT DISTINCT COALESCE(c.name, '') AS title,
+                           COALESCE(u.full_name, u.username, '') AS teacher_name,
+                           CASE
+                             WHEN e.id IS NOT NULL THEN 'Khóa học của tôi'
+                             ELSE 'Tìm khóa học'
+                           END AS page_name
+                    FROM courses c
+                    LEFT JOIN users u ON u.id = c.teacher_id
+                    LEFT JOIN enrollments e ON e.course_id = c.id AND e.student_id = @student_id
+                    WHERE UPPER(COALESCE(c.status, '')) = 'ACTIVE'
+                      AND (
+                           e.id IS NULL
+                           OR UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED', 'PENDING')
+                      )
+                      AND (
+                           COALESCE(c.name, '') ILIKE @pattern
+                           OR COALESCE(c.description, '') ILIKE @pattern
+                           OR COALESCE(u.full_name, u.username, '') ILIKE @pattern
+                      )
+                    ORDER BY title
+                    LIMIT @limit";
+
+                using var command = new NpgsqlCommand(courseQuery, connection);
+                command.Parameters.AddWithValue("@student_id", studentId);
+                command.Parameters.AddWithValue("@pattern", pattern);
+                command.Parameters.AddWithValue("@limit", safeLimit);
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    results.Add(new StudentSearchResultModel
+                    {
+                        Group = "Khóa học",
+                        Title = reader.GetString(0),
+                        Description = reader.GetString(1),
+                        PageName = reader.GetString(2),
+                        Keyword = term
+                    });
+                }
+            }
+
+            if (TableExists(connection, "exams") && TableExists(connection, "enrollments"))
+            {
+                bool hasAttempts = TableExists(connection, "exam_attempts");
+                string attemptsExpression = hasAttempts
+                    ? @"(
+                        SELECT COUNT(*)
+                        FROM exam_attempts ea
+                        WHERE ea.exam_id = ex.id
+                          AND ea.student_id = @student_id
+                    )"
+                    : "0";
+
+                string examQuery = $@"
+                    SELECT COALESCE(ex.title, '') AS title,
+                           COALESCE(c.name, '') AS course_name
+                    FROM exams ex
+                    JOIN enrollments en ON en.course_id = ex.course_id
+                    LEFT JOIN courses c ON c.id = ex.course_id
+                    WHERE en.student_id = @student_id
+                      AND UPPER(COALESCE(en.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
+                      AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
+                      AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)
+                      AND (COALESCE(ex.max_attempts, 1) <= 0 OR {attemptsExpression} < COALESCE(ex.max_attempts, 1))
+                      AND (
+                           COALESCE(ex.title, '') ILIKE @pattern
+                           OR COALESCE(c.name, '') ILIKE @pattern
+                      )
+                    ORDER BY ex.open_time NULLS FIRST, ex.close_time NULLS LAST
+                    LIMIT @limit";
+
+                using var command = new NpgsqlCommand(examQuery, connection);
+                command.Parameters.AddWithValue("@student_id", studentId);
+                command.Parameters.AddWithValue("@pattern", pattern);
+                command.Parameters.AddWithValue("@limit", safeLimit);
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    results.Add(new StudentSearchResultModel
+                    {
+                        Group = "Bài kiểm tra",
+                        Title = reader.GetString(0),
+                        Description = reader.GetString(1),
+                        PageName = "Bài kiểm tra",
+                        Keyword = term
+                    });
+                }
+            }
+
+            if (TableExists(connection, "materials") && TableExists(connection, "courses") && TableExists(connection, "enrollments"))
+            {
+                const string materialQuery = @"
+                    SELECT COALESCE(m.file_name, '') AS title,
+                           COALESCE(c.name, '') AS course_name
+                    FROM materials m
+                    JOIN courses c ON c.id = m.course_id
+                    JOIN enrollments e ON e.course_id = c.id
+                    WHERE e.student_id = @student_id
+                      AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                      AND (
+                           COALESCE(m.file_name, '') ILIKE @pattern
+                           OR COALESCE(m.file_path, '') ILIKE @pattern
+                           OR COALESCE(c.name, '') ILIKE @pattern
+                      )
+                    ORDER BY m.uploaded_at DESC, m.id DESC
+                    LIMIT @limit";
+
+                using var command = new NpgsqlCommand(materialQuery, connection);
+                command.Parameters.AddWithValue("@student_id", studentId);
+                command.Parameters.AddWithValue("@pattern", pattern);
+                command.Parameters.AddWithValue("@limit", safeLimit);
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    results.Add(new StudentSearchResultModel
+                    {
+                        Group = "Tài liệu",
+                        Title = reader.GetString(0),
+                        Description = reader.GetString(1),
+                        PageName = "Tài liệu",
+                        Keyword = term
+                    });
+                }
+            }
+
+            if (TableExists(connection, "notifications"))
+            {
+                const string notificationQuery = @"
+                    SELECT COALESCE(title, '') AS title,
+                           COALESCE(content, '') AS content
+                    FROM notifications
+                    WHERE user_id = @student_id
+                      AND (
+                           COALESCE(title, '') ILIKE @pattern
+                           OR COALESCE(content, '') ILIKE @pattern
+                      )
+                    ORDER BY created_at DESC
+                    LIMIT @limit";
+
+                using var command = new NpgsqlCommand(notificationQuery, connection);
+                command.Parameters.AddWithValue("@student_id", studentId);
+                command.Parameters.AddWithValue("@pattern", pattern);
+                command.Parameters.AddWithValue("@limit", safeLimit);
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    string content = reader.GetString(1);
+                    results.Add(new StudentSearchResultModel
+                    {
+                        Group = "Thông báo",
+                        Title = reader.GetString(0),
+                        Description = content.Length > 64 ? content[..64] + "..." : content,
+                        PageName = "Thông báo",
+                        Keyword = term
+                    });
+                }
+            }
+
+            return results;
+        }
+
+        private int CountStudentExamsByAvailability(int studentId, bool openNowOnly)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            if (!TableExists(connection, "exams") || !TableExists(connection, "enrollments"))
+                return 0;
+
+            bool hasAttempts = TableExists(connection, "exam_attempts");
+            string attemptsExpression = hasAttempts
+                ? @"(
+                    SELECT COUNT(*)
+                    FROM exam_attempts ea
+                    WHERE ea.exam_id = ex.id
+                      AND ea.student_id = @student_id
+                )"
+                : "0";
+
+            string timeFilter = openNowOnly
+                ? @"AND (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
+                   AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)"
+                : @"AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)";
+
+            string query = $@"
+                SELECT COUNT(*)
+                FROM exams ex
+                JOIN enrollments en ON en.course_id = ex.course_id
+                LEFT JOIN courses c ON c.id = ex.course_id
+                WHERE en.student_id = @student_id
+                  AND UPPER(COALESCE(en.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
+                  {timeFilter}
+                  AND (COALESCE(ex.max_attempts, 1) <= 0 OR {attemptsExpression} < COALESCE(ex.max_attempts, 1))";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@student_id", studentId);
+            object? result = command.ExecuteScalar();
+            return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+        }
+
+        private static string BuildResultStatus(double score, string rawStatus)
+        {
+            if (!string.IsNullOrWhiteSpace(rawStatus)
+                && !string.Equals(rawStatus, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase))
+            {
+                return rawStatus;
+            }
+
+            return score < 5.0 ? "Không đạt" : "Đạt";
+        }
+
         public List<UserModel> GetUsersByStatus(params string[] statuses)
         {
             var users = new List<UserModel>();
@@ -1284,6 +1976,52 @@ namespace CourseGuard.Backend.Data
 
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@limit", limit);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(new RecentUserActivityModel
+                {
+                    CreatedAt = reader.GetDateTime(0),
+                    Username = reader.GetString(1),
+                    Action = reader.GetString(2),
+                    IpAddress = reader.GetString(3),
+                    Details = reader.GetString(4)
+                });
+            }
+
+            return result;
+        }
+
+        public List<RecentUserActivityModel> GetRecentUserActivitiesByUser(int userId, int limit = 10)
+        {
+            var result = new List<RecentUserActivityModel>();
+            int safeLimit = limit <= 0 ? 10 : limit;
+
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureAuditLogSchema(connection);
+
+            const string query = @"
+                SELECT a.CREATED_AT,
+                       COALESCE(u.USERNAME, 'SYSTEM') AS USERNAME,
+                       COALESCE(a.ACTION, '') AS ACTION,
+                       COALESCE(a.IP_ADDRESS, '') AS IP_ADDRESS,
+                       COALESCE(a.DETAILS, '') AS DETAILS
+                FROM AUDIT_LOGS a
+                LEFT JOIN USERS u ON u.ID = a.USER_ID
+                WHERE a.USER_ID = @user_id
+                  AND a.ACTION IN (
+                    'LOGIN', 'LOGOUT', 'SIGNUP', 'FORGOT_PASSWORD', 'CHANGE_PASSWORD',
+                    'COURSE_ENROLL_REQUEST', 'COURSE_ENROLL', 'ONLINE_SESSION_JOIN', 'ONLINE_SESSION_EXIT',
+                    'EXAM_JOIN', 'EXAM_SUBMIT', 'EXAM_EXIT',
+                    'CHAT_USE'
+                  )
+                ORDER BY a.CREATED_AT DESC
+                LIMIT @limit";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            command.Parameters.AddWithValue("@limit", safeLimit);
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {

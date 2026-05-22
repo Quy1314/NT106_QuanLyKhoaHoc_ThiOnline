@@ -15,8 +15,7 @@ namespace CourseGuard.Frontend.Theme
                 return;
             }
 
-            SkeletonLoaderControl loader = control.Controls[SKELETON_CONTROL_KEY] as SkeletonLoaderControl;
-            if (loader == null)
+            if (control.Controls[SKELETON_CONTROL_KEY] is not SkeletonLoaderControl loader)
             {
                 loader = new SkeletonLoaderControl
                 {
@@ -44,8 +43,7 @@ namespace CourseGuard.Frontend.Theme
                 return;
             }
 
-            SkeletonLoaderControl loader = control.Controls[SKELETON_CONTROL_KEY] as SkeletonLoaderControl;
-            if (loader != null)
+            if (control.Controls[SKELETON_CONTROL_KEY] is SkeletonLoaderControl loader)
             {
                 loader.Stop();
                 loader.Visible = false;

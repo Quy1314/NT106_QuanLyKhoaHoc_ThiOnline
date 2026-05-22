@@ -1,12 +1,18 @@
+using System;
 using System.Data;
-using System.Drawing;
+using System.Globalization;
 using System.Windows.Forms;
+using CourseGuard.Backend.Data;
+using CourseGuard.Backend.Models;
+using CourseGuard.Backend.Security;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Student
 {
     public partial class UC_Result : UserControl
     {
+        private readonly CourseGuardDbContext _dbContext = new("");
+
         public UC_Result()
         {
             InitializeComponent();
@@ -14,7 +20,6 @@ namespace CourseGuard.Frontend.UserControls.Student
             ApplyAcademicStyle();
             _ = LoadDataAsync();
 
-            // Bo góc buttons
             RoundedButtonHelper.Apply(btnReview, 10);
         }
 
@@ -42,8 +47,12 @@ namespace CourseGuard.Frontend.UserControls.Student
             this.ShowSkeleton(SkeletonType.ResultTable);
             try
             {
-                await System.Threading.Tasks.Task.Delay(500);
-                LoadDummyData();
+                DataTable table = await System.Threading.Tasks.Task.Run(LoadResultTable);
+                BindResultTable(table);
+            }
+            catch (Exception ex)
+            {
+                BindResultTable(CreateMessageTable($"Không thể tải kết quả: {ex.Message}"));
             }
             finally
             {
@@ -51,7 +60,43 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
         }
 
-        private void LoadDummyData()
+        private DataTable LoadResultTable()
+        {
+            int studentId = UserSessionContext.CurrentUserId ?? 0;
+            if (studentId <= 0)
+                return CreateMessageTable("Không xác định được tài khoản học sinh.");
+
+            var results = _dbContext.GetStudentResultItems(studentId);
+            DataTable dt = CreateResultTableSchema();
+
+            if (results.Count == 0)
+            {
+                dt.Rows.Add("Chưa có kết quả học tập", "", "", "", "");
+                return dt;
+            }
+
+            foreach (StudentResultListItemModel item in results)
+            {
+                dt.Rows.Add(
+                    item.ExamTitle,
+                    item.CourseName,
+                    item.CorrectAnswersText,
+                    item.Score.ToString("0.0", CultureInfo.InvariantCulture),
+                    item.StatusText);
+            }
+
+            return dt;
+        }
+
+        private void BindResultTable(DataTable table)
+        {
+            dgvResults.DataSource = table;
+            dgvResults.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgvResults.ClearSelection();
+            dgvResults.CurrentCell = null;
+        }
+
+        private static DataTable CreateResultTableSchema()
         {
             DataTable dt = new DataTable();
             dt.Columns.Add("Kỳ thi", typeof(string));
@@ -59,14 +104,14 @@ namespace CourseGuard.Frontend.UserControls.Student
             dt.Columns.Add("Số câu đúng", typeof(string));
             dt.Columns.Add("Điểm", typeof(string));
             dt.Columns.Add("Xếp loại", typeof(string));
+            return dt;
+        }
 
-            dt.Rows.Add("Thi giữa kỳ", "Lập trình C#", "45/50", "9.0", "Giỏi");
-            dt.Rows.Add("Quiz tuần 1", "Mạng máy tính", "8/10", "8.0", "Khá");
-
-            dgvResults.DataSource = dt;
-            dgvResults.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            dgvResults.ClearSelection();
-            dgvResults.CurrentCell = null;
+        private static DataTable CreateMessageTable(string message)
+        {
+            DataTable dt = CreateResultTableSchema();
+            dt.Rows.Add(message, "", "", "", "");
+            return dt;
         }
     }
 }
