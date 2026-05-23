@@ -46,28 +46,28 @@ namespace CourseGuard.Frontend.Theme
         private static class Dark
         {
             // Surfaces
-            public static readonly Color BgBase       = ColorTranslator.FromHtml("#16161A");
-            public static readonly Color BgCard       = ColorTranslator.FromHtml("#1E1E2E");
-            public static readonly Color BgCardHover  = ColorTranslator.FromHtml("#252535");
-            public static readonly Color BgSidebar    = ColorTranslator.FromHtml("#131320");
-            public static readonly Color BgInput      = ColorTranslator.FromHtml("#191930");
-            public static readonly Color BgElevated   = ColorTranslator.FromHtml("#1C1C30");
+            public static readonly Color BgBase       = ColorTranslator.FromHtml("#13131b");
+            public static readonly Color BgCard       = ColorTranslator.FromHtml("#1f1f27");
+            public static readonly Color BgCardHover  = ColorTranslator.FromHtml("#292932");
+            public static readonly Color BgSidebar    = ColorTranslator.FromHtml("#0d0d16");
+            public static readonly Color BgInput      = ColorTranslator.FromHtml("#1b1b23");
+            public static readonly Color BgElevated   = ColorTranslator.FromHtml("#292932");
 
             // Text
-            public static readonly Color TextPrimary  = ColorTranslator.FromHtml("#F1F5F9");
-            public static readonly Color TextSecondary= ColorTranslator.FromHtml("#94A3B8");
-            public static readonly Color TextMuted    = ColorTranslator.FromHtml("#475569");
+            public static readonly Color TextPrimary  = ColorTranslator.FromHtml("#e4e1ed");
+            public static readonly Color TextSecondary= ColorTranslator.FromHtml("#b9cacb");
+            public static readonly Color TextMuted    = ColorTranslator.FromHtml("#849495");
 
             // Borders
             public static readonly Color Border       = Color.FromArgb(20, 255, 255, 255);
             public static readonly Color BorderStrong = Color.FromArgb(40, 255, 255, 255);
 
             // Chart helpers
-            public static readonly Color ChartFill    = Color.FromArgb(40, 59, 130, 246);
+            public static readonly Color ChartFill    = Color.FromArgb(40, 0, 240, 255);
             public static readonly Color GridLine     = Color.FromArgb(15, 255, 255, 255);
-            public static readonly Color BarInactive  = ColorTranslator.FromHtml("#252535");
-            public static readonly Color HeatmapOff   = ColorTranslator.FromHtml("#252535");
-            public static readonly Color ProgressTrack= ColorTranslator.FromHtml("#16161A");
+            public static readonly Color BarInactive  = ColorTranslator.FromHtml("#292932");
+            public static readonly Color HeatmapOff   = ColorTranslator.FromHtml("#292932");
+            public static readonly Color ProgressTrack= ColorTranslator.FromHtml("#13131b");
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -105,11 +105,10 @@ namespace CourseGuard.Frontend.Theme
         //  SHARED (mode-invariant) accent & status colors
         // ═══════════════════════════════════════════════════════════════
 
-        // Accent: richer in light mode, calmer in dark mode.
-        public static Color AccentBlue     => _isDarkMode ? ColorTranslator.FromHtml("#60A5FA") : ColorTranslator.FromHtml("#2563EB");
-        public static Color AccentHover    => _isDarkMode ? ColorTranslator.FromHtml("#3B82F6") : ColorTranslator.FromHtml("#1D4ED8");
-        public static Color AccentPressed  => _isDarkMode ? ColorTranslator.FromHtml("#2563EB") : ColorTranslator.FromHtml("#1E40AF");
-        public static Color AccentSoft     => _isDarkMode ? Color.FromArgb(36, 96, 165, 250) : Color.FromArgb(28, 37, 99, 235);
+        public static Color AccentBlue     => _isDarkMode ? ColorTranslator.FromHtml("#00f0ff") : ColorTranslator.FromHtml("#2563EB");
+        public static Color AccentHover    => _isDarkMode ? ColorTranslator.FromHtml("#00dbe9") : ColorTranslator.FromHtml("#1D4ED8");
+        public static Color AccentPressed  => _isDarkMode ? ColorTranslator.FromHtml("#00a2ae") : ColorTranslator.FromHtml("#1E40AF");
+        public static Color AccentSoft     => _isDarkMode ? Color.FromArgb(36, 0, 240, 255) : Color.FromArgb(28, 37, 99, 235);
 
         // Status
         public static readonly Color Success        = ColorTranslator.FromHtml("#22C55E");

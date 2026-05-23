@@ -24,6 +24,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
         private readonly CourseGuard.Backend.Controllers.CourseController _courseService;
         private int _selectedCourseId = -1;
         private bool _isBusy;
+        private List<CourseGuard.Backend.Models.UserModel> _allStudents = new List<CourseGuard.Backend.Models.UserModel>();
 
         public UC_CoursesManage()
         {
@@ -33,10 +34,15 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // Bo góc + cursor tay cho tất cả buttons
             CourseGuard.Frontend.Theme.RoundedButtonHelper.Apply(10,
                 btnAddCourse, btnUpdateCourse, btnDeleteCourse,
-                btnAddStudent, btnApproveStudent, btnRemoveStudent);
+                btnApproveStudent, btnRemoveStudent);
 
             _userService = new CourseGuard.Backend.Controllers.UserController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
             _courseService = new CourseGuard.Backend.Controllers.CourseController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
+
+            // Set up cboRegStatus items
+            cboRegStatus.Items.Clear();
+            cboRegStatus.Items.AddRange(new object[] { "Chờ duyệt (Pending)", "Đã tham gia (Approved)", "Tất cả học viên (All)" });
+            cboRegStatus.SelectedIndex = 0; // Default to Pending
 
             WireEvents();
             // Initial load
@@ -52,16 +58,19 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btnUpdateCourse.ForeColor = Color.White;
             btnDeleteCourse.BackColor = Color.FromArgb(220, 38, 38);
             btnDeleteCourse.ForeColor = Color.White;
-            btnAddStudent.BackColor = AcademicTheme.Primary;
-            btnAddStudent.ForeColor = Color.White;
-            btnApproveStudent.BackColor = AcademicTheme.Surface;
-            btnApproveStudent.ForeColor = AcademicTheme.TextSecondary;
-            btnApproveStudent.FlatAppearance.BorderColor = AcademicTheme.BorderSoft;
-            btnApproveStudent.FlatAppearance.BorderSize = 1;
+            
+            btnApproveStudent.BackColor = AcademicTheme.Primary;
+            btnApproveStudent.ForeColor = Color.White;
+            
             btnRemoveStudent.BackColor = AcademicTheme.Surface;
             btnRemoveStudent.ForeColor = AcademicTheme.TextSecondary;
             btnRemoveStudent.FlatAppearance.BorderColor = AcademicTheme.BorderSoft;
             btnRemoveStudent.FlatAppearance.BorderSize = 1;
+            
+            lblSelectCourse.ForeColor = AcademicTheme.TextSecondary;
+            lblStudent.ForeColor = AcademicTheme.TextSecondary;
+            lblRegStatus.ForeColor = AcademicTheme.TextSecondary;
+            
             AcademicTheme.StyleGrid(dgvCourses);
         }
 
@@ -72,7 +81,6 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btnUpdateCourse.Click += btnUpdateCourse_Click;
             btnDeleteCourse.Click += btnDeleteCourse_Click;
             dgvCourses.CellClick += dgvCourses_CellClick;
-            btnAddStudent.Click += btnAddStudent_Click;
             WireStudentApprovalEvents();
         }
 
@@ -98,6 +106,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
                 if (IsDisposed || Disposing) return;
 
+                _allStudents = students;
                 BindTeachers(teachers);
                 BindStudents(students);
                 BindCourses(courses);
@@ -296,28 +305,21 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
         }
         
-        private async void btnAddStudent_Click(object? sender, EventArgs e)
-        {
-            if (cboSelectCourse.SelectedValue == null)
-            {
-                 MessageBox.Show("Vui lòng chọn khóa học.");
-                 return;
-            }
-            // Temporarily use an input box or a full list if we really wanted to manually add,
-            // but right now cboStudent is used for Pending requests. 
-            // For true "Add Student" bypassing requests, we would need a different combo box.
-            // Let's assume Admin just approves or rejects. If they click Add, we will manually enroll if we know the ID.
-            // To keep it simple, we reuse cboStudent but let's notify them to use Approve instead for requests.
-            MessageBox.Show("Vui lòng dùng tính năng 'Duyệt' hoặc 'Xóa' cho các yêu cầu tham gia phía dưới.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
         private void WireStudentApprovalEvents()
         {
             cboSelectCourse.SelectedIndexChanged += async (s, e) =>
             {
                 if (cboSelectCourse.SelectedValue is int courseId)
                 {
-                    await LoadPendingStudents(courseId);
+                    await RefreshStudentDropdown(courseId);
+                }
+            };
+
+            cboRegStatus.SelectedIndexChanged += async (s, e) =>
+            {
+                if (cboSelectCourse.SelectedValue is int courseId)
+                {
+                    await RefreshStudentDropdown(courseId);
                 }
             };
 
@@ -325,49 +327,152 @@ namespace CourseGuard.Frontend.UserControls.Admin
             {
                 if (cboSelectCourse.SelectedValue is int courseId && cboStudent.SelectedValue is int studentId)
                 {
-                    bool ok = await Task.Run(() => _courseService.ApproveEnrollment(courseId, studentId));
-                    if (ok)
+                    if (studentId <= 0)
                     {
-                        MessageBox.Show("Đã duyệt sinh viên tham gia khóa học!");
-                        await LoadPendingStudents(courseId);
+                        MessageBox.Show("Không có học viên hợp lệ để thao tác.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
                     }
-                    else MessageBox.Show("Lỗi duyệt sinh viên.");
+
+                    // Check if there is an enrollment status for this student
+                    string? status = await Task.Run(() => _courseService.GetEnrollmentStatus(courseId, studentId));
+                    if (status == "PENDING")
+                    {
+                        bool ok = await Task.Run(() => _courseService.ApproveEnrollment(courseId, studentId));
+                        if (ok)
+                        {
+                            MessageBox.Show("Đã duyệt yêu cầu tham gia khóa học của học viên!");
+                            await RefreshStudentDropdown(courseId);
+                        }
+                        else MessageBox.Show("Lỗi duyệt học viên.");
+                    }
+                    else if (status == "ACTIVE" || status == "APPROVED")
+                    {
+                        MessageBox.Show("Học viên này đã tham gia khóa học rồi.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else
+                    {
+                        // Directly enroll
+                        bool ok = await Task.Run(() => _courseService.EnrollStudent(courseId, studentId));
+                        if (ok)
+                        {
+                            MessageBox.Show("Thêm học viên vào khóa học thành công!");
+                            await RefreshStudentDropdown(courseId);
+                        }
+                        else MessageBox.Show("Lỗi thêm học viên vào khóa học.");
+                    }
                 }
-                else MessageBox.Show("Vui lòng chọn khóa học và sinh viên.");
+                else MessageBox.Show("Vui lòng chọn khóa học và học viên.");
             };
 
             btnRemoveStudent.Click += async (s, e) =>
             {
                 if (cboSelectCourse.SelectedValue is int courseId && cboStudent.SelectedValue is int studentId)
                 {
+                    if (studentId <= 0)
+                    {
+                        MessageBox.Show("Không có học viên hợp lệ để thao tác.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
                     bool ok = await Task.Run(() => _courseService.RejectEnrollment(courseId, studentId));
                     if (ok)
                     {
-                        MessageBox.Show("Đã từ chối/xóa yêu cầu tham gia!");
-                        await LoadPendingStudents(courseId);
+                        MessageBox.Show("Đã xóa học viên khỏi khóa học / từ chối yêu cầu tham gia!");
+                        await RefreshStudentDropdown(courseId);
                     }
-                    else MessageBox.Show("Lỗi từ chối sinh viên.");
+                    else MessageBox.Show("Lỗi xóa/từ chối học viên.");
                 }
-                else MessageBox.Show("Vui lòng chọn khóa học và sinh viên.");
+                else MessageBox.Show("Vui lòng chọn khóa học và học viên.");
             };
         }
 
-        private async Task LoadPendingStudents(int courseId)
+        private async Task RefreshStudentDropdown(int courseId)
         {
+            if (cboRegStatus.SelectedIndex == -1)
+            {
+                cboRegStatus.SelectedIndex = 0;
+                return;
+            }
+
+            string selectedStatus = cboRegStatus.SelectedItem?.ToString() ?? "Pending";
+            
             try
             {
-                var pendings = await Task.Run(() => _courseService.GetPendingEnrollments(courseId));
-                cboStudent.DataSource = pendings;
-                cboStudent.DisplayMember = "StudentName";
-                cboStudent.ValueMember = "StudentId";
-                cboStudent.SelectedIndex = -1;
-
-                if (pendings.Count == 0)
+                if (selectedStatus.Contains("Pending") || selectedStatus.Contains("Chờ duyệt"))
                 {
-                    cboStudent.Text = "Không có yêu cầu chờ duyệt";
+                    var pendings = await Task.Run(() => _courseService.GetPendingEnrollments(courseId));
+                    
+                    cboStudent.DataSource = null;
+                    if (pendings.Count == 0)
+                    {
+                        var dummyList = new List<CourseGuard.Backend.Models.EnrollmentModel>
+                        {
+                            new CourseGuard.Backend.Models.EnrollmentModel { StudentId = -1, StudentName = "Không có yêu cầu chờ duyệt" }
+                        };
+                        cboStudent.DataSource = dummyList;
+                        cboStudent.DisplayMember = "StudentName";
+                        cboStudent.ValueMember = "StudentId";
+                        cboStudent.SelectedIndex = 0;
+                    }
+                    else
+                    {
+                        cboStudent.DataSource = pendings;
+                        cboStudent.DisplayMember = "StudentName";
+                        cboStudent.ValueMember = "StudentId";
+                        cboStudent.SelectedIndex = -1;
+                    }
+                }
+                else if (selectedStatus.Contains("Approved") || selectedStatus.Contains("Đã tham gia"))
+                {
+                    var approveds = await Task.Run(() => _courseService.GetEnrollmentsByStatus(courseId, "ACTIVE"));
+                    
+                    cboStudent.DataSource = null;
+                    if (approveds.Count == 0)
+                    {
+                        var dummyList = new List<CourseGuard.Backend.Models.EnrollmentModel>
+                        {
+                            new CourseGuard.Backend.Models.EnrollmentModel { StudentId = -1, StudentName = "Không có học viên đã tham gia" }
+                        };
+                        cboStudent.DataSource = dummyList;
+                        cboStudent.DisplayMember = "StudentName";
+                        cboStudent.ValueMember = "StudentId";
+                        cboStudent.SelectedIndex = 0;
+                    }
+                    else
+                    {
+                        cboStudent.DataSource = approveds;
+                        cboStudent.DisplayMember = "StudentName";
+                        cboStudent.ValueMember = "StudentId";
+                        cboStudent.SelectedIndex = -1;
+                    }
+                }
+                else // "Tất cả học viên"
+                {
+                    cboStudent.DataSource = null;
+                    if (_allStudents == null || _allStudents.Count == 0)
+                    {
+                        var dummyList = new List<CourseGuard.Backend.Models.UserModel>
+                        {
+                            new CourseGuard.Backend.Models.UserModel { Id = -1, FullName = "Không có học viên nào" }
+                        };
+                        cboStudent.DataSource = dummyList;
+                        cboStudent.DisplayMember = "FullName";
+                        cboStudent.ValueMember = "Id";
+                        cboStudent.SelectedIndex = 0;
+                    }
+                    else
+                    {
+                        cboStudent.DataSource = _allStudents;
+                        cboStudent.DisplayMember = "FullName";
+                        cboStudent.ValueMember = "Id";
+                        cboStudent.SelectedIndex = -1;
+                    }
                 }
             }
-            catch { }
+            catch (Exception)
+            {
+                // ignore
+            }
         }
 
         private bool ValidateInputs()
