@@ -40,6 +40,10 @@ namespace CourseGuard.Frontend.Theme
         private bool _isAnimating = false;
         private bool _showLabels = true;
 
+        // Submenu dynamic spacing
+        private int _submenuIndex = -1;
+        private int _submenuHeight = 0;
+
         // Layout constants
         private int _itemHeight = 44;
         private int _itemStartY = 80;
@@ -101,6 +105,16 @@ namespace CourseGuard.Frontend.Theme
             _navIcons = icons;
             _activeIndex = 0;
             _hoverIndex = -1;
+            Invalidate();
+        }
+
+        /// <summary>
+        /// Shifts subsequent navigation items down by the specified height.
+        /// </summary>
+        public void SetSubmenuOffset(int index, int height)
+        {
+            _submenuIndex = index;
+            _submenuHeight = height;
             Invalidate();
         }
 
@@ -255,6 +269,10 @@ namespace CourseGuard.Frontend.Theme
                 for (int i = 0; i < _navItems.Length; i++)
                 {
                     int y = _itemStartY + i * _itemHeight;
+                    if (_submenuIndex >= 0 && i > _submenuIndex)
+                    {
+                        y += _submenuHeight;
+                    }
                     Rectangle itemRect = new Rectangle(10, y, Width - 20, _itemHeight);
                     
                     bool isActive = (i == _activeIndex);
@@ -332,7 +350,7 @@ namespace CourseGuard.Frontend.Theme
             }
 
             Rectangle anchor = _hoverIndex >= 0 && _hoverIndex < _navItems.Length
-                ? new Rectangle(0, _itemStartY + _hoverIndex * _itemHeight, Width, _itemHeight)
+                ? new Rectangle(0, _itemStartY + _hoverIndex * _itemHeight + (_submenuIndex >= 0 && _hoverIndex > _submenuIndex ? _submenuHeight : 0), Width, _itemHeight)
                 : _hoverLogout
                     ? GetLogoutBounds()
                     : GetToggleBounds();
@@ -391,14 +409,22 @@ namespace CourseGuard.Frontend.Theme
 
         private int GetNavIndexAt(Point point)
         {
-            if (point.Y < _itemStartY || point.Y >= _itemStartY + _navItems.Length * _itemHeight)
-                return -1;
-
-            Rectangle bounds = new Rectangle(10, _itemStartY, Math.Max(24, Width - 20), _navItems.Length * _itemHeight);
-            if (!bounds.Contains(point))
-                return -1;
-
-            return (point.Y - _itemStartY) / _itemHeight;
+            int relativeY = point.Y - _itemStartY;
+            for (int i = 0; i < _navItems.Length; i++)
+            {
+                int startY = i * _itemHeight;
+                if (_submenuIndex >= 0 && i > _submenuIndex)
+                {
+                    startY += _submenuHeight;
+                }
+                int endY = startY + _itemHeight;
+                Rectangle itemRect = new Rectangle(10, _itemStartY + startY, Math.Max(24, Width - 20), _itemHeight);
+                if (itemRect.Contains(point))
+                {
+                    return i;
+                }
+            }
+            return -1;
         }
 
         private static void DrawNavIcon(Graphics g, Rectangle bounds, string iconKey, Color color)

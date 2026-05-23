@@ -4,7 +4,7 @@ namespace CourseGuard.Frontend.Forms.Login
     {
         private System.ComponentModel.IContainer components = null;
 
-        private Panel LoginPanel;
+        private CourseGuard.Frontend.Theme.TransparentPanel LoginPanel;
         private Label LoginTitle;
         private Label LOGO;
         private Label lblUsername;
@@ -13,14 +13,14 @@ namespace CourseGuard.Frontend.Forms.Login
         private TextBox txtPassword;
         private CourseGuard.Frontend.Theme.NeonGradientButton btnLogin;
         private LinkLabel lnkRegister;
-        private Panel RegisterPanel;
+        private CourseGuard.Frontend.Theme.TransparentPanel RegisterPanel;
         private Label RegisterTitle;
         private Label lblRegUsername, lblRegFullName, lblRegEmail, lblRegPassword;
         private TextBox txtRegUsername, txtRegFullName, txtRegEmail, txtRegPassword;
         private Button btnRegisterSubmit;
         private LinkLabel lnkBackToLoginFromReg;
 
-        private Panel ForgotPassPanel;
+        private CourseGuard.Frontend.Theme.TransparentPanel ForgotPassPanel;
         private Label ForgotTitle;
         private Label lblForgotUsername, lblForgotEmail;
         private TextBox txtForgotUsername, txtForgotEmail;
@@ -38,7 +38,7 @@ namespace CourseGuard.Frontend.Forms.Login
 
         private void InitializeComponent()
         {
-            LoginPanel = new Panel();
+            LoginPanel = new CourseGuard.Frontend.Theme.TransparentPanel();
             linkLabel1 = new LinkLabel();
             chkRemember = new CheckBox();
             LoginTitle = new Label();
@@ -51,7 +51,7 @@ namespace CourseGuard.Frontend.Forms.Login
             lnkRegister = new LinkLabel();
 
             // Register Panel
-            RegisterPanel = new Panel();
+            RegisterPanel = new CourseGuard.Frontend.Theme.TransparentPanel();
             RegisterTitle = new Label();
             lblRegUsername = new Label();
             txtRegUsername = new TextBox();
@@ -65,7 +65,7 @@ namespace CourseGuard.Frontend.Forms.Login
             lnkBackToLoginFromReg = new LinkLabel();
 
             // Forgot Pass Panel
-            ForgotPassPanel = new Panel();
+            ForgotPassPanel = new CourseGuard.Frontend.Theme.TransparentPanel();
             ForgotTitle = new Label();
             lblForgotUsername = new Label();
             txtForgotUsername = new TextBox();

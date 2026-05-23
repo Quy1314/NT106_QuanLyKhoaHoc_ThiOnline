@@ -28,7 +28,9 @@ namespace CourseGuard.Frontend.UserControls.Admin
             cboSelectCourse = new ComboBox();
             cboStudent = new ComboBox();
             cboRegStatus = new ComboBox();
-            btnAddStudent = new Button();
+            lblSelectCourse = new Label();
+            lblStudent = new Label();
+            lblRegStatus = new Label();
             btnApproveStudent = new Button();
             btnRemoveStudent = new Button();
             grpCourseInfo = new GroupBox();
@@ -133,10 +135,12 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // grpStudentManage
             // 
             grpStudentManage.BackColor = Color.White;
+            grpStudentManage.Controls.Add(lblSelectCourse);
             grpStudentManage.Controls.Add(cboSelectCourse);
+            grpStudentManage.Controls.Add(lblStudent);
             grpStudentManage.Controls.Add(cboStudent);
+            grpStudentManage.Controls.Add(lblRegStatus);
             grpStudentManage.Controls.Add(cboRegStatus);
-            grpStudentManage.Controls.Add(btnAddStudent);
             grpStudentManage.Controls.Add(btnApproveStudent);
             grpStudentManage.Controls.Add(btnRemoveStudent);
             grpStudentManage.Dock = DockStyle.Top;
@@ -145,55 +149,71 @@ namespace CourseGuard.Frontend.UserControls.Admin
             grpStudentManage.Location = new Point(10, 360);
             grpStudentManage.Name = "grpStudentManage";
             grpStudentManage.Padding = new Padding(15);
-            grpStudentManage.Size = new Size(324, 220);
+            grpStudentManage.Size = new Size(324, 275);
             grpStudentManage.TabIndex = 0;
             grpStudentManage.TabStop = false;
             grpStudentManage.Text = "Quản lý học viên";
+            // 
+            // lblSelectCourse
+            // 
+            lblSelectCourse.AutoSize = true;
+            lblSelectCourse.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+            lblSelectCourse.ForeColor = Color.FromArgb(75, 85, 99);
+            lblSelectCourse.Location = new Point(20, 25);
+            lblSelectCourse.Name = "lblSelectCourse";
+            lblSelectCourse.Size = new Size(111, 20);
+            lblSelectCourse.Text = "Chọn khóa học:";
             // 
             // cboSelectCourse
             // 
             cboSelectCourse.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             cboSelectCourse.Font = new Font("Segoe UI", 10F);
-            cboSelectCourse.Location = new Point(20, 35);
+            cboSelectCourse.Location = new Point(20, 48);
             cboSelectCourse.Name = "cboSelectCourse";
-            cboSelectCourse.Size = new Size(374, 31);
+            cboSelectCourse.Size = new Size(280, 31);
             cboSelectCourse.TabIndex = 0;
             cboSelectCourse.Text = "Chọn khóa học";
+            // 
+            // lblStudent
+            // 
+            lblStudent.AutoSize = true;
+            lblStudent.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+            lblStudent.ForeColor = Color.FromArgb(75, 85, 99);
+            lblStudent.Location = new Point(20, 88);
+            lblStudent.Name = "lblStudent";
+            lblStudent.Size = new Size(106, 20);
+            lblStudent.Text = "Chọn học viên:";
             // 
             // cboStudent
             // 
             cboStudent.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             cboStudent.Font = new Font("Segoe UI", 10F);
-            cboStudent.Location = new Point(20, 80);
+            cboStudent.Location = new Point(20, 111);
             cboStudent.Name = "cboStudent";
-            cboStudent.Size = new Size(374, 31);
+            cboStudent.Size = new Size(280, 31);
             cboStudent.TabIndex = 1;
             cboStudent.Text = "Chọn học viên";
+            // 
+            // lblRegStatus
+            // 
+            lblRegStatus.AutoSize = true;
+            lblRegStatus.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+            lblRegStatus.ForeColor = Color.FromArgb(75, 85, 99);
+            lblRegStatus.Location = new Point(20, 151);
+            lblRegStatus.Name = "lblRegStatus";
+            lblRegStatus.Size = new Size(130, 20);
+            lblRegStatus.Text = "Trạng thái đăng ký:";
             // 
             // cboRegStatus
             // 
             cboRegStatus.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             cboRegStatus.Font = new Font("Segoe UI", 10F);
             cboRegStatus.Items.AddRange(new object[] { "Pending", "Approved", "Rejected" });
-            cboRegStatus.Location = new Point(20, 125);
+            cboRegStatus.Location = new Point(20, 174);
             cboRegStatus.Name = "cboRegStatus";
-            cboRegStatus.Size = new Size(374, 31);
+            cboRegStatus.Size = new Size(280, 31);
             cboRegStatus.TabIndex = 2;
             cboRegStatus.Text = "Trạng thái";
-            // 
-            // btnAddStudent
-            // 
-            btnAddStudent.BackColor = Color.FromArgb(37, 99, 235);
-            btnAddStudent.FlatAppearance.BorderSize = 0;
-            btnAddStudent.FlatStyle = FlatStyle.Flat;
-            btnAddStudent.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-            btnAddStudent.ForeColor = Color.White;
-            btnAddStudent.Location = new Point(20, 170);
-            btnAddStudent.Name = "btnAddStudent";
-            btnAddStudent.Size = new Size(80, 35);
-            btnAddStudent.TabIndex = 3;
-            btnAddStudent.Text = "Thêm";
-            btnAddStudent.UseVisualStyleBackColor = false;
             // 
             // btnApproveStudent
             // 
@@ -202,11 +222,11 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btnApproveStudent.FlatStyle = FlatStyle.Flat;
             btnApproveStudent.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
             btnApproveStudent.ForeColor = Color.White;
-            btnApproveStudent.Location = new Point(110, 170);
+            btnApproveStudent.Location = new Point(20, 220);
             btnApproveStudent.Name = "btnApproveStudent";
-            btnApproveStudent.Size = new Size(80, 35);
-            btnApproveStudent.TabIndex = 4;
-            btnApproveStudent.Text = "Duyệt";
+            btnApproveStudent.Size = new Size(130, 35);
+            btnApproveStudent.TabIndex = 3;
+            btnApproveStudent.Text = "Thêm / Duyệt";
             btnApproveStudent.UseVisualStyleBackColor = false;
             // 
             // btnRemoveStudent
@@ -216,10 +236,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btnRemoveStudent.FlatStyle = FlatStyle.Flat;
             btnRemoveStudent.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
             btnRemoveStudent.ForeColor = Color.White;
-            btnRemoveStudent.Location = new Point(200, 170);
+            btnRemoveStudent.Location = new Point(170, 220);
             btnRemoveStudent.Name = "btnRemoveStudent";
-            btnRemoveStudent.Size = new Size(80, 35);
-            btnRemoveStudent.TabIndex = 5;
+            btnRemoveStudent.Size = new Size(130, 35);
+            btnRemoveStudent.TabIndex = 4;
             btnRemoveStudent.Text = "Xóa";
             btnRemoveStudent.UseVisualStyleBackColor = false;
             // 
@@ -417,7 +437,9 @@ namespace CourseGuard.Frontend.UserControls.Admin
         private System.Windows.Forms.ComboBox cboSelectCourse;
         private System.Windows.Forms.ComboBox cboStudent;
         private System.Windows.Forms.ComboBox cboRegStatus;
-        private System.Windows.Forms.Button btnAddStudent;
+        private System.Windows.Forms.Label lblSelectCourse;
+        private System.Windows.Forms.Label lblStudent;
+        private System.Windows.Forms.Label lblRegStatus;
         private System.Windows.Forms.Button btnApproveStudent;
         private System.Windows.Forms.Button btnRemoveStudent;
     }

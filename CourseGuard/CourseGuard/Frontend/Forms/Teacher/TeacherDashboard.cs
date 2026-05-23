@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using CourseGuard.Backend.Models;
 using CourseGuard.Frontend.Theme;
@@ -73,10 +74,27 @@ namespace CourseGuard.Frontend.Forms.Teacher
             this.Controls.Add(_rightPanel);
             this.Controls.Add(_sidebar);
 
+            // Configure layout properties first to avoid layout engine bugs
+            pnlSubMenuCourseDocs.Dock = DockStyle.None;
+            pnlSubMenuTesting.Dock = DockStyle.None;
+            pnlSubMenuMonitoring.Dock = DockStyle.None;
+
+            pnlSubMenuCourseDocs.AutoSize = false;
+            pnlSubMenuTesting.AutoSize = false;
+            pnlSubMenuMonitoring.AutoSize = false;
+
             // Re-parent submenu panels as children of _sidebar
             pnlSubMenuCourseDocs.Parent = _sidebar;
             pnlSubMenuTesting.Parent = _sidebar;
             pnlSubMenuMonitoring.Parent = _sidebar;
+
+            // Paint rounded border on submenu cards
+            pnlSubMenuCourseDocs.Paint += SubMenu_Paint;
+            pnlSubMenuTesting.Paint += SubMenu_Paint;
+            pnlSubMenuMonitoring.Paint += SubMenu_Paint;
+
+            // Hide submenus immediately when the sidebar is collapsed or resized
+            _sidebar.Resize += (s, e) => HideAllSubMenus();
 
             // ── 2. Apply theme (Rule 09: no pure white/black) ────────
             BackColor = AppColors.BgBase;
@@ -183,6 +201,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void btnAssignedCourses_Click(object sender, EventArgs e)
         {
+            HideAllSubMenus();
             _topbar.PageTitle = "Phân công lớp";
             if (_nav.ContainsKey("Phân công lớp"))
                 LoadUserControl(_nav["Phân công lớp"]());
@@ -190,12 +209,14 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void btnOnlineClasses_Click(object sender, EventArgs e)
         {
+            HideAllSubMenus();
             _topbar.PageTitle = "Lớp trực tuyến";
             LoadUserControl(new UC_Chat());
         }
 
         private void btnQuestionBank_Click(object sender, EventArgs e)
         {
+            HideAllSubMenus();
             _topbar.PageTitle = "Ngân hàng câu hỏi";
             if (_nav.ContainsKey("Ngân hàng câu hỏi"))
                 LoadUserControl(_nav["Ngân hàng câu hỏi"]());
@@ -203,6 +224,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void btnExamConfig_Click(object sender, EventArgs e)
         {
+            HideAllSubMenus();
             _topbar.PageTitle = "Cấu hình đề thi";
             if (_nav.ContainsKey("Cấu hình đề thi"))
                 LoadUserControl(_nav["Cấu hình đề thi"]());
@@ -210,12 +232,14 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void btnExamList_Click(object sender, EventArgs e)
         {
+            HideAllSubMenus();
             _topbar.PageTitle = "Quản lý kỳ thi";
             LoadUserControl(new UC_ExamManagement());
         }
 
         private void btnLiveMonitor_Click(object sender, EventArgs e)
         {
+            HideAllSubMenus();
             _topbar.PageTitle = "Giám sát Live";
             if (_nav.ContainsKey("Giám sát Live"))
                 LoadUserControl(_nav["Giám sát Live"]());
@@ -223,6 +247,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void btnEssayGrading_Click(object sender, EventArgs e)
         {
+            HideAllSubMenus();
             _topbar.PageTitle = "Chấm tự luận";
             if (_nav.ContainsKey("Chấm tự luận"))
                 LoadUserControl(_nav["Chấm tự luận"]());
@@ -230,6 +255,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void btnScoreManagement_Click(object sender, EventArgs e)
         {
+            HideAllSubMenus();
             _topbar.PageTitle = "Quản lý điểm";
             LoadUserControl(new UC_ScoreManagement());
         }
@@ -260,12 +286,57 @@ namespace CourseGuard.Frontend.Forms.Teacher
             pnlSubMenuCourseDocs.Visible = false;
             pnlSubMenuTesting.Visible = false;
             pnlSubMenuMonitoring.Visible = false;
+            _sidebar?.SetSubmenuOffset(-1, 0);
         }
 
         private void ShowSubMenu(Panel subMenu)
         {
-            if (!subMenu.Visible) { HideAllSubMenus(); subMenu.Visible = true; }
-            else { subMenu.Visible = false; }
+            if (!subMenu.Visible)
+            {
+                HideAllSubMenus();
+
+                int index = -1;
+                int height = 120;
+                if (subMenu == pnlSubMenuCourseDocs) { index = 1; height = 80; }      // "Khóa học" (Index 1)
+                else if (subMenu == pnlSubMenuTesting) { index = 2; height = 120; }    // "Kiểm tra" (Index 2)
+                else if (subMenu == pnlSubMenuMonitoring) { index = 3; height = 120; } // "Giám sát" (Index 3)
+
+                if (index >= 0)
+                {
+                    subMenu.Dock = DockStyle.None;
+                    subMenu.Size = new Size(_sidebar.Width - 20, height);
+                    subMenu.Left = 10;
+                    subMenu.Top = 80 + (index + 1) * 44; // _itemStartY + (index + 1) * _itemHeight
+                    _sidebar.SetSubmenuOffset(index, height);
+                }
+
+                subMenu.Visible = true;
+                subMenu.BringToFront();
+            }
+            else
+            {
+                subMenu.Visible = false;
+                _sidebar.SetSubmenuOffset(-1, 0);
+            }
+        }
+
+        private void SubMenu_Paint(object? sender, PaintEventArgs e)
+        {
+            if (sender is not Panel pnl) return;
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            // Draw rounded borders for submenu container
+            int radius = 10;
+            var rect = new Rectangle(0, 0, pnl.Width - 1, pnl.Height - 1);
+            using (var path = MetaTheme.CreateRoundedRect(rect, radius))
+            {
+                pnl.Region = new Region(path);
+                using (var pen = new Pen(AppColors.BorderStrong, 1.2f))
+                {
+                    g.DrawPath(pen, path);
+                }
+            }
         }
 
         private static void StyleSubmenuButtons(Panel submenu)

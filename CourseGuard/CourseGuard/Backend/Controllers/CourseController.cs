@@ -156,6 +156,15 @@ namespace CourseGuard.Backend.Controllers
             catch { return new List<EnrollmentModel>(); }
         }
 
+        public List<EnrollmentModel> GetEnrollmentsByStatus(int courseId, string status)
+        {
+            if (UserSessionContext.CurrentRole != "ADMIN" && UserSessionContext.CurrentRole != "TEACHER") 
+                return new List<EnrollmentModel>();
+
+            try { return _dbContext.GetEnrollmentsByStatus(courseId, status); }
+            catch { return new List<EnrollmentModel>(); }
+        }
+
         public bool ApproveEnrollment(int courseId, int studentId)
         {
             if (UserSessionContext.CurrentRole != "ADMIN" && UserSessionContext.CurrentRole != "TEACHER") 
@@ -198,6 +207,12 @@ namespace CourseGuard.Backend.Controllers
         /// Lấy danh sách enrollment của một sinh viên
         /// (hiển thị trên trang "Khóa học của tôi").
         /// </summary>
+        public string? GetEnrollmentStatus(int courseId, int studentId)
+        {
+            try { return _dbContext.GetEnrollmentStatus(courseId, studentId); }
+            catch { return null; }
+        }
+
         public List<EnrollmentModel> GetMyEnrollments(int studentId)
         {
             try

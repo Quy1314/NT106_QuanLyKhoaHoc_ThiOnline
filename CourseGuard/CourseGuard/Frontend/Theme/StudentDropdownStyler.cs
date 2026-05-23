@@ -359,7 +359,7 @@ namespace CourseGuard.Frontend.Theme
             using (SolidBrush bgBrush = new SolidBrush(bg))
                 e.Graphics.FillRectangle(bgBrush, e.Bounds);
 
-            if (e.Index >= 0)
+            if (e.Index >= 0 && e.Index < combo.Items.Count)
             {
                 string text = combo.GetItemText(combo.Items[e.Index]) ?? string.Empty;
                 e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;

@@ -1407,6 +1407,51 @@ namespace CourseGuard.Backend.Data
             return list;
         }
 
+        public List<EnrollmentModel> GetEnrollmentsByStatus(int courseId, string status)
+        {
+            var list = new List<EnrollmentModel>();
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"
+                SELECT e.id, e.course_id, e.student_id, e.status, e.joined_at,
+                       c.name AS course_name, COALESCE(u.full_name, u.username) AS teacher_name,
+                       c.status AS course_status, c.start_date, c.end_date, COALESCE(c.description, '') AS description,
+                       COALESCE(s.full_name, s.username) AS student_name
+                FROM ENROLLMENTS e
+                JOIN COURSES c ON e.course_id = c.id
+                JOIN USERS u ON c.teacher_id = u.id
+                JOIN USERS s ON e.student_id = s.id
+                WHERE e.course_id = @course_id AND UPPER(e.status) = UPPER(@status)
+                ORDER BY e.joined_at DESC";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            command.Parameters.AddWithValue("@status", status);
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                list.Add(new EnrollmentModel
+                {
+                    Id = reader.GetInt32(0),
+                    CourseId = reader.GetInt32(1),
+                    StudentId = reader.GetInt32(2),
+                    Status = reader.GetString(3),
+                    JoinedAt = reader.IsDBNull(4) ? DateTime.MinValue : reader.GetDateTime(4),
+                    CourseName = reader.GetString(5),
+                    TeacherName = reader.IsDBNull(6) ? "Unknown" : reader.GetString(6),
+                    CourseStatus = reader.GetString(7),
+                    CourseStartDate = reader.IsDBNull(8) ? DateTime.MinValue : reader.GetDateTime(8),
+                    CourseEndDate = reader.IsDBNull(9) ? DateTime.MinValue : reader.GetDateTime(9),
+                    CourseDescription = reader.GetString(10),
+                    StudentName = reader.GetString(11)
+                });
+            }
+
+            return list;
+        }
+
         /// <summary>
         /// Duyệt yêu cầu đăng ký của sinh viên (PENDING -> ACTIVE)
         /// </summary>
