@@ -16,7 +16,7 @@ namespace CourseGuard.Backend.Models
         public int StudentId { get; set; }
 
         /// <summary>
-        /// PENDING | ACTIVE | DROPPED | COMPLETED
+        /// PENDING | ACTIVE | APPROVED | REJECTED | DROPPED | COMPLETED
         /// </summary>
         public string Status { get; set; } = "PENDING";
 

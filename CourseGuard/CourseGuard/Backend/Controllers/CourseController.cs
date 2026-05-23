@@ -9,10 +9,12 @@ namespace CourseGuard.Backend.Controllers
     public class CourseController
     {
         private readonly CourseGuardDbContext _dbContext;
+        private readonly NotificationRepository _notifications = new();
 
         public CourseController(CourseGuardDbContext dbContext)
         {
             _dbContext = dbContext;
+            _dbContext.EnsureCourseWorkflowSchema();
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -70,6 +72,69 @@ namespace CourseGuard.Backend.Controllers
             try
             {
                 _dbContext.DeleteCourse(courseId);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public bool ApproveCourse(int courseId)
+        {
+            if (!UserSessionContext.IsAdmin())
+                return false;
+
+            CourseModel? course = _dbContext.GetCourseById(courseId);
+            if (course == null || !string.Equals(course.Status, WorkflowConstants.CourseStatus.Pending, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            course.Status = WorkflowConstants.CourseStatus.Active;
+            course.RejectionReason = string.Empty;
+            try
+            {
+                _dbContext.UpdateCourse(course);
+                _notifications.Create(
+                    course.TeacherId,
+                    "Khóa học đã được duyệt",
+                    $"Khóa học \"{course.Name}\" đã được Admin duyệt và sinh viên có thể tìm thấy.",
+                    WorkflowConstants.NotificationCategory.SystemAdmin,
+                    WorkflowConstants.NotificationType.Informational,
+                    "Course",
+                    course.Id);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public bool RejectCourse(int courseId, string reason)
+        {
+            if (!UserSessionContext.IsAdmin())
+                return false;
+
+            CourseModel? course = _dbContext.GetCourseById(courseId);
+            if (course == null || !string.Equals(course.Status, WorkflowConstants.CourseStatus.Pending, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            course.Status = WorkflowConstants.CourseStatus.Rejected;
+            course.RejectionReason = reason?.Trim() ?? string.Empty;
+            try
+            {
+                _dbContext.UpdateCourse(course);
+                string detail = string.IsNullOrWhiteSpace(course.RejectionReason)
+                    ? $"Khóa học \"{course.Name}\" đã bị Admin từ chối."
+                    : $"Khóa học \"{course.Name}\" đã bị Admin từ chối. Lý do: {course.RejectionReason}";
+                _notifications.Create(
+                    course.TeacherId,
+                    "Khóa học bị từ chối",
+                    detail,
+                    WorkflowConstants.NotificationCategory.SystemAdmin,
+                    WorkflowConstants.NotificationType.Informational,
+                    "Course",
+                    course.Id);
                 return true;
             }
             catch
@@ -232,6 +297,10 @@ namespace CourseGuard.Backend.Controllers
         {
             try
             {
+                CourseModel? course = _dbContext.GetCourseById(courseId);
+                if (course == null || !string.Equals(course.Status, WorkflowConstants.CourseStatus.Active, StringComparison.OrdinalIgnoreCase))
+                    return "Khóa học này chưa được mở ghi danh.";
+
                 // Kiểm tra trạng thái hiện tại
                 var existing = _dbContext.GetEnrollmentStatus(courseId, studentId);
                 if (existing != null)
@@ -240,12 +309,16 @@ namespace CourseGuard.Backend.Controllers
                     {
                         "PENDING" => "Bạn đã gửi yêu cầu tham gia khóa học này. Vui lòng chờ duyệt.",
                         "ACTIVE" => "Bạn đã tham gia khóa học này rồi.",
+                        "APPROVED" => "Bạn đã tham gia khóa học này rồi.",
                         "DROPPED" => "Bạn đã rút khỏi khóa học này. Liên hệ Admin để đăng ký lại.",
+                        "REJECTED" => TryReRequestRejectedEnrollment(courseId, studentId, course),
                         _ => $"Trạng thái hiện tại: {existing}"
                     };
                 }
 
                 bool success = _dbContext.SelfEnroll(courseId, studentId);
+                if (success)
+                    NotifyTeacherEnrollmentRequest(course, studentId);
                 return success
                     ? "Đã gửi yêu cầu tham gia. Vui lòng chờ Admin/Giảng viên duyệt."
                     : "Không thể gửi yêu cầu. Vui lòng thử lại.";
@@ -302,6 +375,49 @@ namespace CourseGuard.Backend.Controllers
             catch
             {
                 return 0;
+            }
+        }
+
+        public List<StudentScheduleItemModel> GetStudentOnlineSessions(int studentId)
+        {
+            try
+            {
+                return _dbContext.GetStudentOnlineSessions(studentId);
+            }
+            catch
+            {
+                return new List<StudentScheduleItemModel>();
+            }
+        }
+
+        private string TryReRequestRejectedEnrollment(int courseId, int studentId, CourseModel course)
+        {
+            bool success = _dbContext.SelfEnroll(courseId, studentId);
+            if (success)
+            {
+                NotifyTeacherEnrollmentRequest(course, studentId);
+                return "Đã gửi lại yêu cầu tham gia. Vui lòng chờ Giảng viên duyệt.";
+            }
+
+            return "Không thể gửi lại yêu cầu. Vui lòng thử lại.";
+        }
+
+        private void NotifyTeacherEnrollmentRequest(CourseModel course, int studentId)
+        {
+            try
+            {
+                _notifications.Create(
+                    course.TeacherId,
+                    "Yêu cầu ghi danh mới",
+                    $"Sinh viên ID={studentId} đã gửi yêu cầu tham gia khóa học \"{course.Name}\".",
+                    WorkflowConstants.NotificationCategory.Enrollment,
+                    WorkflowConstants.NotificationType.ActionRequired,
+                    "Course",
+                    course.Id);
+            }
+            catch
+            {
+                // Enrollment remains valid even if notification creation fails.
             }
         }
     }

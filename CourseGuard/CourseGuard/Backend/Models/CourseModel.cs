@@ -17,6 +17,7 @@ namespace CourseGuard.Backend.Models
         public int TeacherId { get; set; }
         public string TeacherName { get; set; } = string.Empty; // For display
         public string Status { get; set; } = "Active";
+        public string RejectionReason { get; set; } = string.Empty;
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public DateTime CreatedAt { get; set; }

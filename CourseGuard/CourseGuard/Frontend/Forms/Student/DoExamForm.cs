@@ -4,6 +4,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Security;
+using CourseGuard.Backend.Services.Monitoring;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.Forms.Student
@@ -11,9 +12,17 @@ namespace CourseGuard.Frontend.Forms.Student
     public partial class DoExamForm : Form
     {
         private readonly AuthController _authController = new(new CourseGuardDbContext(""));
+        private readonly int _examId;
+        private readonly System.Threading.CancellationTokenSource _monitoringCts = new();
+        private StudentScreenStreamClient? _screenStreamClient;
 
-        public DoExamForm()
+        public DoExamForm() : this(0)
         {
+        }
+
+        public DoExamForm(int examId)
+        {
+            _examId = examId;
             InitializeComponent();
             ApplyAcademicExamTheme();
             LoadDummyQuestionsBox();
@@ -28,9 +37,20 @@ namespace CourseGuard.Frontend.Forms.Student
                 }
             };
             this.FormClosing += DoExamForm_FormClosing;
+            StartScreenMonitoring();
 
             // Bo góc buttons
             RoundedButtonHelper.Apply(10, btnSubmit, btnPrev, btnNext);
+        }
+
+        private void StartScreenMonitoring()
+        {
+            int studentId = UserSessionContext.CurrentUserId ?? 0;
+            if (_examId <= 0 || studentId <= 0)
+                return;
+
+            _screenStreamClient = new StudentScreenStreamClient(_examId, studentId);
+            _ = System.Threading.Tasks.Task.Run(() => _screenStreamClient.StartAsync(_monitoringCts.Token));
         }
 
         private void ApplyAcademicExamTheme()
@@ -75,6 +95,8 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private void DoExamForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
+            _monitoringCts.Cancel();
+            _screenStreamClient?.Dispose();
             int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
             string username = UserSessionContext.CurrentUsername ?? "không xác định";
             _authController.LogUserActivity(userId, "EXAM_EXIT", $"Người dùng {username} đã thoát màn hình làm bài thi.", string.Empty);

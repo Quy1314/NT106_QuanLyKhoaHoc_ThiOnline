@@ -36,5 +36,10 @@ namespace CourseGuard.Backend.Models
 
         /// <summary>Thời gian tạo thông báo.</summary>
         public DateTime CreatedAt { get; set; }
+
+        public string Category { get; set; } = WorkflowConstants.NotificationCategory.SystemAdmin;
+        public string NotificationType { get; set; } = WorkflowConstants.NotificationType.Informational;
+        public string SourceType { get; set; } = string.Empty;
+        public int? SourceId { get; set; }
     }
 }
