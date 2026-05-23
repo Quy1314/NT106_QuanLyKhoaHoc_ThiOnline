@@ -247,7 +247,8 @@ namespace CourseGuard.Frontend.UserControls.Student
                 JOIN ENROLLMENTS e ON e.COURSE_ID = c.ID
                 LEFT JOIN USERS u ON u.ID = m.UPLOADED_BY
                 WHERE e.STUDENT_ID = @student_id
-                  AND UPPER(COALESCE(e.STATUS, '')) = 'ACTIVE'
+                  AND UPPER(COALESCE(e.STATUS, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.STATUS, '')) = 'ACTIVE'
                 ORDER BY m.UPLOADED_AT DESC, m.ID DESC";
 
             using var command = new NpgsqlCommand(query, connection);
@@ -347,6 +348,9 @@ namespace CourseGuard.Frontend.UserControls.Student
             _bindingSource.DataSource = table;
             dgvDocuments.DataSource = _bindingSource;
             dgvDocuments.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            lblHint.Text = rows.Count == 0
+                ? "Không có tài liệu phù hợp. Tài liệu chỉ hiển thị khi bạn đã được duyệt tham gia khóa học."
+                : "Chỉ hiển thị tài liệu thuộc các khóa học bạn đã được duyệt tham gia.";
 
             DataGridViewColumn? idColumn = dgvDocuments.Columns["ID"];
             if (idColumn != null)

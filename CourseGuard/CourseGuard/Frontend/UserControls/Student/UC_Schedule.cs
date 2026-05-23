@@ -1,14 +1,11 @@
-// UC_Schedule.cs
-// Trang "Lịch học" – hiển thị lịch học dựa trên các khóa học sinh viên đã đăng ký (ACTIVE).
-
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Drawing;
+using System.Diagnostics;
+using System.Linq;
 using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
-using System.Linq;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Frontend.Theme;
@@ -19,7 +16,7 @@ namespace CourseGuard.Frontend.UserControls.Student
     {
         private readonly AuthController _authController = new(new CourseGuardDbContext(""));
         private readonly CourseController _controller;
-        private List<EnrollmentModel> _enrollments = new();
+        private List<StudentScheduleItemModel> _sessions = new();
 
         public UC_Schedule()
         {
@@ -29,35 +26,10 @@ namespace CourseGuard.Frontend.UserControls.Student
             cboTimeFilter.SelectedIndex = 0;
 
             _controller = new CourseController(new CourseGuardDbContext(""));
-
-            // Pill-shaped button per DESIGN.md
             RoundedButtonHelper.Apply(btnJoinOnline, 10);
-
-            // Events
-            cboTimeFilter.SelectedIndexChanged += (s, e) => ApplyTimeFilter();
-
-            btnJoinOnline.Click += (s, e) =>
-            {
-                if (dgvSchedule.CurrentRow == null || dgvSchedule.CurrentRow.IsNewRow)
-                {
-                    MetaTheme.ShowModernDialog("Vui lòng chọn một buổi học.", "Thông báo");
-                    return;
-                }
-
-                int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
-                string username = UserSessionContext.CurrentUsername ?? "không xác định";
-                string sessionName = dgvSchedule.CurrentRow.Cells.Count > 1
-                    ? dgvSchedule.CurrentRow.Cells[1].Value?.ToString() ?? "buổi học online"
-                    : "buổi học online";
-                _authController.LogUserActivity(userId, "ONLINE_SESSION_JOIN", $"Người dùng {username} tham gia lớp học online: {sessionName}", string.Empty);
-                CourseGuard.Frontend.Forms.Student.OnlineClassForm frm = new CourseGuard.Frontend.Forms.Student.OnlineClassForm();
-                frm.Show();
-            };
-
-            // Style — use MetaTheme.StyleGrid
+            cboTimeFilter.SelectedIndexChanged += (_, _) => ApplyTimeFilter();
+            btnJoinOnline.Click += (_, _) => JoinSelectedSession();
             MetaTheme.StyleGrid(dgvSchedule);
-
-            // Load dữ liệu thực
             _ = LoadSchedule();
         }
 
@@ -69,18 +41,12 @@ namespace CourseGuard.Frontend.UserControls.Student
                 int studentId = UserSessionContext.CurrentUserId ?? 0;
                 if (studentId == 0) return;
 
-                _enrollments = await System.Threading.Tasks.Task.Run(() => 
-                    _controller.GetMyEnrollments(studentId)
-                        .Where(e => e.Status == "ACTIVE")
-                        .ToList()
-                );
-
+                _sessions = await System.Threading.Tasks.Task.Run(() => _controller.GetStudentOnlineSessions(studentId));
                 ApplyTimeFilter();
             }
             catch (Exception ex)
             {
-                MetaTheme.ShowModernDialog("Lỗi tải lịch học: " + ex.Message,
-                    "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MetaTheme.ShowModernDialog("Lỗi tải lịch học: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -111,75 +77,94 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private void ApplyTimeFilter()
         {
-            var filtered = _enrollments.AsEnumerable();
+            IEnumerable<StudentScheduleItemModel> filtered = _sessions;
             DateTime now = DateTime.Now;
 
             switch (cboTimeFilter.SelectedIndex)
             {
-                case 0: // Tuần này
-                    var startOfWeek = now.AddDays(-(int)now.DayOfWeek + 1); // Monday
-                    var endOfWeek = startOfWeek.AddDays(6);
-                    filtered = filtered.Where(e =>
-                        e.CourseStartDate <= endOfWeek && e.CourseEndDate >= startOfWeek);
+                case 0:
+                    DateTime startOfWeek = now.Date.AddDays(-(int)now.DayOfWeek + 1);
+                    DateTime endOfWeek = startOfWeek.AddDays(7);
+                    filtered = filtered.Where(s => s.StartTime.HasValue && s.StartTime.Value >= startOfWeek && s.StartTime.Value < endOfWeek);
                     break;
-                case 1: // Tháng này
-                    var startOfMonth = new DateTime(now.Year, now.Month, 1);
-                    var endOfMonth = startOfMonth.AddMonths(1).AddDays(-1);
-                    filtered = filtered.Where(e =>
-                        e.CourseStartDate <= endOfMonth && e.CourseEndDate >= startOfMonth);
+                case 1:
+                    DateTime startOfMonth = new DateTime(now.Year, now.Month, 1);
+                    DateTime endOfMonth = startOfMonth.AddMonths(1);
+                    filtered = filtered.Where(s => s.StartTime.HasValue && s.StartTime.Value >= startOfMonth && s.StartTime.Value < endOfMonth);
                     break;
-                    // 2 = Tất cả → không lọc
             }
 
             BindToGrid(filtered.ToList());
         }
 
-        private void BindToGrid(List<EnrollmentModel> enrollments)
+        private void BindToGrid(List<StudentScheduleItemModel> sessions)
         {
-            DataTable dt = new DataTable();
+            DataTable dt = new();
+            dt.Columns.Add("SessionId", typeof(int));
             dt.Columns.Add("Môn học", typeof(string));
+            dt.Columns.Add("Buổi học", typeof(string));
             dt.Columns.Add("Giảng viên", typeof(string));
-            dt.Columns.Add("Ngày bắt đầu", typeof(string));
-            dt.Columns.Add("Ngày kết thúc", typeof(string));
+            dt.Columns.Add("Bắt đầu", typeof(string));
+            dt.Columns.Add("Kết thúc", typeof(string));
             dt.Columns.Add("Trạng thái", typeof(string));
+            dt.Columns.Add("Link", typeof(string));
 
-            foreach (var e in enrollments)
+            foreach (var session in sessions)
             {
-                string status = "Đang diễn ra";
-                if (e.CourseEndDate != DateTime.MinValue && e.CourseEndDate < DateTime.Now)
-                    status = "Đã kết thúc";
-                else if (e.CourseStartDate != DateTime.MinValue && e.CourseStartDate > DateTime.Now)
-                    status = "Sắp diễn ra";
-
+                string status = BuildStatus(session);
                 dt.Rows.Add(
-                    e.CourseName,
-                    e.TeacherName,
-                    e.CourseStartDate != DateTime.MinValue ? e.CourseStartDate.ToString("dd/MM/yyyy") : "N/A",
-                    e.CourseEndDate != DateTime.MinValue ? e.CourseEndDate.ToString("dd/MM/yyyy") : "N/A",
-                    status
-                );
+                    session.SessionId,
+                    session.CourseName,
+                    string.IsNullOrWhiteSpace(session.Title) ? session.CourseName : session.Title,
+                    session.TeacherName,
+                    session.StartTime?.ToString("dd/MM/yyyy HH:mm") ?? "",
+                    session.EndTime?.ToString("dd/MM/yyyy HH:mm") ?? "",
+                    status,
+                    session.MeetingLink);
             }
 
             dgvSchedule.DataSource = dt;
             dgvSchedule.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-
-            // Tô màu theo trạng thái
-            foreach (DataGridViewRow row in dgvSchedule.Rows)
-            {
-                if (row.IsNewRow) continue;
-                string status = row.Cells["Trạng thái"].Value?.ToString() ?? "";
-                if (status.Contains("Đang"))
-                    row.DefaultCellStyle.ForeColor = MetaTheme.Colors.Success;
-                else if (status.Contains("kết thúc"))
-                    row.DefaultCellStyle.ForeColor = MetaTheme.Colors.Critical;
-                else if (status.Contains("Sắp"))
-                    row.DefaultCellStyle.ForeColor = MetaTheme.Colors.Primary;
-            }
-
+            if (dgvSchedule.Columns["SessionId"] != null)
+                dgvSchedule.Columns["SessionId"]!.Visible = false;
+            if (dgvSchedule.Columns["Link"] != null)
+                dgvSchedule.Columns["Link"]!.Visible = false;
             dgvSchedule.ClearSelection();
             dgvSchedule.CurrentCell = null;
         }
 
+        private void JoinSelectedSession()
+        {
+            if (dgvSchedule.CurrentRow == null || dgvSchedule.CurrentRow.IsNewRow)
+            {
+                MetaTheme.ShowModernDialog("Vui lòng chọn một buổi học.", "Thông báo");
+                return;
+            }
 
+            string link = dgvSchedule.CurrentRow.Cells["Link"].Value?.ToString() ?? string.Empty;
+            string sessionName = dgvSchedule.CurrentRow.Cells["Buổi học"].Value?.ToString() ?? "buổi học online";
+            int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
+            string username = UserSessionContext.CurrentUsername ?? "không xác định";
+            _authController.LogUserActivity(userId, "ONLINE_SESSION_JOIN", $"Người dùng {username} tham gia lớp học online: {sessionName}", string.Empty);
+
+            if (!string.IsNullOrWhiteSpace(link))
+            {
+                Process.Start(new ProcessStartInfo(link) { UseShellExecute = true });
+                return;
+            }
+
+            CourseGuard.Frontend.Forms.Student.OnlineClassForm frm = new();
+            frm.Show();
+        }
+
+        private static string BuildStatus(StudentScheduleItemModel session)
+        {
+            DateTime now = DateTime.Now;
+            if (session.EndTime.HasValue && session.EndTime.Value < now)
+                return "Đã kết thúc";
+            if (session.StartTime.HasValue && session.StartTime.Value <= now && (!session.EndTime.HasValue || session.EndTime.Value >= now))
+                return "Đang diễn ra";
+            return "Sắp diễn ra";
+        }
     }
 }

@@ -36,6 +36,22 @@ namespace CourseGuard.Backend.Data
             return new NpgsqlConnection(_connectionString);
         }
 
+        public void EnsureCourseWorkflowSchema()
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            using var command = new NpgsqlCommand(@"
+                ALTER TABLE courses
+                    ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+
+                ALTER TABLE notifications
+                    ADD COLUMN IF NOT EXISTS category VARCHAR(32) NOT NULL DEFAULT 'SystemAdmin',
+                    ADD COLUMN IF NOT EXISTS notification_type VARCHAR(32) NOT NULL DEFAULT 'Informational',
+                    ADD COLUMN IF NOT EXISTS source_type VARCHAR(64),
+                    ADD COLUMN IF NOT EXISTS source_id INT;", connection);
+            command.ExecuteNonQuery();
+        }
+
         // Updated direct query method to include all fields
         public UserModel? GetUserByUsername(string username)
         {
@@ -1040,7 +1056,8 @@ namespace CourseGuard.Backend.Data
             using var connection = CreateConnection();
             connection.Open();
 
-            string query = @"SELECT c.id, c.name, c.description, c.teacher_id, u.full_name as teacher_name, c.status, c.start_date, c.end_date 
+            string query = @"SELECT c.id, c.name, c.description, c.teacher_id, u.full_name as teacher_name,
+                                    c.status, c.start_date, c.end_date, COALESCE(c.rejection_reason, '')
                              FROM COURSES c 
                              JOIN USERS u ON c.teacher_id = u.id";
             
@@ -1057,11 +1074,46 @@ namespace CourseGuard.Backend.Data
                     TeacherName = reader.IsDBNull(4) ? "Unknown" : reader.GetString(4),
                     Status = reader.GetString(5),
                     StartDate = reader.IsDBNull(6) ? DateTime.MinValue : reader.GetDateTime(6),
-                    EndDate = reader.IsDBNull(7) ? DateTime.MinValue : reader.GetDateTime(7)
+                    EndDate = reader.IsDBNull(7) ? DateTime.MinValue : reader.GetDateTime(7),
+                    RejectionReason = reader.GetString(8)
                 });
             }
 
             return courses;
+        }
+
+        public CourseModel? GetCourseById(int courseId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"
+                SELECT c.id, c.name, COALESCE(c.description, ''), c.teacher_id,
+                       COALESCE(u.full_name, u.username) AS teacher_name,
+                       COALESCE(c.status, 'ACTIVE'), c.start_date, c.end_date,
+                       COALESCE(c.rejection_reason, '')
+                FROM courses c
+                JOIN users u ON u.id = c.teacher_id
+                WHERE c.id = @id";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@id", courseId);
+            using var reader = command.ExecuteReader();
+            if (!reader.Read())
+                return null;
+
+            return new CourseModel
+            {
+                Id = reader.GetInt32(0),
+                Name = reader.GetString(1),
+                Description = reader.GetString(2),
+                TeacherId = reader.GetInt32(3),
+                TeacherName = reader.GetString(4),
+                Status = reader.GetString(5),
+                StartDate = reader.IsDBNull(6) ? DateTime.MinValue : reader.GetDateTime(6),
+                EndDate = reader.IsDBNull(7) ? DateTime.MinValue : reader.GetDateTime(7),
+                RejectionReason = reader.GetString(8)
+            };
         }
 
         public void InsertCourse(CourseModel course)
@@ -1069,14 +1121,15 @@ namespace CourseGuard.Backend.Data
             using var connection = CreateConnection();
             connection.Open();
 
-            string query = @"INSERT INTO COURSES (name, description, teacher_id, status, start_date, end_date) 
-                            VALUES (@name, @description, @teacher_id, @status, @start_date, @end_date)";
+            string query = @"INSERT INTO COURSES (name, description, teacher_id, status, rejection_reason, start_date, end_date) 
+                            VALUES (@name, @description, @teacher_id, @status, @rejection_reason, @start_date, @end_date)";
             
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@name", course.Name);
             command.Parameters.AddWithValue("@description", course.Description ?? (object)DBNull.Value);
             command.Parameters.AddWithValue("@teacher_id", course.TeacherId);
             command.Parameters.AddWithValue("@status", course.Status ?? "ACTIVE");
+            command.Parameters.AddWithValue("@rejection_reason", string.IsNullOrWhiteSpace(course.RejectionReason) ? (object)DBNull.Value : course.RejectionReason);
             command.Parameters.AddWithValue("@start_date", course.StartDate == DateTime.MinValue ? (object)DBNull.Value : course.StartDate);
             command.Parameters.AddWithValue("@end_date", course.EndDate == DateTime.MinValue ? (object)DBNull.Value : course.EndDate);
 
@@ -1089,13 +1142,14 @@ namespace CourseGuard.Backend.Data
             connection.Open();
 
             string query = @"UPDATE COURSES SET name = @name, description = @description, teacher_id = @teacher_id, 
-                             status = @status, start_date = @start_date, end_date = @end_date WHERE id = @id";
+                             status = @status, rejection_reason = @rejection_reason, start_date = @start_date, end_date = @end_date WHERE id = @id";
             
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@name", course.Name);
             command.Parameters.AddWithValue("@description", course.Description ?? (object)DBNull.Value);
             command.Parameters.AddWithValue("@teacher_id", course.TeacherId);
             command.Parameters.AddWithValue("@status", course.Status);
+            command.Parameters.AddWithValue("@rejection_reason", string.IsNullOrWhiteSpace(course.RejectionReason) ? (object)DBNull.Value : course.RejectionReason);
             command.Parameters.AddWithValue("@start_date", course.StartDate == DateTime.MinValue ? (object)DBNull.Value : course.StartDate);
             command.Parameters.AddWithValue("@end_date", course.EndDate == DateTime.MinValue ? (object)DBNull.Value : course.EndDate);
             command.Parameters.AddWithValue("@id", course.Id);
@@ -1206,6 +1260,47 @@ namespace CourseGuard.Backend.Data
             return list;
         }
 
+        public List<StudentScheduleItemModel> GetStudentOnlineSessions(int studentId)
+        {
+            var rows = new List<StudentScheduleItemModel>();
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"
+                SELECT os.id, os.course_id, COALESCE(c.name, ''),
+                       COALESCE(u.full_name, u.username, ''),
+                       COALESCE(os.title, ''), os.start_time, os.end_time,
+                       COALESCE(os.meeting_link, '')
+                FROM online_sessions os
+                JOIN courses c ON c.id = os.course_id
+                JOIN enrollments e ON e.course_id = c.id
+                JOIN users u ON u.id = c.teacher_id
+                WHERE e.student_id = @student_id
+                  AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'
+                ORDER BY os.start_time ASC NULLS LAST, os.id DESC";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@student_id", studentId);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                rows.Add(new StudentScheduleItemModel
+                {
+                    SessionId = reader.GetInt32(0),
+                    CourseId = reader.GetInt32(1),
+                    CourseName = reader.GetString(2),
+                    TeacherName = reader.GetString(3),
+                    Title = reader.GetString(4),
+                    StartTime = reader.IsDBNull(5) ? null : reader.GetDateTime(5),
+                    EndTime = reader.IsDBNull(6) ? null : reader.GetDateTime(6),
+                    MeetingLink = reader.GetString(7)
+                });
+            }
+
+            return rows;
+        }
+
         /// <summary>
         /// Lấy trạng thái enrollment hiện tại của sinh viên trong một khóa học.
         /// Trả về null nếu chưa ghi danh.
@@ -1234,18 +1329,38 @@ namespace CourseGuard.Backend.Data
             connection.Open();
 
             const string query = @"
+                UPDATE enrollments
+                SET status = 'PENDING', joined_at = CURRENT_TIMESTAMP
+                WHERE course_id = @course_id
+                  AND student_id = @student_id
+                  AND UPPER(COALESCE(status, '')) = 'REJECTED'
+                  AND EXISTS (
+                      SELECT 1 FROM courses
+                      WHERE id = @course_id AND UPPER(COALESCE(status, '')) = 'ACTIVE'
+                  );
+
                 INSERT INTO ENROLLMENTS (course_id, student_id, status)
                 SELECT @course_id, @student_id, 'PENDING'
-                WHERE NOT EXISTS (
+                WHERE EXISTS (
+                    SELECT 1 FROM courses
+                    WHERE id = @course_id AND UPPER(COALESCE(status, '')) = 'ACTIVE'
+                )
+                  AND NOT EXISTS (
                     SELECT 1 FROM ENROLLMENTS
                     WHERE course_id = @course_id AND student_id = @student_id
-                )";
+                );
+
+                SELECT COUNT(*)
+                FROM enrollments
+                WHERE course_id = @course_id
+                  AND student_id = @student_id
+                  AND UPPER(COALESCE(status, '')) = 'PENDING';";
 
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@course_id", courseId);
             command.Parameters.AddWithValue("@student_id", studentId);
 
-            return command.ExecuteNonQuery() > 0;
+            return Convert.ToInt64(command.ExecuteScalar()) > 0;
         }
 
         /// <summary>
@@ -1302,10 +1417,11 @@ namespace CourseGuard.Backend.Data
                        c.status, c.start_date, c.end_date
                 FROM COURSES c
                 JOIN USERS u ON c.teacher_id = u.id
-                WHERE UPPER(c.status) = 'ACTIVE'
+                WHERE UPPER(COALESCE(c.status, '')) = 'ACTIVE'
                   AND c.id NOT IN (
                       SELECT course_id FROM ENROLLMENTS
-                      WHERE student_id = @student_id AND status IN ('PENDING', 'ACTIVE')
+                      WHERE student_id = @student_id
+                        AND UPPER(COALESCE(status, '')) IN ('PENDING', 'ACTIVE', 'APPROVED')
                   )
                 ORDER BY c.created_at DESC";
 
@@ -1477,8 +1593,12 @@ namespace CourseGuard.Backend.Data
             using var connection = CreateConnection();
             connection.Open();
 
-            // Nếu đang PENDING thì XÓA để sinh viên có thể xin lại sau này nếu muốn
-            const string query = "DELETE FROM ENROLLMENTS WHERE course_id = @cid AND student_id = @sid";
+            const string query = @"
+                UPDATE enrollments
+                SET status = 'REJECTED'
+                WHERE course_id = @cid
+                  AND student_id = @sid
+                  AND UPPER(COALESCE(status, '')) = 'PENDING'";
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@cid", courseId);
             command.Parameters.AddWithValue("@sid", studentId);

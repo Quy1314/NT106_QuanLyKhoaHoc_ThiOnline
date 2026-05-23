@@ -196,7 +196,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             string examName = dgvExams.CurrentRow.Cells["Kỳ thi"].Value?.ToString() ?? "unknown-exam";
             _authController.LogUserActivity(userId, "EXAM_JOIN", $"User {username} joined exam: {examName}", string.Empty);
 
-            using var form = new DoExamForm();
+            using var form = new DoExamForm(examId);
             form.ShowDialog();
         }
     }

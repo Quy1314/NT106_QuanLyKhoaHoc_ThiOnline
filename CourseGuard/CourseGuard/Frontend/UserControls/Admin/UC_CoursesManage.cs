@@ -14,6 +14,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using CourseGuard.Backend.Models;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Admin
@@ -25,6 +26,8 @@ namespace CourseGuard.Frontend.UserControls.Admin
         private int _selectedCourseId = -1;
         private bool _isBusy;
         private List<CourseGuard.Backend.Models.UserModel> _allStudents = new List<CourseGuard.Backend.Models.UserModel>();
+        private readonly Button _btnApproveCourse = new Button();
+        private readonly Button _btnRejectCourse = new Button();
 
         public UC_CoursesManage()
         {
@@ -43,6 +46,9 @@ namespace CourseGuard.Frontend.UserControls.Admin
             cboRegStatus.Items.Clear();
             cboRegStatus.Items.AddRange(new object[] { "Chờ duyệt (Pending)", "Đã tham gia (Approved)", "Tất cả học viên (All)" });
             cboRegStatus.SelectedIndex = 0; // Default to Pending
+            cboStatus.Items.Clear();
+            cboStatus.Items.AddRange(new object[] { WorkflowConstants.CourseStatus.Draft, WorkflowConstants.CourseStatus.Pending, WorkflowConstants.CourseStatus.Active, WorkflowConstants.CourseStatus.Rejected, WorkflowConstants.CourseStatus.Closed });
+            SetupCourseApprovalButtons();
 
             WireEvents();
             // Initial load
@@ -74,12 +80,40 @@ namespace CourseGuard.Frontend.UserControls.Admin
             AcademicTheme.StyleGrid(dgvCourses);
         }
 
+        private void SetupCourseApprovalButtons()
+        {
+            grpCourseInfo.Height = 392;
+            _btnApproveCourse.Text = "Duyệt";
+            _btnApproveCourse.Location = new Point(20, 342);
+            _btnApproveCourse.Size = new Size(125, 35);
+            _btnApproveCourse.FlatStyle = FlatStyle.Flat;
+            _btnApproveCourse.FlatAppearance.BorderSize = 0;
+            _btnApproveCourse.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            _btnApproveCourse.BackColor = AcademicTheme.Primary;
+            _btnApproveCourse.ForeColor = Color.White;
+
+            _btnRejectCourse.Text = "Từ chối";
+            _btnRejectCourse.Location = new Point(155, 342);
+            _btnRejectCourse.Size = new Size(125, 35);
+            _btnRejectCourse.FlatStyle = FlatStyle.Flat;
+            _btnRejectCourse.FlatAppearance.BorderSize = 0;
+            _btnRejectCourse.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            _btnRejectCourse.BackColor = Color.FromArgb(220, 38, 38);
+            _btnRejectCourse.ForeColor = Color.White;
+
+            RoundedButtonHelper.Apply(10, _btnApproveCourse, _btnRejectCourse);
+            grpCourseInfo.Controls.Add(_btnApproveCourse);
+            grpCourseInfo.Controls.Add(_btnRejectCourse);
+        }
+
         private void WireEvents()
         {
             this.VisibleChanged += UC_CoursesManage_VisibleChanged;
             btnAddCourse.Click += btnAddCourse_Click;
             btnUpdateCourse.Click += btnUpdateCourse_Click;
             btnDeleteCourse.Click += btnDeleteCourse_Click;
+            _btnApproveCourse.Click += btnApproveCourse_Click;
+            _btnRejectCourse.Click += btnRejectCourse_Click;
             dgvCourses.CellClick += dgvCourses_CellClick;
             WireStudentApprovalEvents();
         }
@@ -159,6 +193,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             if (dgvCourses.Columns["Description"] != null) dgvCourses.Columns["Description"].HeaderText = "Mô Tả";
             if (dgvCourses.Columns["TeacherName"] != null) dgvCourses.Columns["TeacherName"].HeaderText = "Giáo Viên";
             if (dgvCourses.Columns["Status"] != null) dgvCourses.Columns["Status"].HeaderText = "Trạng Thái";
+            if (dgvCourses.Columns["RejectionReason"] != null) dgvCourses.Columns["RejectionReason"].HeaderText = "Lý Do Từ Chối";
             if (dgvCourses.Columns["StartDate"] != null) dgvCourses.Columns["StartDate"].HeaderText = "Ngày Bắt Đầu";
             if (dgvCourses.Columns["EndDate"] != null) dgvCourses.Columns["EndDate"].HeaderText = "Ngày Kết Thúc";
 
@@ -303,6 +338,58 @@ namespace CourseGuard.Frontend.UserControls.Admin
                     MessageBox.Show("Lỗi xóa khóa học: " + ex.Message);
                 }
             }
+        }
+
+        private async void btnApproveCourse_Click(object? sender, EventArgs e)
+        {
+            if (_selectedCourseId <= 0)
+            {
+                MessageBox.Show("Vui lòng chọn khóa học cần duyệt.");
+                return;
+            }
+
+            bool ok = await Task.Run(() => _courseService.ApproveCourse(_selectedCourseId));
+            MessageBox.Show(ok ? "Đã duyệt khóa học." : "Chỉ khóa học đang chờ duyệt mới có thể được duyệt.");
+            await RefreshDataAsync();
+        }
+
+        private async void btnRejectCourse_Click(object? sender, EventArgs e)
+        {
+            if (_selectedCourseId <= 0)
+            {
+                MessageBox.Show("Vui lòng chọn khóa học cần từ chối.");
+                return;
+            }
+
+            string reason = PromptRejectReason();
+            bool ok = await Task.Run(() => _courseService.RejectCourse(_selectedCourseId, reason));
+            MessageBox.Show(ok ? "Đã từ chối khóa học." : "Chỉ khóa học đang chờ duyệt mới có thể bị từ chối.");
+            await RefreshDataAsync();
+        }
+
+        private static string PromptRejectReason()
+        {
+            using var form = new Form
+            {
+                Text = "Từ chối khóa học",
+                Width = 420,
+                Height = 180,
+                StartPosition = FormStartPosition.CenterParent,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MaximizeBox = false,
+                MinimizeBox = false
+            };
+            var input = new TextBox { Left = 16, Top = 42, Width = 370 };
+            var label = new Label { Left = 16, Top = 16, Width = 370, Text = "Nhập lý do từ chối:" };
+            var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Left = 214, Top = 82, Width = 80 };
+            var cancel = new Button { Text = "Hủy", DialogResult = DialogResult.Cancel, Left = 304, Top = 82, Width = 80 };
+            form.Controls.Add(label);
+            form.Controls.Add(input);
+            form.Controls.Add(ok);
+            form.Controls.Add(cancel);
+            form.AcceptButton = ok;
+            form.CancelButton = cancel;
+            return form.ShowDialog() == DialogResult.OK ? input.Text.Trim() : string.Empty;
         }
         
         private void WireStudentApprovalEvents()

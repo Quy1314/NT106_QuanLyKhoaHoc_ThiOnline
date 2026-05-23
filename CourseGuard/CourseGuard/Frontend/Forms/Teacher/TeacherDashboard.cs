@@ -1,24 +1,13 @@
-/*
- * TeacherDashboard.cs
- * 
- * Layer: Presentation (Forms)
- * Layout: Sidebar(Left) → RightPanel(Fill) → Topbar(Top) + pnlMainboard(Fill)
- *
- * UI/UX Rules applied:
- *   Rule 01 (Layout Skeleton) — Sidebar fixed left, Header top, Content fills rest
- *   Rule 09 — No pure black/white
- *   Rule 40 — Single accent color in navigation
- *   Rule 46 — Short navigation labels (1-2 words max)
- *   Rule 05 — Visual hierarchy
- *   Rule 06 — Red for destructive actions (logout)
- *   Rule 15 — Actionable button text
- */
 using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Drawing2D;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Windows.Forms;
+using CourseGuard.Backend.Controllers;
+using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
+using CourseGuard.Backend.Security;
 using CourseGuard.Frontend.Theme;
 using CourseGuard.Frontend.UserControls.Teacher;
 
@@ -26,453 +15,296 @@ namespace CourseGuard.Frontend.Forms.Teacher
 {
     public partial class TeacherDashboard : Form
     {
-        private Dictionary<string, Func<UserControl>> _nav = new();
-        private UserControl? activeUserControl;
-        private int _currentTeacherId = 0;
-        private string _currentTeacherUsername = string.Empty;
-        private SidebarPanel _sidebar;
-        private TopbarPanel _topbar;
-        private Panel _rightPanel;   // container: topbar + pnlMainboard
+        private const string OverviewPage = "Tổng quan";
+        private const string ProfilePage = "Hồ sơ";
+        private const string ProfileTitle = "Hồ sơ cá nhân";
 
-        public TeacherDashboard()
+        private readonly UserModel _currentUser;
+        private readonly int _teacherId;
+        private readonly string _teacherName;
+        private readonly CourseGuardDbContext _dbContext = new("");
+        private readonly TeacherController _teacherController;
+        private Dictionary<string, Func<UserControl>> _routes = new();
+        private SidebarPanel _sidebar = null!;
+        private TopbarPanel _topbar = null!;
+        private Panel _rightPanel = null!;
+        private Panel _content = null!;
+        private string _currentPageName = OverviewPage;
+
+        public TeacherDashboard() : this(new UserModel { Id = 0, Username = "teacher", FullName = "Teacher" })
         {
+        }
+
+        public TeacherDashboard(UserModel user)
+        {
+            _currentUser = user ?? new UserModel { Id = 0, Username = "teacher", FullName = "Teacher" };
+            _teacherId = _currentUser.Id;
+            _teacherName = GetDisplayName(_currentUser);
+            _teacherController = new TeacherController(_dbContext);
+
+            AppColors.IsDarkMode = false;
             InitializeComponent();
             SearchFocusManager.Install(this);
+            BuildStudentStyleShell();
+            InitializeNavigation();
+            NavigateToPage(OverviewPage);
+        }
 
-            // ── 1. Build layout skeleton (Skill 01) ──────────────────
-            // Sidebar docks Left on Form
+        private void BuildStudentStyleShell()
+        {
             _sidebar = new SidebarPanel { Dock = DockStyle.Left };
             _sidebar.SetNavItems(
-                // Rule 46: Short labels (1-2 words max)
-                new[] { "Tổng quan", "Khóa học", "Kiểm tra", "Giám sát", "Thông báo" },
-                new[] { "🏠", "📚", "✍", "👁", "🔔" }
-            );
+                new[]
+                {
+                    "Tổng quan",
+                    "Khóa học",
+                    "Bài học",
+                    "Bài tập",
+                    "Bài kiểm tra",
+                    "Giám sát thi",
+                    "Kết quả",
+                    "Sinh viên",
+                    "Tài liệu",
+                    "Lịch dạy",
+                    "Tin nhắn",
+                    "Thông báo",
+                    "Hồ sơ"
+                },
+                new[]
+                {
+                    "home",
+                    "folder-check",
+                    "book",
+                    "document",
+                    "clipboard-check",
+                    "exam",
+                    "chart",
+                    "user",
+                    "document",
+                    "calendar",
+                    "message",
+                    "bell",
+                    "user"
+                });
             _sidebar.NavItemClicked += Sidebar_NavItemClicked;
 
-            // Right container holds Topbar(Top) + pnlMainboard(Fill)
-            _rightPanel = new Panel { Dock = DockStyle.Fill, Padding = Padding.Empty };
+            _rightPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 8, 12, 0) };
             _topbar = new TopbarPanel
             {
                 Dock = DockStyle.Top,
-                PageTitle = "Tổng quan",
-                Subtitle = "Giáo viên"
+                PageTitle = OverviewPage,
+                Subtitle = string.Empty,
+                UserName = _teacherName,
+                UseStudentTopbar = true,
+                QuickSearchPlaceholder = "Tìm khóa học, bài kiểm tra, học viên, tài liệu...",
+                OpenExamCount = SafeCount(() => _teacherController.GetActiveExamSessions(_teacherId).Count),
+                IsOnline = true,
+                NotificationCount = SafeCount(() => _dbContext.CountUnreadNotifications(_teacherId)),
+                NotificationPreviewItems = BuildNotificationPreviewItems()
             };
+            _topbar.ThemeToggled += (_, _) => ReloadCurrentPage();
+            _topbar.LogoutRequested += (_, _) => LogoutCurrentUser();
+            _topbar.NavigationRequested += Topbar_NavigationRequested;
+            _topbar.QuickSearchRequested += Topbar_QuickSearchRequested;
+            _topbar.SearchResultSelected += Topbar_SearchResultSelected;
 
-            // Re-parent btnMail onto TopbarPanel
-            btnMail.Parent = _topbar;
-            btnMail.Location = new Point(_topbar.Width - 60, 15);
-            btnMail.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-
-            // pnlMainboard (from Designer) fills remaining space under topbar
-            pnlMainboard.Dock = DockStyle.Fill;
-
-            // Assemble: pnlMainboard Fill first, then topbar Top docks above
-            _rightPanel.Controls.Add(pnlMainboard);
+            _content = new Panel { Dock = DockStyle.Fill, BackColor = AppColors.BgBase };
+            _rightPanel.Controls.Add(_content);
             _rightPanel.Controls.Add(_topbar);
+            Controls.Add(_rightPanel);
+            Controls.Add(_sidebar);
 
-            // Sidebar on the left, right panel fills the rest
-            this.Controls.Add(_rightPanel);
-            this.Controls.Add(_sidebar);
-
-            // Configure layout properties first to avoid layout engine bugs
-            pnlSubMenuCourseDocs.Dock = DockStyle.None;
-            pnlSubMenuTesting.Dock = DockStyle.None;
-            pnlSubMenuMonitoring.Dock = DockStyle.None;
-
-            pnlSubMenuCourseDocs.AutoSize = false;
-            pnlSubMenuTesting.AutoSize = false;
-            pnlSubMenuMonitoring.AutoSize = false;
-
-            // Re-parent submenu panels as children of _sidebar
-            pnlSubMenuCourseDocs.Parent = _sidebar;
-            pnlSubMenuTesting.Parent = _sidebar;
-            pnlSubMenuMonitoring.Parent = _sidebar;
-
-            // Paint rounded border on submenu cards
-            pnlSubMenuCourseDocs.Paint += SubMenu_Paint;
-            pnlSubMenuTesting.Paint += SubMenu_Paint;
-            pnlSubMenuMonitoring.Paint += SubMenu_Paint;
-
-            // Hide submenus immediately when the sidebar is collapsed or resized
-            _sidebar.Resize += (s, e) => HideAllSubMenus();
-
-            // ── 2. Apply theme (Rule 09: no pure white/black) ────────
             BackColor = AppColors.BgBase;
             _rightPanel.BackColor = AppColors.BgBase;
-            pnlMainboard.BackColor = AppColors.BgBase;
-            ForeColor = AppColors.TextPrimary;
-
-            // Submenu panels
-            pnlSubMenuCourseDocs.BackColor = AppColors.BgSidebar;
-            pnlSubMenuTesting.BackColor = AppColors.BgSidebar;
-            pnlSubMenuMonitoring.BackColor = AppColors.BgSidebar;
-
-            // Style submenu child buttons
-            StyleSubmenuButtons(pnlSubMenuCourseDocs);
-            StyleSubmenuButtons(pnlSubMenuTesting);
-            StyleSubmenuButtons(pnlSubMenuMonitoring);
-
-            lblEmailHeader.ForeColor = AppColors.AccentBlue;
-            btnMail.ForeColor = AppColors.TextSecondary;
-
-            // ── 3. Navigation logic ──────────────────────────────────
-            HideAllSubMenus();
-            InitializeEmailDropdown();
-            InitializeNavigation();
-
-            pnlEmailDropdown.BringToFront();
+            _content.BackColor = AppColors.BgBase;
         }
-
-        public TeacherDashboard(UserModel user) : this()
-        {
-            _currentTeacherId = user?.Id ?? 0;
-            _currentTeacherUsername = user?.Username ?? string.Empty;
-            _topbar.PageTitle = "Tổng quan";
-            _topbar.Subtitle = "Chào mừng, " + _currentTeacherUsername;
-            _topbar.UserName = _currentTeacherUsername;
-        }
-
-        // ═══════════════ NAVIGATION ═══════════════
 
         private void InitializeNavigation()
         {
-            _nav = new Dictionary<string, Func<UserControl>>
+            _routes = new Dictionary<string, Func<UserControl>>
             {
-                // Sub-items under "Khóa học" group
-                { "Phân công lớp",        () => CreateEmptyView("Quản lý phân công lớp") },
-                { "Lớp trực tuyến",       () => new UC_Chat() },
-                // Sub-items under "Kiểm tra" group
-                { "Ngân hàng câu hỏi",    () => CreateEmptyView("Ngân hàng câu hỏi") },
-                { "Cấu hình đề thi",      () => CreateEmptyView("Cấu hình đề thi") },
-                { "Quản lý kỳ thi",       () => new UC_ExamManagement() },
-                // Sub-items under "Giám sát" group
-                { "Giám sát Live",         () => CreateEmptyView("Giám sát Live") },
-                { "Chấm tự luận",          () => CreateEmptyView("Chấm tự luận") },
-                { "Quản lý điểm",          () => new UC_ScoreManagement() },
-                // Direct nav items
-                { "Thông báo",             () => new UC_Notification(_currentTeacherId) },
+                { "Tổng quan", () => new UC_TeacherOverview(_teacherId) },
+                { "Khóa học", () => new UC_TeacherCourses(_teacherId) },
+                { "Bài học", () => new UC_TeacherLessons(_teacherId) },
+                { "Bài tập", () => new UC_TeacherAssignments(_teacherId) },
+                { "Bài kiểm tra", () => new UC_TeacherExams(_teacherId) },
+                { "Giám sát thi", () => new UC_ExamMonitor(_teacherId) },
+                { "Kết quả", () => new UC_TeacherResults(_teacherId) },
+                { "Sinh viên", () => new UC_TeacherStudents(_teacherId) },
+                { "Tài liệu", () => new UC_TeacherMaterials(_teacherId) },
+                { "Lịch dạy", () => new UC_TeacherSchedule(_teacherId) },
+                { "Tin nhắn", () => new UC_TeacherMessages(_teacherId) },
+                { "Thông báo", () => new UC_TeacherNotifications(_teacherId) },
+                { "Hồ sơ", CreateTeacherProfilePage }
             };
+        }
+
+        private UserControl CreateTeacherProfilePage()
+        {
+            var profile = new UC_TeacherProfile(_teacherId);
+            profile.ProfileChanged += (_, e) =>
+            {
+                if (!string.IsNullOrWhiteSpace(e.FullName))
+                    _topbar.UserName = e.FullName.Trim();
+                _topbar.RefreshUserFromSession();
+                _topbar.Invalidate();
+            };
+            return profile;
         }
 
         private void Sidebar_NavItemClicked(object? sender, string pageName)
         {
             if (pageName == "Logout")
             {
-                HandleLogout();
+                LogoutCurrentUser();
                 return;
             }
 
-            _topbar.PageTitle = pageName;
+            NavigateToPage(pageName);
+        }
 
-            // Items with submenus — toggle instead of loading a UC
-            switch (pageName)
-            {
-                case "Khóa học":
-                    ShowSubMenu(pnlSubMenuCourseDocs);
-                    return;
-                case "Kiểm tra":
-                    ShowSubMenu(pnlSubMenuTesting);
-                    return;
-                case "Giám sát":
-                    ShowSubMenu(pnlSubMenuMonitoring);
-                    return;
-            }
+        private void Topbar_NavigationRequested(object? sender, TopbarNavigationRequestedEventArgs e)
+        {
+            NavigateToPage(e.PageName);
+        }
 
-            // Normal nav items
-            HideAllSubMenus();
+        private void Topbar_QuickSearchRequested(object? sender, TopbarQuickSearchRequestedEventArgs e)
+        {
+            string keyword = e.Keyword.Trim();
+            if (string.IsNullOrWhiteSpace(keyword))
+                return;
 
-            if (pageName == "Tổng quan")
-            {
-                // Clear mainboard for overview (no specific UC yet)
-                if (activeUserControl != null)
+            string normalized = keyword.ToLowerInvariant();
+            IEnumerable<TopbarSearchResult> results = _routes.Keys
+                .Where(page => page.ToLowerInvariant().Contains(normalized))
+                .Select(page => new TopbarSearchResult
                 {
-                    pnlMainboard.Controls.Remove(activeUserControl);
-                    activeUserControl.Dispose();
-                    activeUserControl = null;
-                }
-            }
-            else if (pageName == "Thông báo")
-            {
-                LoadUserControl(new UC_Notification(_currentTeacherId));
-            }
+                    Group = "Chức năng giảng viên",
+                    Title = page,
+                    Description = BuildSearchDescription(page),
+                    PageName = page,
+                    Keyword = keyword
+                });
+
+            _topbar.ShowQuickSearchResults(results);
         }
 
-        // ═══════════════ SUB-MENU BUTTON CLICKS ═══════════════
-
-        private void btnAssignedCourses_Click(object sender, EventArgs e)
+        private void Topbar_SearchResultSelected(object? sender, TopbarSearchResultSelectedEventArgs e)
         {
-            HideAllSubMenus();
-            _topbar.PageTitle = "Phân công lớp";
-            if (_nav.ContainsKey("Phân công lớp"))
-                LoadUserControl(_nav["Phân công lớp"]());
+            if (!string.IsNullOrWhiteSpace(e.Result.PageName))
+                NavigateToPage(e.Result.PageName);
         }
 
-        private void btnOnlineClasses_Click(object sender, EventArgs e)
+        private void NavigateToPage(string pageName)
         {
-            HideAllSubMenus();
-            _topbar.PageTitle = "Lớp trực tuyến";
-            LoadUserControl(new UC_Chat());
+            if (!_routes.TryGetValue(pageName, out Func<UserControl>? factory))
+                return;
+
+            _currentPageName = pageName;
+            _sidebar.SetActiveByName(pageName);
+            _topbar.PageTitle = pageName == ProfilePage ? ProfileTitle : pageName;
+            LoadUI(factory());
         }
 
-        private void btnQuestionBank_Click(object sender, EventArgs e)
+        private void LoadUI(UserControl uc)
         {
-            HideAllSubMenus();
-            _topbar.PageTitle = "Ngân hàng câu hỏi";
-            if (_nav.ContainsKey("Ngân hàng câu hỏi"))
-                LoadUserControl(_nav["Ngân hàng câu hỏi"]());
-        }
+            foreach (Control control in _content.Controls)
+                control.Dispose();
 
-        private void btnExamConfig_Click(object sender, EventArgs e)
-        {
-            HideAllSubMenus();
-            _topbar.PageTitle = "Cấu hình đề thi";
-            if (_nav.ContainsKey("Cấu hình đề thi"))
-                LoadUserControl(_nav["Cấu hình đề thi"]());
-        }
-
-        private void btnExamList_Click(object sender, EventArgs e)
-        {
-            HideAllSubMenus();
-            _topbar.PageTitle = "Quản lý kỳ thi";
-            LoadUserControl(new UC_ExamManagement());
-        }
-
-        private void btnLiveMonitor_Click(object sender, EventArgs e)
-        {
-            HideAllSubMenus();
-            _topbar.PageTitle = "Giám sát Live";
-            if (_nav.ContainsKey("Giám sát Live"))
-                LoadUserControl(_nav["Giám sát Live"]());
-        }
-
-        private void btnEssayGrading_Click(object sender, EventArgs e)
-        {
-            HideAllSubMenus();
-            _topbar.PageTitle = "Chấm tự luận";
-            if (_nav.ContainsKey("Chấm tự luận"))
-                LoadUserControl(_nav["Chấm tự luận"]());
-        }
-
-        private void btnScoreManagement_Click(object sender, EventArgs e)
-        {
-            HideAllSubMenus();
-            _topbar.PageTitle = "Quản lý điểm";
-            LoadUserControl(new UC_ScoreManagement());
-        }
-
-        // ═══════════════ UI LOADING ═══════════════
-
-        public void LoadUserControl(UserControl uc)
-        {
-            if (activeUserControl != null)
-            {
-                pnlMainboard.Controls.Remove(activeUserControl);
-                activeUserControl.Dispose();
-            }
-
-            activeUserControl = uc;
+            _content.Controls.Clear();
             uc.Dock = DockStyle.Fill;
             uc.BackColor = AppColors.BgBase;
-            pnlMainboard.Controls.Add(uc);
-            uc.BringToFront();
-
+            _content.Controls.Add(uc);
             AppColors.ApplyTheme(uc);
         }
 
-        // ═══════════════ HELPERS ═══════════════
-
-        private void HideAllSubMenus()
+        private void ReloadCurrentPage()
         {
-            pnlSubMenuCourseDocs.Visible = false;
-            pnlSubMenuTesting.Visible = false;
-            pnlSubMenuMonitoring.Visible = false;
-            _sidebar?.SetSubmenuOffset(-1, 0);
+            BackColor = AppColors.BgBase;
+            _rightPanel.BackColor = AppColors.BgBase;
+            _content.BackColor = AppColors.BgBase;
+            _topbar.BackColor = AppColors.BgCard;
+            _topbar.OpenExamCount = SafeCount(() => _teacherController.GetActiveExamSessions(_teacherId).Count);
+            _topbar.NotificationCount = SafeCount(() => _dbContext.CountUnreadNotifications(_teacherId));
+            _topbar.NotificationPreviewItems = BuildNotificationPreviewItems();
+            _topbar.PageTitle = _currentPageName == ProfilePage ? ProfileTitle : _currentPageName;
+            _sidebar.SetActiveByName(_currentPageName);
+
+            if (_routes.TryGetValue(_currentPageName, out Func<UserControl>? factory))
+                LoadUI(factory());
+
+            _sidebar.Invalidate();
+            _topbar.Invalidate();
         }
 
-        private void ShowSubMenu(Panel subMenu)
+        private void LogoutCurrentUser()
         {
-            if (!subMenu.Visible)
-            {
-                HideAllSubMenus();
-
-                int index = -1;
-                int height = 120;
-                if (subMenu == pnlSubMenuCourseDocs) { index = 1; height = 80; }      // "Khóa học" (Index 1)
-                else if (subMenu == pnlSubMenuTesting) { index = 2; height = 120; }    // "Kiểm tra" (Index 2)
-                else if (subMenu == pnlSubMenuMonitoring) { index = 3; height = 120; } // "Giám sát" (Index 3)
-
-                if (index >= 0)
-                {
-                    subMenu.Dock = DockStyle.None;
-                    subMenu.Size = new Size(_sidebar.Width - 20, height);
-                    subMenu.Left = 10;
-                    subMenu.Top = 80 + (index + 1) * 44; // _itemStartY + (index + 1) * _itemHeight
-                    _sidebar.SetSubmenuOffset(index, height);
-                }
-
-                subMenu.Visible = true;
-                subMenu.BringToFront();
-            }
-            else
-            {
-                subMenu.Visible = false;
-                _sidebar.SetSubmenuOffset(-1, 0);
-            }
+            var authService = new AuthController(new CourseGuardDbContext(""));
+            authService.Logout(_teacherId, _currentUser?.Username ?? _teacherName, GetLocalIpAddress());
+            DialogResult = DialogResult.OK;
+            Close();
         }
 
-        private void SubMenu_Paint(object? sender, PaintEventArgs e)
+        private IEnumerable<string> BuildNotificationPreviewItems()
         {
-            if (sender is not Panel pnl) return;
-            var g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-
-            // Draw rounded borders for submenu container
-            int radius = 10;
-            var rect = new Rectangle(0, 0, pnl.Width - 1, pnl.Height - 1);
-            using (var path = MetaTheme.CreateRoundedRect(rect, radius))
-            {
-                pnl.Region = new Region(path);
-                using (var pen = new Pen(AppColors.BorderStrong, 1.2f))
-                {
-                    g.DrawPath(pen, path);
-                }
-            }
+            return SafeList(() => new NotificationRepository().LoadByUserId(_teacherId))
+                .OrderByDescending(n => n.CreatedAt)
+                .Take(5)
+                .Select(n => string.IsNullOrWhiteSpace(n.Content) ? n.Title : $"{n.Title} - {n.Content}");
         }
 
-        private static void StyleSubmenuButtons(Panel submenu)
+        private static string BuildSearchDescription(string pageName)
         {
-            foreach (Control c in submenu.Controls)
+            return pageName switch
             {
-                if (c is Button btn)
-                {
-                    btn.FlatStyle = FlatStyle.Flat;
-                    btn.FlatAppearance.BorderSize = 0;
-                    btn.BackColor = Color.Transparent;
-                    btn.ForeColor = AppColors.TextSecondary;
-                    btn.Font = AppFonts.Body;
-                    btn.Cursor = Cursors.Hand;
-                    btn.FlatAppearance.MouseOverBackColor = AppColors.BgCardHover;
-                }
-            }
-        }
-
-        private static UserControl CreateEmptyView(string title)
-        {
-            var panel = new Panel { Dock = DockStyle.Fill, BackColor = AppColors.BgBase };
-            var label = new Label
-            {
-                Dock = DockStyle.Fill,
-                Text = $"{title}\n(Đang phát triển)",
-                TextAlign = ContentAlignment.MiddleCenter,
-                Font = AppFonts.Title,
-                ForeColor = AppColors.TextMuted
+                "Khóa học" => "Quản lý các khóa học giảng viên phụ trách",
+                "Bài học" => "Tạo và cập nhật nội dung bài học",
+                "Bài tập" => "Quản lý bài tập và hạn nộp",
+                "Bài kiểm tra" => "Tạo và cấu hình kỳ thi",
+                "Giám sát thi" => "Theo dõi các phiên thi đang diễn ra",
+                "Kết quả" => "Xem và cập nhật điểm",
+                "Sinh viên" => "Duyệt ghi danh và xem học viên",
+                "Tài liệu" => "Quản lý tài liệu khóa học",
+                "Lịch dạy" => "Quản lý lịch dạy và buổi học",
+                "Tin nhắn" => "Trao đổi theo khóa học",
+                "Thông báo" => "Xem thông báo cá nhân",
+                "Hồ sơ" => "Thông tin tài khoản giảng viên",
+                _ => "Mở chức năng giảng viên"
             };
-            panel.Controls.Add(label);
-            var uc = new UserControl { Dock = DockStyle.Fill, BackColor = AppColors.BgBase };
-            uc.Controls.Add(panel);
-            return uc;
         }
 
-        // ═══════════════ LOGOUT (Rule 06: red for destructive) ═══════════════
-
-        private void HandleLogout()
+        private static string GetDisplayName(UserModel user)
         {
-            // Rule 15: Actionable button text in confirmation
-            DialogResult result = MessageBox.Show(
-                "Bạn có chắc chắn muốn đăng xuất khỏi hệ thống không?",
-                "Xác nhận đăng xuất",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
-
-            if (result == DialogResult.Yes)
-            {
-                var authService = new CourseGuard.Backend.Controllers.AuthController(
-                    new CourseGuard.Backend.Data.CourseGuardDbContext(""));
-                string ipAddress = GetLocalIpAddress();
-                authService.Logout(_currentTeacherId, _currentTeacherUsername, ipAddress);
-                this.Close();
-            }
+            if (!string.IsNullOrWhiteSpace(user.FullName))
+                return user.FullName.Trim();
+            if (!string.IsNullOrWhiteSpace(user.Username))
+                return user.Username.Trim();
+            return "teacher";
         }
 
-        // ═══════════════ MAIL DROPDOWN ═══════════════
-
-        private void InitializeEmailDropdown()
-        {
-            pnlEmailDropdown.BackColor = AppColors.BgCard;
-            pnlEmailDropdown.Paint += (s, e) =>
-            {
-                if (s is not Panel pnl) return;
-                // Rule 26: nested border radii — inner = outer - padding
-                int radius = 16;
-                System.Drawing.Drawing2D.GraphicsPath path = new System.Drawing.Drawing2D.GraphicsPath();
-                path.AddArc(0, 0, radius, radius, 180, 90);
-                path.AddArc(pnl.Width - radius - 1, 0, radius, radius, 270, 90);
-                path.AddArc(pnl.Width - radius - 1, pnl.Height - radius - 1, radius, radius, 0, 90);
-                path.AddArc(0, pnl.Height - radius - 1, radius, radius, 90, 90);
-                path.CloseFigure();
-                pnl.Region = new System.Drawing.Region(path);
-
-                using (Pen pen = new Pen(AppColors.Border, 1.5f))
-                {
-                    e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                    e.Graphics.DrawPath(pen, path);
-                }
-            };
-            _ = LoadEmailsAsync();
-        }
-
-        private async System.Threading.Tasks.Task LoadEmailsAsync()
+        private static int SafeCount(Func<int> getter)
         {
             try
             {
-                var gmailHelper = new CourseGuard.Backend.Services.GmailServiceHelper();
-                var emails = await gmailHelper.GetLatestEmailsAsync(10);
-                if (this.InvokeRequired)
-                    this.Invoke(new Action(() => PopulateEmails(emails)));
-                else
-                    PopulateEmails(emails);
+                return Math.Max(0, getter());
             }
-            catch (Exception ex)
+            catch
             {
-                if (this.InvokeRequired)
-                    this.Invoke(new Action(() => ShowEmailError(ex.Message)));
-                else
-                    ShowEmailError(ex.Message);
+                return 0;
             }
         }
 
-        private void PopulateEmails(System.Collections.Generic.List<CourseGuard.Backend.Services.EmailItem> emails)
+        private static List<T> SafeList<T>(Func<List<T>> getter)
         {
-            flpEmails.SuspendLayout();
-            flpEmails.Controls.Clear();
-            foreach (var email in emails)
-                flpEmails.Controls.Add(new UC_EmailCard(email.Sender, email.Subject, email.Snippet, email.Date));
-            flpEmails.ResumeLayout();
-        }
-
-        // Rule 47: Constructive error message
-        private void ShowEmailError(string errorMsg)
-        {
-            flpEmails.Controls.Clear();
-            flpEmails.Controls.Add(new Label
+            try
             {
-                Text = "Không thể tải email: " + errorMsg,
-                AutoSize = true,
-                ForeColor = AppColors.Danger,
-                Padding = new Padding(10)
-            });
+                return getter() ?? new List<T>();
+            }
+            catch
+            {
+                return new List<T>();
+            }
         }
-
-        private void btnMail_Click(object sender, EventArgs e)
-        {
-            pnlEmailDropdown.Visible = !pnlEmailDropdown.Visible;
-            if (pnlEmailDropdown.Visible) pnlEmailDropdown.BringToFront();
-        }
-
-        private void btnMail_MouseEnter(object sender, EventArgs e) => btnMail.ForeColor = AppColors.AccentBlue;
-        private void btnMail_MouseLeave(object sender, EventArgs e) => btnMail.ForeColor = AppColors.TextSecondary;
-
-        // ═══════════════ UTILITIES ═══════════════
 
         private static string GetLocalIpAddress()
         {
@@ -480,16 +312,20 @@ namespace CourseGuard.Frontend.Forms.Teacher
             {
                 foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
                 {
-                    if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+                    if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up)
+                        continue;
+
                     foreach (var ip in ni.GetIPProperties().UnicastAddresses)
                     {
-                        if (ip.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
-                            !System.Net.IPAddress.IsLoopback(ip.Address))
+                        if (ip.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip.Address))
                             return ip.Address.ToString();
                     }
                 }
             }
-            catch { }
+            catch
+            {
+            }
+
             return "127.0.0.1";
         }
     }
