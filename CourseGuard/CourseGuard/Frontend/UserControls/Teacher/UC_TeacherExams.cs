@@ -8,11 +8,32 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 {
     public partial class UC_TeacherExams : TeacherGridPageBase
     {
-        public UC_TeacherExams(int teacherId) : base(teacherId, "Bài kiểm tra", "Tạo và quản lý kỳ thi. Giám sát nằm ở tab riêng.", "Danh sách bài kiểm tra") { }
+        public UC_TeacherExams(int teacherId) : base(teacherId, "Bài kiểm tra", "Tạo và quản lý kỳ thi. Giám sát nằm ở tab riêng.", "Danh sách bài kiểm tra")
+        {
+            var questionsButton = TeacherTabChrome.SecondaryButton("Soạn câu hỏi");
+            questionsButton.Click += async (_, _) => await EditQuestionsAsync();
+            AddHeaderAction(questionsButton);
+        }
+
         protected override Task<DataTable> CreateTableAsync() => Task.Run(() => TeacherTabChrome.ToTable(
             new[] { "Id", "CourseId", "Khóa học", "Tên kỳ thi", "Mở", "Đóng", "Thời lượng", "Lượt", "Câu hỏi", "Trạng thái" },
             Controller.GetExams(TeacherId),
             e => new object?[] { e.Id, e.CourseId, e.CourseName, e.Title, e.OpenTime?.ToString("dd/MM/yyyy HH:mm") ?? "", e.CloseTime?.ToString("dd/MM/yyyy HH:mm") ?? "", e.DurationMinutes, e.MaxAttempts, e.QuestionCount, e.StatusText }));
+
+        private async Task EditQuestionsAsync()
+        {
+            int id = CurrentInt("Id");
+            if (id <= 0)
+            {
+                MetaTheme.ShowModernDialog("Vui lòng chọn một bài kiểm tra.", "Thông báo");
+                return;
+            }
+
+            using var dialog = new TeacherExamQuestionsDialog(TeacherId, id, CurrentString("Tên kỳ thi"));
+            dialog.ShowDialog(FindForm());
+            await LoadDataAsync();
+        }
+
         protected override async Task AddAsync()
         {
             using var dialog = new TeacherExamDialog(Controller.GetCourses(TeacherId));
@@ -22,6 +43,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 await LoadDataAsync();
             }
         }
+
         protected override async Task EditAsync()
         {
             int id = CurrentInt("Id");
@@ -40,6 +62,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 await LoadDataAsync();
             }
         }
+
         protected override async Task DeleteAsync()
         {
             int id = CurrentInt("Id");
