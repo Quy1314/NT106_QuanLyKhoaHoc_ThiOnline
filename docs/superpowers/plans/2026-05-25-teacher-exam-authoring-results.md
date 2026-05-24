@@ -264,7 +264,7 @@ ALTER TABLE exam_questions
 
 CREATE INDEX IF NOT EXISTS idx_exams_status ON exams(status);
 CREATE INDEX IF NOT EXISTS idx_exam_questions_exam ON exam_questions(exam_id);
-CREATE UNIQUE INDEX IF NOT EXISTS ux_exam_questions_exam_order ON exam_questions(exam_id, display_order);
+-- Do not enforce unique display_order because legacy rows may not have stable ordering yet.
 
 CREATE TABLE IF NOT EXISTS student_hidden_results (
     student_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -312,7 +312,7 @@ using (var command = new NpgsqlCommand(@"
 
     CREATE INDEX IF NOT EXISTS idx_exams_status ON exams(status);
     CREATE INDEX IF NOT EXISTS idx_exam_questions_exam ON exam_questions(exam_id);
-    CREATE UNIQUE INDEX IF NOT EXISTS ux_exam_questions_exam_order ON exam_questions(exam_id, display_order);
+    -- Do not enforce unique display_order because legacy rows may not have stable ordering yet.
 
     CREATE TABLE IF NOT EXISTS student_hidden_results (
         student_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
