@@ -24,8 +24,38 @@ CREATE TABLE IF NOT EXISTS exam_questions (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+DO $$
+BEGIN
+    ALTER TABLE exam_questions
+        ADD COLUMN IF NOT EXISTS id INTEGER;
+
+    CREATE SEQUENCE IF NOT EXISTS exam_questions_id_seq;
+
+    UPDATE exam_questions
+    SET id = nextval('exam_questions_id_seq')
+    WHERE id IS NULL;
+
+    PERFORM setval(
+        'exam_questions_id_seq',
+        COALESCE((SELECT MAX(id) FROM exam_questions), 1),
+        (SELECT COALESCE(MAX(id), 0) > 0 FROM exam_questions)
+    );
+
+    ALTER TABLE exam_questions
+        ALTER COLUMN id SET DEFAULT nextval('exam_questions_id_seq');
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_index i
+        WHERE i.indrelid = 'exam_questions'::regclass
+          AND i.indisprimary
+    ) THEN
+        ALTER TABLE exam_questions
+            ADD CONSTRAINT exam_questions_pkey PRIMARY KEY (id);
+    END IF;
+END $$;
+
 ALTER TABLE exam_questions
-    ADD COLUMN IF NOT EXISTS id SERIAL,
     ADD COLUMN IF NOT EXISTS question_text TEXT,
     ADD COLUMN IF NOT EXISTS option_a TEXT,
     ADD COLUMN IF NOT EXISTS option_b TEXT,
