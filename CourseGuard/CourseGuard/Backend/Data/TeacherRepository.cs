@@ -597,21 +597,25 @@ namespace CourseGuard.Backend.Data
         public int CreateMaterial(int teacherId, TeacherMaterialModel input) => InsertCourseChild(
             teacherId,
             input.CourseId,
-            @"INSERT INTO materials (course_id, file_name, file_path, uploaded_by, uploaded_at)
-              SELECT @course_id, @file_name, @file_path, @teacher_id, CURRENT_TIMESTAMP
+            @"INSERT INTO materials (course_id, file_name, file_path, content_type, file_size, file_content, uploaded_by, uploaded_at)
+              SELECT @course_id, @file_name, @file_path, @content_type, @file_size, @file_content, @teacher_id, CURRENT_TIMESTAMP
               WHERE EXISTS (SELECT 1 FROM courses WHERE id = @course_id AND teacher_id = @teacher_id)
               RETURNING id",
             command =>
             {
                 command.Parameters.AddWithValue("@file_name", input.FileName);
                 command.Parameters.AddWithValue("@file_path", input.FilePath);
+                command.Parameters.AddWithValue("@content_type", string.IsNullOrWhiteSpace(input.ContentType) ? DBNull.Value : input.ContentType);
+                command.Parameters.AddWithValue("@file_size", input.FileSize);
+                command.Parameters.AddWithValue("@file_content", input.FileContent == null || input.FileContent.Length == 0 ? DBNull.Value : input.FileContent);
             });
 
         public bool UpdateMaterial(int teacherId, TeacherMaterialModel input) => ExecuteCourseChild(
             teacherId,
             input.CourseId,
             @"UPDATE materials m
-              SET file_name = @file_name, file_path = @file_path
+              SET file_name = @file_name, file_path = @file_path,
+                  content_type = @content_type, file_size = @file_size, file_content = @file_content
               FROM courses c
               WHERE m.course_id = c.id AND c.teacher_id = @teacher_id AND m.id = @id AND m.course_id = @course_id",
             command =>
@@ -619,6 +623,9 @@ namespace CourseGuard.Backend.Data
                 command.Parameters.AddWithValue("@id", input.Id);
                 command.Parameters.AddWithValue("@file_name", input.FileName);
                 command.Parameters.AddWithValue("@file_path", input.FilePath);
+                command.Parameters.AddWithValue("@content_type", string.IsNullOrWhiteSpace(input.ContentType) ? DBNull.Value : input.ContentType);
+                command.Parameters.AddWithValue("@file_size", input.FileSize);
+                command.Parameters.AddWithValue("@file_content", input.FileContent == null || input.FileContent.Length == 0 ? DBNull.Value : input.FileContent);
             });
 
         public bool DeleteMaterial(int teacherId, int materialId) => ExecuteOwnedDelete(
@@ -850,7 +857,9 @@ namespace CourseGuard.Backend.Data
             connection.Open();
             string sql = @"
                 SELECT m.id, m.course_id, COALESCE(c.name, ''), COALESCE(m.file_name, ''),
-                       COALESCE(m.file_path, ''), m.uploaded_at
+                       COALESCE(m.file_path, ''), m.uploaded_at,
+                       COALESCE(m.content_type, ''), COALESCE(m.file_size, 0),
+                       m.file_content IS NOT NULL
                 FROM materials m
                 JOIN courses c ON c.id = m.course_id
                 WHERE c.teacher_id = @teacher_id";
@@ -871,7 +880,10 @@ namespace CourseGuard.Backend.Data
                     CourseName = reader.GetString(2),
                     FileName = reader.GetString(3),
                     FilePath = reader.GetString(4),
-                    UploadedAt = reader.IsDBNull(5) ? DateTime.MinValue : reader.GetDateTime(5)
+                    UploadedAt = reader.IsDBNull(5) ? DateTime.MinValue : reader.GetDateTime(5),
+                    ContentType = reader.GetString(6),
+                    FileSize = reader.GetInt64(7),
+                    HasStoredContent = reader.GetBoolean(8)
                 });
             }
             return rows;
@@ -1208,6 +1220,24 @@ namespace CourseGuard.Backend.Data
 
                 CREATE INDEX IF NOT EXISTS idx_exams_status ON exams(status);
                 CREATE INDEX IF NOT EXISTS idx_exam_questions_exam ON exam_questions(exam_id);
+
+                CREATE TABLE IF NOT EXISTS exam_attempt_answers (
+                    attempt_id INT NOT NULL REFERENCES exam_attempts(id) ON DELETE CASCADE,
+                    exam_question_id INT NOT NULL REFERENCES exam_questions(id) ON DELETE CASCADE,
+                    selected_option CHAR(1) NOT NULL,
+                    is_correct BOOLEAN,
+                    score NUMERIC(6,2) NOT NULL DEFAULT 0,
+                    answered_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (attempt_id, exam_question_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_exam_attempt_answers_attempt ON exam_attempt_answers(attempt_id);
+                CREATE INDEX IF NOT EXISTS idx_exam_attempt_answers_question ON exam_attempt_answers(exam_question_id);
+
+                ALTER TABLE materials
+                    ADD COLUMN IF NOT EXISTS content_type VARCHAR(120),
+                    ADD COLUMN IF NOT EXISTS file_size BIGINT NOT NULL DEFAULT 0,
+                    ADD COLUMN IF NOT EXISTS file_content BYTEA;
 
                 CREATE TABLE IF NOT EXISTS student_hidden_results (
                     student_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

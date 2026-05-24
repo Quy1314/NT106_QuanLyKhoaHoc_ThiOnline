@@ -10,7 +10,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
     {
         public UC_TeacherExams(int teacherId) : base(teacherId, "Bài kiểm tra", "Tạo và quản lý kỳ thi. Giám sát nằm ở tab riêng.", "Danh sách bài kiểm tra")
         {
-            var questionsButton = TeacherTabChrome.SecondaryButton("Soạn câu hỏi");
+            var questionsButton = TeacherTabChrome.PrimaryButton("Soạn câu hỏi");
             questionsButton.Click += async (_, _) => await EditQuestionsAsync();
             AddHeaderAction(questionsButton);
         }

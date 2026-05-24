@@ -198,6 +198,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             using var form = new DoExamForm(examId);
             form.ShowDialog();
+            _ = LoadDataAsync();
         }
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Drawing;
 using System.Globalization;
 using System.Windows.Forms;
 using CourseGuard.Backend.Data;
@@ -15,6 +16,8 @@ namespace CourseGuard.Frontend.UserControls.Student
         private readonly ComboBox _courseFilter = new();
         private readonly TextBox _searchBox = new();
         private readonly Button _hideResult = new();
+        private RoundedPanel _resultBody = null!;
+        private Label _emptyStateLabel = null!;
         private bool _loadingCourseFilter;
 
         public UC_Result()
@@ -48,16 +51,41 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             var actions = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
             actions.Controls.Add(_courseFilter);
-            actions.Controls.Add(_searchBox);
+            actions.Controls.Add(StudentTabChrome.CreateSearchBox(_searchBox, 260));
             actions.Controls.Add(btnReview);
             actions.Controls.Add(_hideResult);
+
+            _resultBody = new RoundedPanel
+            {
+                Dock = DockStyle.Fill,
+                FillColor = AppColors.BgCard,
+                BorderColor = Color.Transparent,
+                CornerRadius = 12,
+                Padding = Padding.Empty
+            };
+
+            _emptyStateLabel = new Label
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = false,
+                BackColor = AppColors.IsDarkMode ? AppColors.BgCardHover : ColorTranslator.FromHtml("#F8FAFC"),
+                ForeColor = AppColors.TextMuted,
+                Font = AppFonts.Body,
+                TextAlign = ContentAlignment.MiddleCenter,
+                UseCompatibleTextRendering = false,
+                Visible = false
+            };
+            dgvResults.Dock = DockStyle.Fill;
+            dgvResults.Margin = Padding.Empty;
+            _resultBody.Controls.Add(dgvResults);
+            _resultBody.Controls.Add(_emptyStateLabel);
 
             var root = StudentTabChrome.CreateRoot(this);
             root.Controls.Add(StudentTabChrome.CreateHeader(
                 "Kết quả học tập",
                 "Xem điểm, trạng thái chấm và mở lại bài làm khi được phép.",
                 actions), 0, 0);
-            root.Controls.Add(StudentTabChrome.CreateDataCard("Bảng điểm bài kiểm tra", dgvResults), 0, 1);
+            root.Controls.Add(StudentTabChrome.CreateDataCard("Bảng điểm bài kiểm tra", _resultBody), 0, 1);
             StudentTabChrome.EnableNaturalFocusClear(this, dgvResults);
         }
 
@@ -82,7 +110,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 int studentId = UserSessionContext.CurrentUserId ?? 0;
                 if (studentId <= 0)
                 {
-                    BindResultTable(CreateMessageTable("Không xác định được tài khoản học sinh."));
+                    BindResultTable(CreateResultTableSchema(), "Không xác định được tài khoản học sinh.");
                     return;
                 }
 
@@ -90,11 +118,12 @@ namespace CourseGuard.Frontend.UserControls.Student
                 int selectedCourseId = _courseFilter.SelectedItem is StudentResultCourseFilterModel selected ? selected.CourseId : 0;
                 string keyword = _searchBox.Text.Trim();
                 DataTable table = await System.Threading.Tasks.Task.Run(() => LoadResultTable(studentId, selectedCourseId, keyword));
-                BindResultTable(table);
+                string emptyMessage = BuildEmptyMessage(selectedCourseId, keyword);
+                BindResultTable(table, emptyMessage);
             }
             catch (Exception ex)
             {
-                BindResultTable(CreateMessageTable($"Không thể tải kết quả: {ex.Message}"));
+                BindResultTable(CreateResultTableSchema(), $"Không thể tải kết quả: {ex.Message}");
             }
             finally
             {
@@ -130,15 +159,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             DataTable dt = CreateResultTableSchema();
 
             if (results.Count == 0)
-            {
-                string message = !string.IsNullOrWhiteSpace(keyword)
-                    ? "Không tìm thấy bài thi phù hợp."
-                    : selectedCourseId > 0
-                        ? "Khóa học này chưa có kết quả bài kiểm tra."
-                        : "Bạn chưa có kết quả bài kiểm tra nào.";
-                dt.Rows.Add(0, 0, 0, "", message, "", "", "", "");
                 return dt;
-            }
 
             foreach (StudentResultListItemModel item in results)
             {
@@ -157,8 +178,14 @@ namespace CourseGuard.Frontend.UserControls.Student
             return dt;
         }
 
-        private void BindResultTable(DataTable table)
+        private void BindResultTable(DataTable table, string emptyMessage)
         {
+            if (table.Rows.Count == 0)
+            {
+                ShowEmptyState(emptyMessage);
+                return;
+            }
+
             dgvResults.DataSource = table;
             dgvResults.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             foreach (string columnName in new[] { "AttemptId", "ExamId", "CourseId", "ExamStatus" })
@@ -166,6 +193,9 @@ namespace CourseGuard.Frontend.UserControls.Student
                 if (dgvResults.Columns[columnName] != null)
                     dgvResults.Columns[columnName]!.Visible = false;
             }
+            dgvResults.Visible = true;
+            _emptyStateLabel.Visible = false;
+            ApplyResultBodyTheme(showTable: true);
             dgvResults.ClearSelection();
             dgvResults.CurrentCell = null;
             UpdateActionButtons();
@@ -186,11 +216,37 @@ namespace CourseGuard.Frontend.UserControls.Student
             return dt;
         }
 
-        private static DataTable CreateMessageTable(string message)
+        private static string BuildEmptyMessage(int selectedCourseId, string keyword)
         {
-            DataTable dt = CreateResultTableSchema();
-            dt.Rows.Add(0, 0, 0, "", message, "", "", "", "");
-            return dt;
+            return !string.IsNullOrWhiteSpace(keyword)
+                ? "Không tìm thấy bài thi phù hợp."
+                : selectedCourseId > 0
+                    ? "Khóa học này chưa có kết quả bài kiểm tra."
+                    : "Bạn chưa có kết quả bài kiểm tra nào.";
+        }
+
+        private void ShowEmptyState(string message)
+        {
+            dgvResults.DataSource = null;
+            dgvResults.Visible = false;
+            _emptyStateLabel.Text = message;
+            _emptyStateLabel.Visible = true;
+            ApplyResultBodyTheme(showTable: false);
+            _emptyStateLabel.BringToFront();
+            btnReview.Enabled = false;
+            _hideResult.Enabled = false;
+        }
+
+        private void ApplyResultBodyTheme(bool showTable)
+        {
+            Color emptyFill = AppColors.IsDarkMode ? AppColors.BgCardHover : ColorTranslator.FromHtml("#F8FAFC");
+            _resultBody.Padding = showTable ? Padding.Empty : new Padding(18);
+            _resultBody.FillColor = showTable ? AppColors.BgCard : emptyFill;
+            _resultBody.BorderColor = showTable ? Color.Transparent : AppColors.Border;
+            _resultBody.BackColor = AppColors.BgCard;
+            _emptyStateLabel.BackColor = emptyFill;
+            _emptyStateLabel.ForeColor = AppColors.TextMuted;
+            _resultBody.Invalidate();
         }
 
         private void UpdateActionButtons()
@@ -243,7 +299,9 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private int CurrentInt(string columnName)
         {
-            if (dgvResults.CurrentRow == null || dgvResults.CurrentRow.IsNewRow)
+            if (!dgvResults.Visible || dgvResults.CurrentRow == null || dgvResults.CurrentRow.IsNewRow)
+                return 0;
+            if (!dgvResults.Columns.Contains(columnName))
                 return 0;
             object? value = dgvResults.CurrentRow.Cells[columnName].Value;
             return value == null || value == DBNull.Value ? 0 : Convert.ToInt32(value);
@@ -251,7 +309,9 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private string CurrentString(string columnName)
         {
-            if (dgvResults.CurrentRow == null || dgvResults.CurrentRow.IsNewRow)
+            if (!dgvResults.Visible || dgvResults.CurrentRow == null || dgvResults.CurrentRow.IsNewRow)
+                return string.Empty;
+            if (!dgvResults.Columns.Contains(columnName))
                 return string.Empty;
             return dgvResults.CurrentRow.Cells[columnName].Value?.ToString() ?? string.Empty;
         }

@@ -105,6 +105,24 @@ ALTER TABLE exam_questions
 CREATE INDEX IF NOT EXISTS idx_exams_status ON exams(status);
 CREATE INDEX IF NOT EXISTS idx_exam_questions_exam ON exam_questions(exam_id);
 
+CREATE TABLE IF NOT EXISTS exam_attempt_answers (
+    attempt_id INT NOT NULL REFERENCES exam_attempts(id) ON DELETE CASCADE,
+    exam_question_id INT NOT NULL REFERENCES exam_questions(id) ON DELETE CASCADE,
+    selected_option CHAR(1) NOT NULL,
+    is_correct BOOLEAN,
+    score NUMERIC(6,2) NOT NULL DEFAULT 0,
+    answered_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (attempt_id, exam_question_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_exam_attempt_answers_attempt ON exam_attempt_answers(attempt_id);
+CREATE INDEX IF NOT EXISTS idx_exam_attempt_answers_question ON exam_attempt_answers(exam_question_id);
+
+ALTER TABLE materials
+    ADD COLUMN IF NOT EXISTS content_type VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS file_size BIGINT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS file_content BYTEA;
+
 CREATE TABLE IF NOT EXISTS student_hidden_results (
     student_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     attempt_id INT NOT NULL REFERENCES exam_attempts(id) ON DELETE CASCADE,
