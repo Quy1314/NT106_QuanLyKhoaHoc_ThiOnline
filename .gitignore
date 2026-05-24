@@ -11,6 +11,7 @@ obj/
 
 # Agent
 .agent/
+.worktrees/
 
 # Documentation
 GEMINI.md
