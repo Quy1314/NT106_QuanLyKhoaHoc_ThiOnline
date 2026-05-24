@@ -76,6 +76,9 @@ namespace CourseGuard.Backend.Controllers
         public bool UpdateExam(int teacherId, TeacherExamModel input) =>
             teacherId > 0 && _repository.UpdateExam(teacherId, input);
 
+        public bool CanActivateExam(int teacherId, int examId) =>
+            teacherId > 0 && examId > 0 && _repository.CanActivateExam(teacherId, examId);
+
         public bool DeleteExam(int teacherId, int examId) =>
             teacherId > 0 && _repository.DeleteExam(teacherId, examId);
 

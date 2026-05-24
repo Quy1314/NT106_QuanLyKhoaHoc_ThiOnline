@@ -358,8 +358,8 @@ namespace CourseGuard.Backend.Data
         public int CreateExam(int teacherId, TeacherExamModel input) => InsertCourseChild(
             teacherId,
             input.CourseId,
-            @"INSERT INTO exams (course_id, title, open_time, close_time, duration_minutes, max_attempts, created_by)
-              SELECT @course_id, @title, @open_time, @close_time, @duration_minutes, @max_attempts, @teacher_id
+            @"INSERT INTO exams (course_id, title, open_time, close_time, duration_minutes, max_attempts, created_by, status)
+              SELECT @course_id, @title, @open_time, @close_time, @duration_minutes, @max_attempts, @teacher_id, @status
               WHERE EXISTS (SELECT 1 FROM courses WHERE id = @course_id AND teacher_id = @teacher_id)
               RETURNING id",
             command => AddExamParameters(command, input, includeId: false));
@@ -369,7 +369,7 @@ namespace CourseGuard.Backend.Data
             input.CourseId,
             @"UPDATE exams ex
               SET title = @title, open_time = @open_time, close_time = @close_time,
-                  duration_minutes = @duration_minutes, max_attempts = @max_attempts
+                  duration_minutes = @duration_minutes, max_attempts = @max_attempts, status = @status
               FROM courses c
               WHERE ex.course_id = c.id AND c.teacher_id = @teacher_id AND ex.id = @id AND ex.course_id = @course_id",
             command => AddExamParameters(command, input, includeId: true));
@@ -379,6 +379,21 @@ namespace CourseGuard.Backend.Data
             @"DELETE FROM exams ex USING courses c
               WHERE ex.course_id = c.id AND c.teacher_id = @teacher_id AND ex.id = @id",
             examId);
+
+        public bool CanActivateExam(int teacherId, int examId)
+        {
+            using var connection = _dbContext.CreateConnection();
+            connection.Open();
+            using var command = new NpgsqlCommand(@"
+                SELECT COUNT(eq.id)::int
+                FROM exams ex
+                JOIN courses c ON c.id = ex.course_id
+                LEFT JOIN exam_questions eq ON eq.exam_id = ex.id
+                WHERE c.teacher_id = @teacher_id AND ex.id = @exam_id", connection);
+            command.Parameters.AddWithValue("@teacher_id", teacherId);
+            command.Parameters.AddWithValue("@exam_id", examId);
+            return Convert.ToInt32(command.ExecuteScalar() ?? 0) > 0;
+        }
 
         public List<TeacherStudentModel> GetPendingEnrollments(int teacherId) => QueryStudents(teacherId, "PENDING", null);
         public List<TeacherStudentModel> GetEnrolledStudents(int teacherId, int? courseId) => QueryStudents(teacherId, "ACTIVE", courseId);
@@ -623,7 +638,8 @@ namespace CourseGuard.Backend.Data
             string query = @"
                 SELECT ex.id, ex.course_id, COALESCE(c.name, ''), COALESCE(ex.title, ''),
                        ex.open_time, ex.close_time, COALESCE(ex.duration_minutes, 0),
-                       COALESCE(ex.max_attempts, 1), COUNT(eq.id)::int
+                       COALESCE(ex.max_attempts, 1), COUNT(eq.id)::int,
+                       COALESCE(ex.status, 'DRAFT')
                 FROM exams ex
                 JOIN courses c ON c.id = ex.course_id
                 LEFT JOIN exam_questions eq ON eq.exam_id = ex.id
@@ -651,7 +667,8 @@ namespace CourseGuard.Backend.Data
                     DurationMinutes = reader.GetInt32(6),
                     MaxAttempts = reader.GetInt32(7),
                     QuestionCount = reader.GetInt32(8),
-                    StatusText = BuildExamStatus(open, close)
+                    Status = reader.GetString(9),
+                    StatusText = reader.GetString(9)
                 });
             }
             return rows;
@@ -1153,6 +1170,18 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@close_time", input.CloseTime.HasValue ? input.CloseTime.Value : DBNull.Value);
             command.Parameters.AddWithValue("@duration_minutes", input.DurationMinutes);
             command.Parameters.AddWithValue("@max_attempts", input.MaxAttempts <= 0 ? 1 : input.MaxAttempts);
+            command.Parameters.AddWithValue("@status", NormalizeExamStatus(input.Status));
+        }
+
+        private static string NormalizeExamStatus(string? status)
+        {
+            string value = (status ?? string.Empty).Trim().ToUpperInvariant();
+            return value switch
+            {
+                WorkflowConstants.ExamStatus.Active => WorkflowConstants.ExamStatus.Active,
+                WorkflowConstants.ExamStatus.Closed => WorkflowConstants.ExamStatus.Closed,
+                _ => WorkflowConstants.ExamStatus.Draft
+            };
         }
 
         private static void AddScheduleParameters(NpgsqlCommand command, TeacherScheduleItemModel input, bool includeId)
