@@ -82,6 +82,21 @@ namespace CourseGuard.Backend.Controllers
         public bool DeleteExam(int teacherId, int examId) =>
             teacherId > 0 && _repository.DeleteExam(teacherId, examId);
 
+        public List<TeacherExamQuestionModel> GetExamQuestions(int teacherId, int examId) =>
+            teacherId <= 0 || examId <= 0 ? new List<TeacherExamQuestionModel>() : _repository.GetExamQuestions(teacherId, examId);
+
+        public string GetExamStatus(int teacherId, int examId) =>
+            teacherId <= 0 || examId <= 0 ? WorkflowConstants.ExamStatus.Draft : _repository.GetExamStatus(teacherId, examId);
+
+        public int CreateExamQuestion(int teacherId, TeacherExamQuestionModel input) =>
+            teacherId <= 0 ? 0 : _repository.CreateExamQuestion(teacherId, input);
+
+        public bool UpdateExamQuestion(int teacherId, TeacherExamQuestionModel input) =>
+            teacherId > 0 && _repository.UpdateExamQuestion(teacherId, input);
+
+        public bool DeleteExamQuestion(int teacherId, int examId, int questionId) =>
+            teacherId > 0 && _repository.DeleteExamQuestion(teacherId, examId, questionId);
+
         public List<TeacherStudentModel> GetPendingEnrollments(int teacherId) =>
             teacherId <= 0 ? new List<TeacherStudentModel>() : _repository.GetPendingEnrollments(teacherId);
 
