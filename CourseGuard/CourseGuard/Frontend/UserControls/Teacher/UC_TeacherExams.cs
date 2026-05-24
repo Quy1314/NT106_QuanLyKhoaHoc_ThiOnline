@@ -26,6 +26,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         {
             int id = CurrentInt("Id");
             if (id <= 0) return;
+            int currentCourseId = CurrentInt("CourseId");
             using var dialog = new TeacherSimpleItemDialog("Sửa bài kiểm tra", Controller.GetCourses(TeacherId), CurrentString("Tên kỳ thi"), string.Empty, CurrentString("Trạng thái"));
             if (dialog.ShowDialog(FindForm()) == System.Windows.Forms.DialogResult.OK)
             {
@@ -35,7 +36,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     return;
                 }
 
-                Controller.UpdateExam(TeacherId, new TeacherExamModel { Id = id, CourseId = dialog.CourseId, Title = dialog.ItemTitle, OpenTime = dialog.SelectedDate, CloseTime = dialog.SelectedDate.AddHours(1), DurationMinutes = 60, MaxAttempts = 1, Status = dialog.Status });
+                Controller.UpdateExam(TeacherId, new TeacherExamModel { Id = id, CourseId = currentCourseId, Title = dialog.ItemTitle, OpenTime = dialog.SelectedDate, CloseTime = dialog.SelectedDate.AddHours(1), DurationMinutes = 60, MaxAttempts = 1, Status = dialog.Status });
                 await LoadDataAsync();
             }
         }
