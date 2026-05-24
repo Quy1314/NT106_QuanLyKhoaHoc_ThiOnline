@@ -961,6 +961,16 @@ namespace CourseGuard.Backend.Data
                 ALTER TABLE exams
                     ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'DRAFT';
 
+                ALTER TABLE exams
+                    ALTER COLUMN status SET DEFAULT 'DRAFT';
+
+                UPDATE exams
+                SET status = CASE
+                    WHEN close_time IS NOT NULL AND close_time < CURRENT_TIMESTAMP THEN 'CLOSED'
+                    ELSE 'DRAFT'
+                END
+                WHERE status IS NULL OR TRIM(status) = '';
+
                 CREATE TABLE IF NOT EXISTS exam_questions (
                     id SERIAL PRIMARY KEY,
                     exam_id INT NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
