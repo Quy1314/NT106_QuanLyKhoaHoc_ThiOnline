@@ -512,6 +512,7 @@ namespace CourseGuard.Backend.Data
                 WHERE en.student_id = @student_id
                   AND UPPER(COALESCE(en.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
                   AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
+                  AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'
                   AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)
                   AND (COALESCE(ex.max_attempts, 1) <= 0 OR {attemptsExpression} < COALESCE(ex.max_attempts, 1))
                 ORDER BY
@@ -710,6 +711,7 @@ namespace CourseGuard.Backend.Data
                     WHERE en.student_id = @student_id
                       AND UPPER(COALESCE(en.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
                       AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
+                      AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'
                       AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)
                       AND (COALESCE(ex.max_attempts, 1) <= 0 OR {attemptsExpression} < COALESCE(ex.max_attempts, 1))
                       AND (
@@ -840,6 +842,7 @@ namespace CourseGuard.Backend.Data
                 WHERE en.student_id = @student_id
                   AND UPPER(COALESCE(en.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
                   AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
+                  AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'
                   {timeFilter}
                   AND (COALESCE(ex.max_attempts, 1) <= 0 OR {attemptsExpression} < COALESCE(ex.max_attempts, 1))";
 
