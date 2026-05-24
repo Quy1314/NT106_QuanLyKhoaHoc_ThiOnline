@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS exam_questions (
 );
 
 DO $$
+DECLARE
+    existing_primary_key TEXT;
 BEGIN
     ALTER TABLE exam_questions
         ADD COLUMN IF NOT EXISTS id INTEGER;
@@ -46,6 +48,38 @@ BEGIN
 
     ALTER TABLE exam_questions
         ALTER COLUMN id SET DEFAULT nextval('exam_questions_id_seq');
+
+    SELECT c.conname
+    INTO existing_primary_key
+    FROM pg_constraint c
+    WHERE c.conrelid = 'exam_questions'::regclass
+      AND c.contype = 'p'
+      AND NOT (
+          array_length(c.conkey, 1) = 1
+          AND c.conkey[1] = (
+              SELECT a.attnum
+              FROM pg_attribute a
+              WHERE a.attrelid = 'exam_questions'::regclass
+                AND a.attname = 'id'
+                AND NOT a.attisdropped
+          )
+      )
+    LIMIT 1;
+
+    IF existing_primary_key IS NOT NULL THEN
+        EXECUTE format('ALTER TABLE exam_questions DROP CONSTRAINT %I', existing_primary_key);
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'exam_questions'
+          AND column_name = 'question_id'
+    ) THEN
+        ALTER TABLE exam_questions
+            ALTER COLUMN question_id DROP NOT NULL;
+    END IF;
 
     IF NOT EXISTS (
         SELECT 1
@@ -70,7 +104,6 @@ ALTER TABLE exam_questions
 
 CREATE INDEX IF NOT EXISTS idx_exams_status ON exams(status);
 CREATE INDEX IF NOT EXISTS idx_exam_questions_exam ON exam_questions(exam_id);
-CREATE UNIQUE INDEX IF NOT EXISTS ux_exam_questions_exam_order ON exam_questions(exam_id, display_order);
 
 CREATE TABLE IF NOT EXISTS student_hidden_results (
     student_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
