@@ -227,7 +227,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             grid.RowTemplate.Height = 40;
             grid.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
             grid.AlternatingRowsDefaultCellStyle.BackColor = AppColors.IsDarkMode ? AppColors.BgCard : ColorTranslator.FromHtml("#F8FAFC");
-            grid.GridColor = AppColors.Border;
+            grid.GridColor = AppColors.GridBorder;
         }
 
         public static void StyleInput(TextBox input)

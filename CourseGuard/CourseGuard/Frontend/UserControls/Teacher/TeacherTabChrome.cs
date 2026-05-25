@@ -337,7 +337,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             grid.RowTemplate.Height = 40;
             grid.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
             grid.AlternatingRowsDefaultCellStyle.BackColor = AppColors.IsDarkMode ? AppColors.BgCard : ColorTranslator.FromHtml("#F8FAFC");
-            grid.GridColor = AppColors.Border;
+            grid.GridColor = AppColors.GridBorder;
         }
 
         public static DataTable ToTable<T>(string[] columns, System.Collections.Generic.IEnumerable<T> rows, Func<T, object?[]> map)

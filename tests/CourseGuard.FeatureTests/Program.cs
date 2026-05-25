@@ -1,6 +1,7 @@
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services;
 using CourseGuard.Frontend.Forms.Student;
+using CourseGuard.Frontend.Theme;
 
 Run("exam scoring sums only correct selected options", () =>
 {
@@ -102,6 +103,17 @@ Run("student exam form constructor does not invoke before handle exists", () =>
 
     if (failure != null)
         throw new InvalidOperationException(failure.Message, failure);
+});
+
+Run("table grid border token is opaque in both themes", () =>
+{
+    AppColors.IsDarkMode = true;
+    AssertEqual(255, AppColors.GridBorder.A);
+
+    AppColors.IsDarkMode = false;
+    AssertEqual(255, AppColors.GridBorder.A);
+
+    AppColors.IsDarkMode = true;
 });
 
 Console.WriteLine("Feature tests passed.");
