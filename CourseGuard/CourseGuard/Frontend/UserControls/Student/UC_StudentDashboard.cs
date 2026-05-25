@@ -481,7 +481,6 @@ namespace CourseGuard.Frontend.UserControls.Student
                 _noticeBody.BorderColor = dgvRecentNotices.Visible ? Color.Transparent : AppColors.Border;
                 _noticeBody.Invalidate();
             }
-            StudentTabChrome.StyleGrid(dgvRecentNotices);
             dgvRecentNotices.ClearSelection();
         }
 
