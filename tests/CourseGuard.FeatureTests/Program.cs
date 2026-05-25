@@ -32,6 +32,42 @@ Run("material file policy accepts common documents and rejects unsafe files", ()
     AssertFalse(tooLarge.IsValid, "files above 20MB must be rejected");
 });
 
+Run("student exam availability separates visibility from start eligibility", () =>
+{
+    var future = new StudentExamListItemModel
+    {
+        Title = "Future active exam",
+        OpenTime = DateTime.Now.AddHours(1),
+        MaxAttempts = 1,
+        AttemptCount = 0,
+        QuestionCount = 5
+    };
+
+    var noQuestions = new StudentExamListItemModel
+    {
+        Title = "Active shell",
+        MaxAttempts = 1,
+        AttemptCount = 0,
+        QuestionCount = 0
+    };
+
+    var resumable = new StudentExamListItemModel
+    {
+        Title = "Resume exam",
+        MaxAttempts = 1,
+        AttemptCount = 1,
+        InProgressAttemptCount = 1,
+        QuestionCount = 3
+    };
+
+    AssertFalse(StudentExamAvailabilityService.CanStart(future), "future active exam must be visible but not startable");
+    AssertEqual("Chưa đến giờ", StudentExamAvailabilityService.GetStatusText(future));
+    AssertFalse(StudentExamAvailabilityService.CanStart(noQuestions), "active shell without questions must be visible but not startable");
+    AssertEqual("Chưa có câu hỏi", StudentExamAvailabilityService.GetStatusText(noQuestions));
+    AssertTrue(StudentExamAvailabilityService.CanStart(resumable), "in-progress attempt must be resumable even when max attempts is reached");
+    AssertEqual("Đang làm dở", StudentExamAvailabilityService.GetStatusText(resumable));
+});
+
 Console.WriteLine("Feature tests passed.");
 
 static void Run(string name, Action test)

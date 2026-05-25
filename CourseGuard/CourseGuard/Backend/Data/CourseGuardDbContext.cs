@@ -488,6 +488,16 @@ namespace CourseGuard.Backend.Data
                 )"
                 : "0";
 
+            string inProgressAttemptsExpression = hasAttempts
+                ? @"(
+                    SELECT COUNT(*)
+                    FROM exam_attempts ea
+                    WHERE ea.exam_id = ex.id
+                      AND ea.student_id = @student_id
+                      AND UPPER(COALESCE(ea.status, '')) = 'IN_PROGRESS'
+                )"
+                : "0";
+
             string questionExpression = hasQuestions
                 ? @"(
                     SELECT COUNT(*)
@@ -506,6 +516,7 @@ namespace CourseGuard.Backend.Data
                        COALESCE(ex.duration_minutes, 0) AS duration_minutes,
                        COALESCE(ex.max_attempts, 1) AS max_attempts,
                        {attemptsExpression}::int AS attempt_count,
+                       {inProgressAttemptsExpression}::int AS in_progress_attempt_count,
                        {questionExpression}::int AS question_count
                 FROM exams ex
                 JOIN enrollments en ON en.course_id = ex.course_id
@@ -514,10 +525,6 @@ namespace CourseGuard.Backend.Data
                   AND UPPER(COALESCE(en.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
                   AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
                   AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'
-                  AND (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
-                  AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)
-                  AND {questionExpression} > 0
-                  AND (COALESCE(ex.max_attempts, 1) <= 0 OR {attemptsExpression} < COALESCE(ex.max_attempts, 1))
                 ORDER BY
                   CASE
                     WHEN (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
@@ -546,7 +553,8 @@ namespace CourseGuard.Backend.Data
                     DurationMinutes = reader.GetInt32(6),
                     MaxAttempts = reader.GetInt32(7),
                     AttemptCount = reader.GetInt32(8),
-                    QuestionCount = reader.GetInt32(9)
+                    InProgressAttemptCount = reader.GetInt32(9),
+                    QuestionCount = reader.GetInt32(10)
                 });
             }
 

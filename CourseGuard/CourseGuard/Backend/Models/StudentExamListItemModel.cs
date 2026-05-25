@@ -1,4 +1,5 @@
 using System;
+using CourseGuard.Backend.Services;
 
 namespace CourseGuard.Backend.Models
 {
@@ -13,18 +14,11 @@ namespace CourseGuard.Backend.Models
         public int DurationMinutes { get; set; }
         public int MaxAttempts { get; set; }
         public int AttemptCount { get; set; }
+        public int InProgressAttemptCount { get; set; }
         public int QuestionCount { get; set; }
 
-        public bool IsOpen
-        {
-            get
-            {
-                DateTime now = DateTime.Now;
-                return RemainingAttempts > 0
-                    && (!OpenTime.HasValue || OpenTime.Value <= now)
-                    && (!CloseTime.HasValue || CloseTime.Value >= now);
-            }
-        }
+        public bool CanStart => StudentExamAvailabilityService.CanStart(this);
+        public bool IsOpen => CanStart;
 
         public int RemainingAttempts
         {
@@ -37,20 +31,6 @@ namespace CourseGuard.Backend.Models
             }
         }
 
-        public string StatusText
-        {
-            get
-            {
-                DateTime now = DateTime.Now;
-                if (RemainingAttempts <= 0)
-                    return "Hết lượt";
-                if (OpenTime.HasValue && OpenTime.Value > now)
-                    return "Sắp mở";
-                if (CloseTime.HasValue && CloseTime.Value < now)
-                    return "Đã đóng";
-
-                return "Đang mở";
-            }
-        }
+        public string StatusText => StudentExamAvailabilityService.GetStatusText(this);
     }
 }

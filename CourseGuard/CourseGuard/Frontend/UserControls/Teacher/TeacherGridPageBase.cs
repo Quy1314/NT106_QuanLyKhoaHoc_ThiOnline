@@ -19,9 +19,14 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         protected readonly Button EditButton = TeacherTabChrome.SecondaryButton("Sửa");
         protected readonly Button DeleteButton = TeacherTabChrome.DangerButton("Xóa");
 
+        private readonly string _emptyMessage;
+        private RoundedPanel _gridBody = null!;
+        private Label _emptyStateLabel = null!;
+
         protected TeacherGridPageBase(int teacherId, string title, string subtitle, string cardTitle, bool showCrud = true)
         {
             TeacherId = teacherId;
+            _emptyMessage = $"Chưa có dữ liệu trong {cardTitle.ToLowerInvariant()}.";
             InitializeComponent(title, subtitle, cardTitle, showCrud);
             RefreshButton.Click += async (_, _) => await LoadDataAsync();
             AddButton.Click += async (_, _) => await AddAsync();
@@ -47,7 +52,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         protected int CurrentInt(string columnName)
         {
-            if (Grid.CurrentRow == null || Grid.CurrentRow.IsNewRow)
+            if (!Grid.Visible || Grid.CurrentRow == null || Grid.CurrentRow.IsNewRow)
                 return 0;
             object? value = Grid.CurrentRow.Cells[columnName].Value;
             return value == null || value == DBNull.Value ? 0 : Convert.ToInt32(value);
@@ -55,7 +60,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         protected string CurrentString(string columnName)
         {
-            if (Grid.CurrentRow == null || Grid.CurrentRow.IsNewRow)
+            if (!Grid.Visible || Grid.CurrentRow == null || Grid.CurrentRow.IsNewRow)
                 return string.Empty;
             return Grid.CurrentRow.Cells[columnName].Value?.ToString() ?? string.Empty;
         }
@@ -65,18 +70,28 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             this.ShowSkeleton(SkeletonType.TableWithToolbar);
             try
             {
-                BindingSource.DataSource = await CreateTableAsync();
+                DataTable table = await CreateTableAsync();
+                BindingSource.DataSource = table;
                 Grid.DataSource = BindingSource;
                 foreach (DataGridViewColumn column in Grid.Columns)
                 {
                     if (column.Name.EndsWith("Id", StringComparison.OrdinalIgnoreCase) || column.Name == "ID")
                         column.Visible = false;
                 }
+
+                bool hasRows = table.Rows.Count > 0;
+                TeacherTabChrome.SetTableState(_gridBody, Grid, _emptyStateLabel, hasRows, _emptyMessage);
+                EditButton.Enabled = hasRows;
+                DeleteButton.Enabled = hasRows;
                 Grid.ClearSelection();
                 Grid.CurrentCell = null;
             }
             catch (Exception ex)
             {
+                BindingSource.DataSource = null;
+                TeacherTabChrome.SetTableState(_gridBody, Grid, _emptyStateLabel, showTable: false, "Không thể tải dữ liệu.");
+                EditButton.Enabled = false;
+                DeleteButton.Enabled = false;
                 MetaTheme.ShowModernDialog("Không thể tải dữ liệu: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -93,7 +108,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 : new Control[] { RefreshButton };
             root.Controls.Add(TeacherTabChrome.CreateHeader(title, subtitle, actions), 0, 0);
             TeacherTabChrome.StyleGrid(Grid);
-            root.Controls.Add(TeacherTabChrome.CreateDataCard(cardTitle, Grid), 0, 1);
+            _gridBody = TeacherTabChrome.CreateTableBody(Grid, out _emptyStateLabel);
+            root.Controls.Add(TeacherTabChrome.CreateDataCard(cardTitle, _gridBody), 0, 1);
         }
 
         private static FlowLayoutPanel? FindActionPanel(Control root)

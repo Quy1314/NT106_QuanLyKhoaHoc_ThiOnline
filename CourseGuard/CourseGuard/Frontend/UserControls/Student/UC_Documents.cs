@@ -28,6 +28,8 @@ namespace CourseGuard.Frontend.UserControls.Student
         private Button btnOpen = null!;
         private DataGridView dgvDocuments = null!;
         private Label lblHint = null!;
+        private RoundedPanel _documentsBody = null!;
+        private Label _emptyStateLabel = null!;
 
         public UC_Documents()
         {
@@ -171,7 +173,8 @@ namespace CourseGuard.Frontend.UserControls.Student
             };
             content.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
             content.RowStyles.Add(new RowStyle(SizeType.Absolute, 42f));
-            content.Controls.Add(StudentTabChrome.CreateDataCard("Danh sách tài liệu", dgvDocuments), 0, 0);
+            _documentsBody = StudentTabChrome.CreateTableBody(dgvDocuments, out _emptyStateLabel);
+            content.Controls.Add(StudentTabChrome.CreateDataCard("Danh sách tài liệu", _documentsBody), 0, 0);
             lblHint.Dock = DockStyle.Fill;
             lblHint.TextAlign = ContentAlignment.MiddleLeft;
             lblHint.Margin = new Padding(0, 12, 0, 0);
@@ -359,6 +362,12 @@ namespace CourseGuard.Frontend.UserControls.Student
             _bindingSource.DataSource = table;
             dgvDocuments.DataSource = _bindingSource;
             dgvDocuments.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            bool hasRows = table.Rows.Count > 0;
+            string emptyMessage = string.IsNullOrWhiteSpace(txtSearch.Text)
+                ? "Chưa có tài liệu trong các khóa học đang học."
+                : "Không tìm thấy tài liệu phù hợp.";
+            StudentTabChrome.SetTableState(_documentsBody, dgvDocuments, _emptyStateLabel, hasRows, emptyMessage);
+            btnOpen.Enabled = hasRows;
             lblHint.Text = rows.Count == 0
                 ? "Không có tài liệu phù hợp. Tài liệu chỉ hiển thị khi bạn đã được duyệt tham gia khóa học."
                 : "Chỉ hiển thị tài liệu thuộc các khóa học bạn đã được duyệt tham gia.";
