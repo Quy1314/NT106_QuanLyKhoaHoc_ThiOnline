@@ -36,8 +36,20 @@ namespace CourseGuard.Frontend.Forms.Student
             ApplyAcademicExamTheme();
             WireEvents();
             RoundedButtonHelper.Apply(10, btnSubmit, btnPrev, btnNext);
-            LoadExamSession();
+            Shown += DoExamForm_Shown;
             this.FormClosing += DoExamForm_FormClosing;
+        }
+
+        private void DoExamForm_Shown(object? sender, EventArgs e)
+        {
+            try
+            {
+                LoadExamSession();
+            }
+            catch (Exception ex)
+            {
+                ShowErrorAndClose("Không thể tải bài kiểm tra: " + ex.Message);
+            }
         }
 
         private void WireEvents()
@@ -59,22 +71,14 @@ namespace CourseGuard.Frontend.Forms.Student
             int studentId = UserSessionContext.CurrentUserId ?? 0;
             if (_examId <= 0 || studentId <= 0)
             {
-                BeginInvoke(new MethodInvoker(() =>
-                {
-                    MetaTheme.ShowModernDialog("Không xác định được bài kiểm tra hoặc tài khoản học sinh.", "Thông báo");
-                    Close();
-                }));
+                ShowErrorAndClose("Không xác định được bài kiểm tra hoặc tài khoản học sinh.");
                 return;
             }
 
             _session = _dbContext.StartOrResumeStudentExam(studentId, _examId);
             if (_session == null || _session.Questions.Count == 0)
             {
-                BeginInvoke(new MethodInvoker(() =>
-                {
-                    MetaTheme.ShowModernDialog("Bài kiểm tra chưa thể làm ở thời điểm hiện tại.", "Thông báo");
-                    Close();
-                }));
+                ShowErrorAndClose("Bài kiểm tra chưa thể làm ở thời điểm hiện tại.");
                 return;
             }
 
@@ -85,6 +89,12 @@ namespace CourseGuard.Frontend.Forms.Student
             UpdateTimerText();
             _timer.Start();
             StartScreenMonitoring();
+        }
+
+        private void ShowErrorAndClose(string message)
+        {
+            MetaTheme.ShowModernDialog(message, "Thông báo");
+            Close();
         }
 
         private void StartScreenMonitoring()

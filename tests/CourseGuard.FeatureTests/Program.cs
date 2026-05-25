@@ -1,5 +1,6 @@
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services;
+using CourseGuard.Frontend.Forms.Student;
 
 Run("exam scoring sums only correct selected options", () =>
 {
@@ -60,12 +61,47 @@ Run("student exam availability separates visibility from start eligibility", () 
         QuestionCount = 3
     };
 
+    var missingAttemptStorage = new StudentExamListItemModel
+    {
+        Title = "Storage missing",
+        MaxAttempts = 1,
+        AttemptCount = 0,
+        QuestionCount = 3,
+        AttemptStorageAvailable = false
+    };
+
     AssertFalse(StudentExamAvailabilityService.CanStart(future), "future active exam must be visible but not startable");
-    AssertEqual("Chưa đến giờ", StudentExamAvailabilityService.GetStatusText(future));
+    AssertEqual(StudentExamAvailabilityService.StatusNotOpenYet, StudentExamAvailabilityService.GetStatusText(future));
     AssertFalse(StudentExamAvailabilityService.CanStart(noQuestions), "active shell without questions must be visible but not startable");
-    AssertEqual("Chưa có câu hỏi", StudentExamAvailabilityService.GetStatusText(noQuestions));
+    AssertEqual(StudentExamAvailabilityService.StatusNoQuestions, StudentExamAvailabilityService.GetStatusText(noQuestions));
     AssertTrue(StudentExamAvailabilityService.CanStart(resumable), "in-progress attempt must be resumable even when max attempts is reached");
-    AssertEqual("Đang làm dở", StudentExamAvailabilityService.GetStatusText(resumable));
+    AssertEqual(StudentExamAvailabilityService.StatusInProgress, StudentExamAvailabilityService.GetStatusText(resumable));
+    AssertFalse(StudentExamAvailabilityService.CanStart(missingAttemptStorage), "exam must not be startable without attempt storage");
+    AssertEqual(StudentExamAvailabilityService.StatusStorageUnavailable, StudentExamAvailabilityService.GetStatusText(missingAttemptStorage));
+});
+
+Run("student exam form constructor does not invoke before handle exists", () =>
+{
+    Environment.SetEnvironmentVariable("COURSEGUARD_DB_CONNECTION", "Host=localhost;Username=test;Password=test;Database=test");
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            using var form = new DoExamForm(0);
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw new InvalidOperationException(failure.Message, failure);
 });
 
 Console.WriteLine("Feature tests passed.");

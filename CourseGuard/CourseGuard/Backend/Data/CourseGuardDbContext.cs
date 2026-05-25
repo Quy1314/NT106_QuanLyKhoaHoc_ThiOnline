@@ -554,7 +554,8 @@ namespace CourseGuard.Backend.Data
                     MaxAttempts = reader.GetInt32(7),
                     AttemptCount = reader.GetInt32(8),
                     InProgressAttemptCount = reader.GetInt32(9),
-                    QuestionCount = reader.GetInt32(10)
+                    QuestionCount = reader.GetInt32(10),
+                    AttemptStorageAvailable = hasAttempts
                 });
             }
 
@@ -1250,7 +1251,9 @@ namespace CourseGuard.Backend.Data
         private static bool CanStartStudentExam(NpgsqlConnection connection, NpgsqlTransaction transaction, int studentId, int examId)
         {
             using var command = new NpgsqlCommand(@"
-                SELECT COALESCE(ex.max_attempts, 1),
+                SELECT ex.open_time,
+                       ex.close_time,
+                       COALESCE(ex.max_attempts, 1),
                        (SELECT COUNT(*) FROM exam_attempts a WHERE a.exam_id = ex.id AND a.student_id = @student_id)::int,
                        (SELECT COUNT(*) FROM exam_questions eq WHERE eq.exam_id = ex.id)::int
                 FROM exams ex
@@ -1260,19 +1263,23 @@ namespace CourseGuard.Backend.Data
                   AND en.student_id = @student_id
                   AND UPPER(COALESCE(en.status, '')) IN ('ACTIVE', 'APPROVED')
                   AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
-                  AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'
-                  AND (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
-                  AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)", connection, transaction);
+                  AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'", connection, transaction);
             command.Parameters.AddWithValue("@student_id", studentId);
             command.Parameters.AddWithValue("@exam_id", examId);
             using var reader = command.ExecuteReader();
             if (!reader.Read())
                 return false;
 
-            int maxAttempts = reader.GetInt32(0);
-            int attemptCount = reader.GetInt32(1);
-            int questionCount = reader.GetInt32(2);
-            return questionCount > 0 && (maxAttempts <= 0 || attemptCount < maxAttempts);
+            DateTime? openTime = reader.IsDBNull(0) ? null : reader.GetDateTime(0);
+            DateTime? closeTime = reader.IsDBNull(1) ? null : reader.GetDateTime(1);
+            int maxAttempts = reader.GetInt32(2);
+            int attemptCount = reader.GetInt32(3);
+            int questionCount = reader.GetInt32(4);
+            DateTime now = DateTime.Now;
+            return questionCount > 0
+                && (!openTime.HasValue || openTime.Value <= now)
+                && (!closeTime.HasValue || closeTime.Value >= now)
+                && (maxAttempts <= 0 || attemptCount < maxAttempts);
         }
 
         private static bool OwnsInProgressAttempt(NpgsqlConnection connection, NpgsqlTransaction transaction, int studentId, int attemptId)

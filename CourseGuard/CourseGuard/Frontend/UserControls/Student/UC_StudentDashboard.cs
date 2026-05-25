@@ -227,31 +227,10 @@ namespace CourseGuard.Frontend.UserControls.Student
             dgvRecentNotices.RowHeadersVisible = false;
             dgvRecentNotices.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvRecentNotices.MultiSelect = false;
+            StudentTabChrome.StyleGrid(dgvRecentNotices);
 
-            _noticeBody = new RoundedPanel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.Transparent,
-                FillColor = AppColors.IsDarkMode ? AppColors.BgCardHover : ColorTranslator.FromHtml("#F8FAFC"),
-                BorderColor = AppColors.Border,
-                CornerRadius = 12,
-                Padding = new Padding(18)
-            };
-
-            _noticeEmptyLabel = new Label
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.Transparent,
-                ForeColor = AppColors.TextMuted,
-                Font = AppFonts.Body,
-                Text = "Chưa có thông báo gần đây",
-                TextAlign = ContentAlignment.MiddleCenter,
-                Visible = false,
-                UseCompatibleTextRendering = false
-            };
-
-            _noticeBody.Controls.Add(dgvRecentNotices);
-            _noticeBody.Controls.Add(_noticeEmptyLabel);
+            _noticeBody = StudentTabChrome.CreateTableBody(dgvRecentNotices, out _noticeEmptyLabel);
+            _noticeEmptyLabel.Text = "Chưa có thông báo gần đây";
 
             panelGrid.Controls.Add(lblRecentNotices, 0, 0);
             panelGrid.Controls.Add(_noticeBody, 0, 1);
@@ -366,11 +345,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             dgvRecentNotices.DataSource = dt;
             dgvRecentNotices.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            _noticeBody.Padding = Padding.Empty;
-            _noticeBody.FillColor = AppColors.BgCard;
-            _noticeBody.BorderColor = Color.Transparent;
-            dgvRecentNotices.Visible = true;
-            _noticeEmptyLabel.Visible = false;
+            StudentTabChrome.SetTableState(_noticeBody, dgvRecentNotices, _noticeEmptyLabel, showTable: true, string.Empty);
             dgvRecentNotices.BringToFront();
             dgvRecentNotices.ClearSelection();
             dgvRecentNotices.CurrentCell = null;
@@ -379,14 +354,8 @@ namespace CourseGuard.Frontend.UserControls.Student
         private void ShowNoticeEmptyState(string message, Color color)
         {
             dgvRecentNotices.DataSource = null;
-            dgvRecentNotices.Visible = false;
-            _noticeBody.Padding = new Padding(18);
-            _noticeBody.FillColor = AppColors.IsDarkMode ? AppColors.BgCardHover : ColorTranslator.FromHtml("#F8FAFC");
-            _noticeBody.BorderColor = AppColors.Border;
-            _noticeBody.Invalidate();
-            _noticeEmptyLabel.Text = message;
+            StudentTabChrome.SetTableState(_noticeBody, dgvRecentNotices, _noticeEmptyLabel, showTable: false, message);
             _noticeEmptyLabel.ForeColor = color;
-            _noticeEmptyLabel.Visible = true;
             _noticeEmptyLabel.BringToFront();
         }
 
@@ -499,9 +468,10 @@ namespace CourseGuard.Frontend.UserControls.Student
                 panel.Invalidate();
             }
 
+            AppColors.ApplyTheme(this);
             lblTitle.ForeColor = AppColors.TextPrimary;
             lblRecentNotices.ForeColor = AppColors.TextPrimary;
-            if (_noticeEmptyLabel != null)
+            if (_noticeEmptyLabel != null && dgvRecentNotices.Visible)
                 _noticeEmptyLabel.ForeColor = AppColors.TextMuted;
             if (_noticeBody != null)
             {
@@ -511,8 +481,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 _noticeBody.BorderColor = dgvRecentNotices.Visible ? Color.Transparent : AppColors.Border;
                 _noticeBody.Invalidate();
             }
-            AcademicTheme.StyleGrid(dgvRecentNotices);
-            AppColors.ApplyTheme(this);
+            StudentTabChrome.StyleGrid(dgvRecentNotices);
             dgvRecentNotices.ClearSelection();
         }
 

@@ -16,6 +16,7 @@ namespace CourseGuard.Backend.Models
         public int AttemptCount { get; set; }
         public int InProgressAttemptCount { get; set; }
         public int QuestionCount { get; set; }
+        public bool AttemptStorageAvailable { get; set; } = true;
 
         public bool CanStart => StudentExamAvailabilityService.CanStart(this);
         public bool IsOpen => CanStart;
