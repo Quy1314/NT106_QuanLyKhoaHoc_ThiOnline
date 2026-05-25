@@ -11,6 +11,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         {
             AddButton.Text = "Duyệt";
             EditButton.Text = "Từ chối";
+            TeacherTabChrome.StyleDangerButton(EditButton);
             TeacherTabChrome.FitButtonToText(AddButton);
             TeacherTabChrome.FitButtonToText(EditButton);
             DeleteButton.Visible = false;

@@ -1,12 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
 using System.Globalization;
+using System.Linq;
 using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Backend.Services;
 using CourseGuard.Frontend.Forms.Student;
 using CourseGuard.Frontend.Theme;
 
@@ -17,7 +20,10 @@ namespace CourseGuard.Frontend.UserControls.Student
         private readonly CourseGuardDbContext _dbContext = new("");
         private readonly AuthController _authController = new(new CourseGuardDbContext(""));
         private DataTable? _examTable;
+        private List<StudentExamListItemModel> _exams = new();
         private string _globalSearchKeyword = string.Empty;
+        private RoundedPanel _examBody = null!;
+        private Label _emptyStateLabel = null!;
 
         public UC_TakeExam()
         {
@@ -42,9 +48,10 @@ namespace CourseGuard.Frontend.UserControls.Student
             var root = StudentTabChrome.CreateRoot(this);
             root.Controls.Add(StudentTabChrome.CreateHeader(
                 "Bài kiểm tra",
-                "Theo dõi bài kiểm tra đang mở, thời lượng và trạng thái làm bài.",
+                "Theo dõi bài kiểm tra active trong các khóa học đang học và trạng thái làm bài.",
                 btnStartExam), 0, 0);
-            root.Controls.Add(StudentTabChrome.CreateDataCard("Danh sách bài kiểm tra", dgvExams), 0, 1);
+            _examBody = StudentTabChrome.CreateTableBody(dgvExams, out _emptyStateLabel);
+            root.Controls.Add(StudentTabChrome.CreateDataCard("Danh sách bài kiểm tra", _examBody), 0, 1);
             StudentTabChrome.EnableNaturalFocusClear(this, dgvExams);
         }
 
@@ -58,7 +65,8 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
             catch (Exception ex)
             {
-                BindExamTable(CreateMessageTable($"Không thể tải bài kiểm tra: {ex.Message}"));
+                _examTable = CreateExamTableSchema();
+                BindExamTable(_examTable, $"Không thể tải bài kiểm tra: {ex.Message}");
             }
             finally
             {
@@ -70,22 +78,16 @@ namespace CourseGuard.Frontend.UserControls.Student
         {
             int studentId = UserSessionContext.CurrentUserId ?? 0;
             if (studentId <= 0)
-                return CreateMessageTable("Không xác định được tài khoản học sinh.");
+                return CreateExamTableSchema();
 
-            var exams = _dbContext.GetAvailableExamsForStudent(studentId);
+            _exams = _dbContext.GetAvailableExamsForStudent(studentId);
             DataTable dt = CreateExamTableSchema();
 
-            if (exams.Count == 0)
-            {
-                dt.Rows.Add(0, false, "Chưa có bài kiểm tra đang/sắp mở", "", "", "", "");
-                return dt;
-            }
-
-            foreach (StudentExamListItemModel exam in exams)
+            foreach (StudentExamListItemModel exam in _exams)
             {
                 dt.Rows.Add(
                     exam.Id,
-                    exam.IsOpen,
+                    exam.CanStart,
                     exam.Title,
                     exam.CourseName,
                     BuildExamTimeText(exam),
@@ -96,12 +98,22 @@ namespace CourseGuard.Frontend.UserControls.Student
             return dt;
         }
 
-        private void BindExamTable(DataTable table)
+        private void BindExamTable(DataTable table, string emptyMessage = "Chưa có bài kiểm tra active trong các khóa học đang học.")
         {
+            if (table.Rows.Count == 0)
+            {
+                dgvExams.DataSource = null;
+                StudentTabChrome.SetTableState(_examBody, dgvExams, _emptyStateLabel, showTable: false, emptyMessage);
+                btnStartExam.Enabled = false;
+                return;
+            }
+
             dgvExams.DataSource = table;
             dgvExams.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             HideInternalColumn("ExamId");
             HideInternalColumn("CanStart");
+            StudentTabChrome.SetTableState(_examBody, dgvExams, _emptyStateLabel, showTable: true, string.Empty);
+            btnStartExam.Enabled = true;
             dgvExams.ClearSelection();
             dgvExams.CurrentCell = null;
         }
@@ -109,8 +121,14 @@ namespace CourseGuard.Frontend.UserControls.Student
         public void ApplyGlobalSearch(string keyword)
         {
             _globalSearchKeyword = keyword ?? string.Empty;
-            if (_examTable != null)
-                BindExamTable(FilterExamTable(_examTable));
+            if (_examTable == null)
+                return;
+
+            DataTable filtered = FilterExamTable(_examTable);
+            string emptyMessage = string.IsNullOrWhiteSpace(_globalSearchKeyword)
+                ? "Chưa có bài kiểm tra active trong các khóa học đang học."
+                : "Không tìm thấy bài kiểm tra phù hợp";
+            BindExamTable(filtered, emptyMessage);
         }
 
         private DataTable FilterExamTable(DataTable source)
@@ -127,9 +145,6 @@ namespace CourseGuard.Frontend.UserControls.Student
                     filtered.ImportRow(row);
             }
 
-            if (filtered.Rows.Count == 0)
-                filtered.Rows.Add(0, false, "Không tìm thấy bài kiểm tra phù hợp", "", "", "", "");
-
             return filtered;
         }
 
@@ -141,7 +156,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private static DataTable CreateExamTableSchema()
         {
-            DataTable dt = new DataTable();
+            DataTable dt = new();
             dt.Columns.Add("ExamId", typeof(int));
             dt.Columns.Add("CanStart", typeof(bool));
             dt.Columns.Add("Kỳ thi", typeof(string));
@@ -149,13 +164,6 @@ namespace CourseGuard.Frontend.UserControls.Student
             dt.Columns.Add("Thời gian", typeof(string));
             dt.Columns.Add("Số câu", typeof(string));
             dt.Columns.Add("Tình trạng", typeof(string));
-            return dt;
-        }
-
-        private static DataTable CreateMessageTable(string message)
-        {
-            DataTable dt = CreateExamTableSchema();
-            dt.Rows.Add(0, false, message, "", "", "", "");
             return dt;
         }
 
@@ -177,7 +185,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private void btnStartExam_Click(object sender, EventArgs e)
         {
-            if (dgvExams.CurrentRow == null || dgvExams.CurrentRow.IsNewRow)
+            if (!dgvExams.Visible || dgvExams.CurrentRow == null || dgvExams.CurrentRow.IsNewRow)
             {
                 MetaTheme.ShowModernDialog("Vui lòng chọn một bài kiểm tra.", "Thông báo");
                 return;
@@ -187,7 +195,11 @@ namespace CourseGuard.Frontend.UserControls.Student
             bool canStart = Convert.ToBoolean(dgvExams.CurrentRow.Cells["CanStart"].Value);
             if (examId <= 0 || !canStart)
             {
-                MetaTheme.ShowModernDialog("Bài kiểm tra này chưa thể làm ở thời điểm hiện tại.", "Thông báo");
+                StudentExamListItemModel? exam = _exams.FirstOrDefault(item => item.Id == examId);
+                string message = exam == null
+                    ? "Bài kiểm tra này chưa thể làm ở thời điểm hiện tại."
+                    : StudentExamAvailabilityService.GetStartBlockedMessage(exam);
+                MetaTheme.ShowModernDialog(message, "Thông báo");
                 return;
             }
 
@@ -198,6 +210,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             using var form = new DoExamForm(examId);
             form.ShowDialog();
+            _ = LoadDataAsync();
         }
     }
 }

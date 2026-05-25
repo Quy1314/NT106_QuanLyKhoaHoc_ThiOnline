@@ -17,6 +17,8 @@ namespace CourseGuard.Frontend.UserControls.Student
         private readonly AuthController _authController = new(new CourseGuardDbContext(""));
         private readonly CourseController _controller;
         private List<StudentScheduleItemModel> _sessions = new();
+        private RoundedPanel _scheduleBody = null!;
+        private Label _emptyStateLabel = null!;
 
         public UC_Schedule()
         {
@@ -39,13 +41,18 @@ namespace CourseGuard.Frontend.UserControls.Student
             try
             {
                 int studentId = UserSessionContext.CurrentUserId ?? 0;
-                if (studentId == 0) return;
+                if (studentId == 0)
+                {
+                    BindToGrid(new List<StudentScheduleItemModel>(), "Không xác định được tài khoản học sinh.");
+                    return;
+                }
 
                 _sessions = await System.Threading.Tasks.Task.Run(() => _controller.GetStudentOnlineSessions(studentId));
                 ApplyTimeFilter();
             }
             catch (Exception ex)
             {
+                BindToGrid(new List<StudentScheduleItemModel>(), $"Lỗi tải lịch học: {ex.Message}");
                 MetaTheme.ShowModernDialog("Lỗi tải lịch học: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -71,7 +78,8 @@ namespace CourseGuard.Frontend.UserControls.Student
                 "Lịch học",
                 "Xem lịch học theo tuần, tháng và tham gia buổi học online.",
                 cboTimeFilter, btnJoinOnline), 0, 0);
-            root.Controls.Add(StudentTabChrome.CreateDataCard("Lịch khóa học", dgvSchedule), 0, 1);
+            _scheduleBody = StudentTabChrome.CreateTableBody(dgvSchedule, out _emptyStateLabel);
+            root.Controls.Add(StudentTabChrome.CreateDataCard("Lịch khóa học", _scheduleBody), 0, 1);
             StudentTabChrome.EnableNaturalFocusClear(this, dgvSchedule);
         }
 
@@ -79,6 +87,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         {
             IEnumerable<StudentScheduleItemModel> filtered = _sessions;
             DateTime now = DateTime.Now;
+            string emptyMessage = "Chưa có lịch học phù hợp.";
 
             switch (cboTimeFilter.SelectedIndex)
             {
@@ -86,18 +95,20 @@ namespace CourseGuard.Frontend.UserControls.Student
                     DateTime startOfWeek = now.Date.AddDays(-(int)now.DayOfWeek + 1);
                     DateTime endOfWeek = startOfWeek.AddDays(7);
                     filtered = filtered.Where(s => s.StartTime.HasValue && s.StartTime.Value >= startOfWeek && s.StartTime.Value < endOfWeek);
+                    emptyMessage = "Chưa có lịch học trong tuần này.";
                     break;
                 case 1:
-                    DateTime startOfMonth = new DateTime(now.Year, now.Month, 1);
+                    DateTime startOfMonth = new(now.Year, now.Month, 1);
                     DateTime endOfMonth = startOfMonth.AddMonths(1);
                     filtered = filtered.Where(s => s.StartTime.HasValue && s.StartTime.Value >= startOfMonth && s.StartTime.Value < endOfMonth);
+                    emptyMessage = "Chưa có lịch học trong tháng này.";
                     break;
             }
 
-            BindToGrid(filtered.ToList());
+            BindToGrid(filtered.ToList(), emptyMessage);
         }
 
-        private void BindToGrid(List<StudentScheduleItemModel> sessions)
+        private void BindToGrid(List<StudentScheduleItemModel> sessions, string emptyMessage = "Chưa có lịch học phù hợp.")
         {
             DataTable dt = new();
             dt.Columns.Add("SessionId", typeof(int));
@@ -111,7 +122,6 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             foreach (var session in sessions)
             {
-                string status = BuildStatus(session);
                 dt.Rows.Add(
                     session.SessionId,
                     session.CourseName,
@@ -119,7 +129,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                     session.TeacherName,
                     session.StartTime?.ToString("dd/MM/yyyy HH:mm") ?? "",
                     session.EndTime?.ToString("dd/MM/yyyy HH:mm") ?? "",
-                    status,
+                    BuildStatus(session),
                     session.MeetingLink);
             }
 
@@ -129,13 +139,17 @@ namespace CourseGuard.Frontend.UserControls.Student
                 dgvSchedule.Columns["SessionId"]!.Visible = false;
             if (dgvSchedule.Columns["Link"] != null)
                 dgvSchedule.Columns["Link"]!.Visible = false;
+
+            bool hasRows = dt.Rows.Count > 0;
+            StudentTabChrome.SetTableState(_scheduleBody, dgvSchedule, _emptyStateLabel, hasRows, emptyMessage);
+            btnJoinOnline.Enabled = hasRows;
             dgvSchedule.ClearSelection();
             dgvSchedule.CurrentCell = null;
         }
 
         private void JoinSelectedSession()
         {
-            if (dgvSchedule.CurrentRow == null || dgvSchedule.CurrentRow.IsNewRow)
+            if (!dgvSchedule.Visible || dgvSchedule.CurrentRow == null || dgvSchedule.CurrentRow.IsNewRow)
             {
                 MetaTheme.ShowModernDialog("Vui lòng chọn một buổi học.", "Thông báo");
                 return;

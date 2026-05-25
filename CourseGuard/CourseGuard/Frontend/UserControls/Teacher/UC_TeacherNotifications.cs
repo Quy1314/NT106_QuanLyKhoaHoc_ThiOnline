@@ -1,6 +1,5 @@
 using System;
 using System.Data;
-using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Data;
@@ -19,6 +18,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private readonly Button _markRead = TeacherTabChrome.PrimaryButton("Đánh dấu đã đọc");
         private readonly Button _refresh = TeacherTabChrome.SecondaryButton("Tải lại");
         private DataTable _source = new();
+        private RoundedPanel _gridBody = null!;
+        private Label _emptyStateLabel = null!;
 
         public UC_TeacherNotifications(int teacherId)
         {
@@ -47,7 +48,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 "Các sự kiện giáo viên cần biết hoặc cần xử lý.",
                 _categoryFilter, _typeFilter, _markRead, _refresh), 0, 0);
             TeacherTabChrome.StyleGrid(_grid);
-            root.Controls.Add(TeacherTabChrome.CreateDataCard("Danh sách thông báo", _grid), 0, 1);
+            _gridBody = TeacherTabChrome.CreateTableBody(_grid, out _emptyStateLabel);
+            root.Controls.Add(TeacherTabChrome.CreateDataCard("Danh sách thông báo", _gridBody), 0, 1);
             TeacherTabChrome.EnableNaturalFocusClear(this, _grid);
         }
 
@@ -111,14 +113,17 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _grid.DataSource = filtered;
             if (_grid.Columns["Id"] != null) _grid.Columns["Id"]!.Visible = false;
             if (_grid.Columns["IsRead"] != null) _grid.Columns["IsRead"]!.Visible = false;
-            _markRead.Enabled = filtered.Rows.Count > 0;
+
+            bool hasRows = filtered.Rows.Count > 0;
+            TeacherTabChrome.SetTableState(_gridBody, _grid, _emptyStateLabel, hasRows, "Chưa có thông báo phù hợp.");
+            _markRead.Enabled = hasRows;
             _grid.ClearSelection();
             _grid.CurrentCell = null;
         }
 
         private async Task MarkSelectedAsReadAsync()
         {
-            if (_grid.CurrentRow == null || _grid.CurrentRow.IsNewRow)
+            if (!_grid.Visible || _grid.CurrentRow == null || _grid.CurrentRow.IsNewRow)
             {
                 MetaTheme.ShowModernDialog("Vui lòng chọn một thông báo.", "Thông báo");
                 return;

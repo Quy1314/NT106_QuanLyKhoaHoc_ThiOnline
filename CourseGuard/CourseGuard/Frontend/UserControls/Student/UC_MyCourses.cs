@@ -22,6 +22,8 @@ namespace CourseGuard.Frontend.UserControls.Student
         private List<EnrollmentModel> _allEnrollments = new();
         private bool _isLoadingEnrollments;
         private string _globalSearchKeyword = string.Empty;
+        private RoundedPanel _myCoursesBody = null!;
+        private Label _emptyStateLabel = null!;
 
         public UC_MyCourses()
         {
@@ -84,7 +86,8 @@ namespace CourseGuard.Frontend.UserControls.Student
             content.RowStyles.Add(new RowStyle(SizeType.Percent, 68f));
             content.RowStyles.Add(new RowStyle(SizeType.Percent, 32f));
 
-            var tableCard = StudentTabChrome.CreateDataCard("Danh sách khóa học", dgvMyCourses);
+            _myCoursesBody = StudentTabChrome.CreateTableBody(dgvMyCourses, out _emptyStateLabel);
+            var tableCard = StudentTabChrome.CreateDataCard("Danh sách khóa học", _myCoursesBody);
             tableCard.Margin = new Padding(0, 0, 0, 12);
             var detailCard = StudentTabChrome.CreateDataCard("Chi tiết ghi danh", pnlCourseInfo);
             detailCard.Margin = new Padding(0, 12, 0, 0);
@@ -207,6 +210,13 @@ namespace CourseGuard.Frontend.UserControls.Student
             {
                 dgvMyCourses.DataSource = dt;
                 dgvMyCourses.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+                bool hasRows = dt.Rows.Count > 0;
+                string emptyMessage = string.IsNullOrWhiteSpace(_globalSearchKeyword)
+                    ? "Chưa có khóa học trong danh sách của bạn."
+                    : "Không tìm thấy khóa học phù hợp.";
+                StudentTabChrome.SetTableState(_myCoursesBody, dgvMyCourses, _emptyStateLabel, hasRows, emptyMessage);
+                btnViewDetail.Enabled = hasRows;
+                btnDrop.Enabled = hasRows;
 
                 // Ẩn cột ID/CourseId nội bộ
                 DataGridViewColumn? idColumn = dgvMyCourses.Columns["ID"];

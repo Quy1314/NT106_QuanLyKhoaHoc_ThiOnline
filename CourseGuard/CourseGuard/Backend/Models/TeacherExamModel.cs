@@ -13,6 +13,7 @@ namespace CourseGuard.Backend.Models
         public int DurationMinutes { get; set; }
         public int MaxAttempts { get; set; } = 1;
         public int QuestionCount { get; set; }
-        public string StatusText { get; set; } = string.Empty;
+        public string Status { get; set; } = WorkflowConstants.ExamStatus.Draft;
+        public string StatusText { get; set; } = WorkflowConstants.ExamStatus.Draft;
     }
 }

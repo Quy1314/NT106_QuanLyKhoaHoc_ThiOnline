@@ -143,6 +143,9 @@ namespace CourseGuard.Frontend.Theme
         // ── Borders ─────────────────────────────────────────────────
         public static Color Border       => _isDarkMode ? Dark.Border       : Light.Border;
         public static Color BorderStrong => _isDarkMode ? Dark.BorderStrong : Light.BorderStrong;
+        public static Color GridBorder   => _isDarkMode
+            ? Color.FromArgb(40, 40, 55)
+            : Light.Border;
 
         // ── Chart / Data-viz ────────────────────────────────────────
         public static Color ChartLine    => AccentBlue;                                        // Always blue
@@ -441,9 +444,7 @@ namespace CourseGuard.Frontend.Theme
             dgv.EnableHeadersVisualStyles = false;
             dgv.BackgroundColor = BgCard;
             dgv.BorderStyle = BorderStyle.None;
-            dgv.GridColor = IsDarkMode
-                ? Color.FromArgb(40, 40, 55)
-                : Color.FromArgb(226, 232, 240);
+            dgv.GridColor = GridBorder;
 
             dgv.DefaultCellStyle.BackColor = BgCard;
             dgv.DefaultCellStyle.ForeColor = TextPrimary;
