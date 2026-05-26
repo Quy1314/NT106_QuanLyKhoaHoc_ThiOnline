@@ -1,0 +1,99 @@
+# ═══════════════════════════════════════════════════════════════
+#  COURSEGUARD — QUY CHUẨN XƯƠNG SỐNG (CORE RULES) v1.0
+#  Cập nhật: 2026-05-25
+# ═══════════════════════════════════════════════════════════════
+
+# 1. TỔNG QUAN KIẾN TRÚC
+# Tên: CourseGuard — Quản lý khóa học & thi online
+# Stack: C# WinForms (.NET 10.0) + Supabase PostgreSQL (Cloud)
+# DB Driver: Npgsql (Direct — không ORM)
+#
+# CourseGuard/CourseGuard/
+# ├── Frontend/
+# │   ├── Program.cs
+# │   ├── Forms/{Admin,Login,Teacher,Student}/
+# │   ├── Theme/ (Design System & Custom Controls)
+# │   └── UserControls/{Admin,Teacher,Student,Shared}/
+# └── Backend/
+#     ├── Config/AppEnvironment.cs
+#     ├── Controllers/{Auth,User,Course,Dashboard,Teacher,Chat}Controller.cs
+#     ├── Data/{CourseGuardDbContext,DatabaseAction,*Repository}.cs
+#     ├── Database/Scripts/ (SQL Schema & Migrations)
+#     ├── Models/ (31 DTO/Model files)
+#     ├── Security/{PasswordHasher,BloomFilter,UserSessionContext}.cs
+#     └── Services/{SmtpEmail,SupabaseAuth,Gmail,ChatFileStorage}Service.cs
+
+# 2. NGUYÊN TẮC KIẾN TRÚC
+# - Frontend KHÔNG gọi trực tiếp Npgsql/SQL.
+# - Luồng: UC → Controller → Repository/DbContext → Supabase.
+# - Đặt tên: UC_{Tên}.cs, {Domain}Controller.cs, {Domain}Repository.cs
+# - Namespace: CourseGuard.Frontend.*, CourseGuard.Backend.*
+
+# 3. ASYNC/AWAIT — BẮT BUỘC TUYỆT ĐỐI
+# ⚠️ Mọi thao tác DB PHẢI async/await để tránh freeze UI.
+# - Tầng Data: async Task<T>, OpenAsync(), ExecuteReaderAsync()...
+# - Tầng Controller: public async Task<T>, CẤM .Result/.Wait()
+# - Tầng UI: async void (chỉ event handler), kiểm tra IsDisposed sau await
+# - Pattern chuẩn:
+#   async void btn_Click(...) {
+#     try { btnX.Enabled=false; var d=await ctrl.GetAsync();
+#           if(IsDisposed) return; /*update UI*/ }
+#     catch(Exception ex) { MetaTheme.ShowModernDialog(ex.Message,...); }
+#     finally { if(!IsDisposed) btnX.Enabled=true; } }
+# - Checklist: Không .Result/.Wait(), mọi DB=async, try-catch bao bọc, check IsDisposed
+
+# 4. BẢO MẬT HỆ THỐNG — ĐẶC BIỆT QUAN TRỌNG
+# 🔒 FILE BẢO VỆ: Frontend/Theme/ColorPalette.cs
+#   - CẤM TUYỆT ĐỐI: chỉnh sửa, ghi đè, thêm/xóa, đổi tên, di chuyển
+#   - CHỈ ĐƯỢC PHÉP ĐỌC (Read-only) để đồng bộ mã màu
+#   - Nếu cần thay đổi → PHẢI hỏi xác nhận người dùng
+#   - Lý do: Cầu nối backward-compatible MetaTheme ↔ component cũ
+#
+# 🔐 File nhạy cảm (thận trọng):
+#   - Frontend/Theme/MetaTheme.cs → Token trung tâm, ảnh hưởng toàn cục
+#   - Frontend/Theme/AppColors.cs → Bảng màu gốc
+#   - Backend/Data/CourseGuardDbContext.cs → Connection string & truy vấn cốt lõi
+#   - Backend/Config/AppEnvironment.cs → Cấu hình môi trường
+
+# 5. CUSTOM CONTROLS — BẮT BUỘC SỬ DỤNG
+# PHẢI dùng thay WinForms mặc định khi có tương đương:
+# - RoundedPanel.cs        → Thay Panel (card/container bo góc)
+# - RoundedButtonHelper.cs → Thay Button (nút bo tròn hiện đại)
+# - FuturisticLoginKit.cs  → Form đăng nhập/đăng ký
+# - StatCard.cs            → KPI/thống kê dashboard
+# - SidebarPanel.cs        → Thanh điều hướng bên trái
+# - TopbarPanel.cs         → Thanh tiêu đề phía trên
+# - SearchBoxPanel.cs      → Ô tìm kiếm có placeholder
+# - SkeletonLoaderControl.cs → Loading state thay "Đang tải..."
+# - StudentDropdownStyler.cs → ComboBox theo theme Student
+# ❌ KHÔNG dùng Panel/GroupBox/Button cơ bản khi có Custom Control tương đương.
+
+# 6. THIẾT KẾ GIAO DIỆN
+# - Dark Mode mặc định: dùng MetaTheme.Colors.*
+# - Gọi MetaTheme.ApplyDarkRecursive(this) khi Load UC
+# - MetaTheme.StyleGrid() cho DataGridView, StyleForm() cho Form
+# - Font: MetaTheme.Fonts.* (Inter → Segoe UI), KHÔNG hardcode
+# - Spacing: MetaTheme.Spacing.* | Radius: MetaTheme.Radius.*
+# - Dialog: MetaTheme.ShowModernDialog() — CẤM MessageBox.Show()
+
+# 7. CƠ SỞ DỮ LIỆU
+# - Schema: Backend/Database/Scripts/SupabaseSchema.sql
+# - Thay đổi schema → tạo migration trong Scripts/Migrations/
+# - Parameterized query (@param) — CẤM nối chuỗi SQL
+# - try-catch + logging cho mọi truy vấn, đóng connection đúng cách
+
+# 8. XỬ LÝ LỖI
+# - Mọi async method PHẢI có try-catch
+# - Log ra Console.Error/Debug, hiển thị qua ShowModernDialog()
+# - KHÔNG catch rỗng — tối thiểu phải ghi nhận exception
+
+# 9. WORKFLOWS & SKILLS
+# Trước khi code, PHẢI đọc:
+# - .agent/workflows/plan_workflow.md (3 bước trước khi code)
+# - .agent/workflows/review_workflow.md (rà soát sau code)
+# - .agent/skills/winforms_modern_ui_expert.md (UI chuyên sâu)
+# - .agent/skills/database_guard_expert.md (DB chuyên sâu)
+
+# 10. PACKAGES: Npgsql 10.0.2, MailKit 4.16.0, Google.Apis.Gmail.v1,
+#     DotNetEnv 3.2.0, CsvHelper 33.0.1, ScottPlot.WinForms 5.1.58
+# ═══════════════════════════════════════════════════════════════

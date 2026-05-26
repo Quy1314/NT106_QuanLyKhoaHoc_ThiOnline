@@ -36,6 +36,10 @@ namespace CourseGuard.Frontend.Forms.Student
             ApplyAcademicExamTheme();
             WireEvents();
             RoundedButtonHelper.Apply(10, btnSubmit, btnPrev, btnNext);
+            
+            this.WindowState = FormWindowState.Maximized;
+            this.TopMost = true;
+
             Shown += DoExamForm_Shown;
             this.FormClosing += DoExamForm_FormClosing;
         }

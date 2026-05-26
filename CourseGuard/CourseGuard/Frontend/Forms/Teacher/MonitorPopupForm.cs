@@ -1,10 +1,15 @@
 using System;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using CourseGuard.Backend.Data;
+using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services.Monitoring;
+using CourseGuard.Backend.Services.Storage;
+using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.Forms.Teacher
 {
@@ -17,6 +22,13 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private readonly TcpScreenMonitorService _service = new();
         private readonly PictureBox _picture = new();
         private readonly Label _status = new();
+        
+        // Cột bên phải cho Vi phạm
+        private readonly DataGridView _dgvViolations = new();
+        private readonly Button _btnRecordViolation = new();
+        
+        private readonly ViolationRepository _violationRepo = new();
+        private readonly SupabaseStorageService _storageService = new();
 
         public MonitorPopupForm(int teacherId, int examId, int studentId, int attemptId)
         {
@@ -25,21 +37,12 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _attemptId = attemptId;
             InitializeComponent();
             Text = $"Giám sát thi - HS {studentId}";
-            Width = 1100;
+            Width = 1200;
             Height = 760;
             StartPosition = FormStartPosition.CenterParent;
+            BackColor = MetaTheme.Colors.FormBg;
 
-            _status.Dock = DockStyle.Top;
-            _status.Height = 38;
-            _status.Text = "Đang kết nối";
-            _status.TextAlign = ContentAlignment.MiddleLeft;
-            _status.Padding = new Padding(12, 0, 0, 0);
-
-            _picture.Dock = DockStyle.Fill;
-            _picture.BackColor = Color.Black;
-            _picture.SizeMode = PictureBoxSizeMode.Zoom;
-            Controls.Add(_picture);
-            Controls.Add(_status);
+            SetupLayout();
 
             _service.FrameReceived += Service_FrameReceived;
             _service.StatusChanged += (_, e) => SetStatus(e.Status);
@@ -49,30 +52,192 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 _service.Dispose();
                 _picture.Image?.Dispose();
             };
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
             _ = Task.Run(() => _service.StartAsync(_examId, _studentId, _attemptId, _cts.Token));
+            _ = LoadViolationsAsync();
+        }
+
+        private void SetupLayout()
+        {
+            var split = new SplitContainer
+            {
+                Dock = DockStyle.Fill,
+                Orientation = Orientation.Vertical,
+                SplitterDistance = 800,
+                FixedPanel = FixedPanel.Panel2,
+                BackColor = MetaTheme.Colors.Border
+            };
+
+            // PANEL 1: Hình ảnh giám sát
+            var pnlLeft = new Panel { Dock = DockStyle.Fill, BackColor = Color.Black };
+            _status.Dock = DockStyle.Top;
+            _status.Height = 38;
+            _status.Text = "Đang kết nối...";
+            _status.ForeColor = Color.White;
+            _status.TextAlign = ContentAlignment.MiddleLeft;
+            _status.Padding = new Padding(12, 0, 0, 0);
+            
+            _picture.Dock = DockStyle.Fill;
+            _picture.BackColor = Color.Black;
+            _picture.SizeMode = PictureBoxSizeMode.Zoom;
+            
+            pnlLeft.Controls.Add(_picture);
+            pnlLeft.Controls.Add(_status);
+
+            // PANEL 2: Danh sách vi phạm
+            var pnlRight = new Panel { Dock = DockStyle.Fill, BackColor = MetaTheme.Colors.FormBg, Padding = new Padding(16) };
+            
+            var lblTitle = new Label
+            {
+                Text = "Danh sách vi phạm",
+                Font = MetaTheme.Fonts.HeadingMd(),
+                ForeColor = MetaTheme.Colors.TextPrimary,
+                Dock = DockStyle.Top,
+                Height = 40,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            _dgvViolations.Dock = DockStyle.Fill;
+            MetaTheme.StyleGrid(_dgvViolations);
+            _dgvViolations.Columns.Add("CreatedAt", "Thời gian");
+            _dgvViolations.Columns.Add("Type", "Loại vi phạm");
+
+            var pnlBottom = new Panel { Dock = DockStyle.Bottom, Height = 60, Padding = new Padding(0, 16, 0, 0) };
+            _btnRecordViolation.Text = "Ghi nhận vi phạm";
+            _btnRecordViolation.Dock = DockStyle.Fill;
+            MetaTheme.StyleLogoutButton(_btnRecordViolation);
+            _btnRecordViolation.Click += BtnRecordViolation_Click;
+            pnlBottom.Controls.Add(_btnRecordViolation);
+
+            pnlRight.Controls.Add(_dgvViolations);
+            pnlRight.Controls.Add(lblTitle);
+            pnlRight.Controls.Add(pnlBottom);
+
+            split.Panel1.Controls.Add(pnlLeft);
+            split.Panel2.Controls.Add(pnlRight);
+            Controls.Add(split);
+        }
+
+        private async void BtnRecordViolation_Click(object? sender, EventArgs e)
+        {
+            if (_picture.Image == null)
+            {
+                MetaTheme.ShowModernDialog("Chưa có hình ảnh từ máy học sinh để ghi nhận.", "Thông báo");
+                return;
+            }
+
+            _btnRecordViolation.Enabled = false;
+            _btnRecordViolation.Text = "Đang xử lý...";
+
+            try
+            {
+                // Chụp lại khung hình hiện tại
+                using var ms = new MemoryStream();
+                using var bmp = new Bitmap(_picture.Image);
+                bmp.Save(ms, ImageFormat.Jpeg);
+                byte[] imageBytes = ms.ToArray();
+
+                // 1. Upload ảnh
+                string fileName = $"violation_exam{_examId}_student{_studentId}_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}.jpg";
+                string imageUrl = await _storageService.UploadViolationImageAsync(imageBytes, fileName);
+
+                // 2. Lưu database
+                var violation = new ViolationModel
+                {
+                    UserId = _studentId,
+                    ExamAttemptId = _attemptId > 0 ? _attemptId : null,
+                    Type = "Mất Focus / Chuyển Tab (Ghi nhận thủ công)",
+                    ImageUrl = imageUrl
+                };
+                await _violationRepo.InsertViolationAsync(violation);
+
+                // 3. Reload list
+                await LoadViolationsAsync();
+                MetaTheme.ShowModernDialog("Đã ghi nhận vi phạm thành công!", "Thành công");
+            }
+            catch (Exception ex)
+            {
+                MetaTheme.ShowModernDialog($"Lỗi khi ghi nhận vi phạm: {ex.Message}", "Lỗi");
+            }
+            finally
+            {
+                _btnRecordViolation.Enabled = true;
+                _btnRecordViolation.Text = "Ghi nhận vi phạm";
+            }
+        }
+
+        private async Task LoadViolationsAsync()
+        {
+            if (_attemptId <= 0) return;
+
+            try
+            {
+                var violations = await _violationRepo.GetViolationsByAttemptIdAsync(_attemptId);
+                if (InvokeRequired)
+                {
+                    BeginInvoke(new MethodInvoker(() => BindViolations(violations)));
+                }
+                else
+                {
+                    BindViolations(violations);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Bỏ qua lỗi load ban đầu để không làm phiền giám thị
+                Console.WriteLine(ex.Message);
+            }
+        }
+
+        private void BindViolations(System.Collections.Generic.List<ViolationModel> violations)
+        {
+            _dgvViolations.Rows.Clear();
+            foreach (var v in violations)
+            {
+                _dgvViolations.Rows.Add(v.CreatedAt.ToString("HH:mm:ss"), v.Type);
+            }
         }
 
         private void Service_FrameReceived(object? sender, ScreenFrameReceivedEventArgs e)
         {
-            using var ms = new MemoryStream(e.JpegBytes);
-            using var source = Image.FromStream(ms);
-            var frame = new Bitmap(source);
-            if (InvokeRequired)
+            try
             {
-                BeginInvoke(new MethodInvoker(() => SetFrame(frame)));
+                using var ms = new MemoryStream(e.JpegBytes);
+                using var source = Image.FromStream(ms);
+                var frame = new Bitmap(source);
+                if (InvokeRequired)
+                {
+                    BeginInvoke(new MethodInvoker(() => SetFrame(frame)));
+                }
+                else
+                {
+                    SetFrame(frame);
+                }
             }
-            else
+            catch
             {
-                SetFrame(frame);
+                // Bỏ qua lỗi parse hình ảnh bị hỏng nếu có
             }
         }
 
         private void SetFrame(Image frame)
         {
-            Image? old = _picture.Image;
+            if (_picture.Image != null)
+            {
+                Image old = _picture.Image;
+                _picture.Image = null;
+                old.Dispose();
+            }
+            
             _picture.Image = frame;
-            old?.Dispose();
-            _status.Text = "Đang nhận hình";
+            _picture.Refresh(); // Ép vẽ lại ngay lập tức để tránh dính ảnh cũ
+            
+            _status.Text = "Đang nhận hình liên tục (Real-time)";
+            _status.ForeColor = MetaTheme.Colors.Success;
         }
 
         private void SetStatus(string status)
@@ -80,7 +245,10 @@ namespace CourseGuard.Frontend.Forms.Teacher
             if (InvokeRequired)
                 BeginInvoke(new MethodInvoker(() => _status.Text = status));
             else
+            {
                 _status.Text = status;
+                _status.ForeColor = Color.White;
+            }
         }
     }
 }

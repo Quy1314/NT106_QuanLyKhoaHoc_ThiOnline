@@ -29,6 +29,10 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 var popup = new MonitorPopupForm(TeacherId, examId, studentId, attemptId);
                 popup.Show(FindForm());
             }
+            else
+            {
+                Theme.MetaTheme.ShowModernDialog("Vui lòng chọn một sinh viên đang trong phiên thi để giám sát.", "Thông báo");
+            }
             return Task.CompletedTask;
         }
     }
