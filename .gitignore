@@ -22,3 +22,7 @@ awesome-agent-skills/
 
 # Local architecture notes
 PROJECT_CONTEXT.md
+
+# Config and Environment
+*.env
+.cursorrules
