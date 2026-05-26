@@ -673,8 +673,6 @@ namespace CourseGuard.Backend.Data
                 JOIN users s ON s.id = a.student_id
                 WHERE c.teacher_id = @teacher_id
                   AND UPPER(COALESCE(a.status, '')) = 'IN_PROGRESS'
-                  AND (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
-                  AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)
                 ORDER BY a.start_time DESC", connection);
             command.Parameters.AddWithValue("@teacher_id", teacherId);
             using var reader = command.ExecuteReader();

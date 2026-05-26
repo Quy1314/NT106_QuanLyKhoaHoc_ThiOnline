@@ -27,24 +27,30 @@ namespace CourseGuard.Backend.Services.Monitoring
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            try
+            while (!cancellationToken.IsCancellationRequested)
             {
-                _client = new TcpClient();
-                await _client.ConnectAsync(_host, ScreenStreamProtocol.DefaultPort, cancellationToken);
-                await using NetworkStream stream = _client.GetStream();
-                while (!cancellationToken.IsCancellationRequested)
+                try
                 {
-                    byte[] jpeg = CaptureJpeg();
-                    byte[] header = ScreenStreamProtocol.BuildHeader(_examId, _studentId, _attemptId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), jpeg.Length);
-                    await stream.WriteAsync(header, cancellationToken);
-                    await stream.WriteAsync(jpeg, cancellationToken);
-                    await stream.FlushAsync(cancellationToken);
-                    await Task.Delay(1000, cancellationToken);
+                    _client?.Dispose();
+                    _client = new TcpClient();
+                    await _client.ConnectAsync(_host, ScreenStreamProtocol.DefaultPort, cancellationToken);
+                    await using NetworkStream stream = _client.GetStream();
+                    while (!cancellationToken.IsCancellationRequested)
+                    {
+                        byte[] jpeg = CaptureJpeg();
+                        byte[] header = ScreenStreamProtocol.BuildHeader(_examId, _studentId, _attemptId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), jpeg.Length);
+                        await stream.WriteAsync(header, cancellationToken);
+                        await stream.WriteAsync(jpeg, cancellationToken);
+                        await stream.FlushAsync(cancellationToken);
+                        await Task.Delay(1000, cancellationToken);
+                    }
                 }
-            }
-            catch
-            {
-                // Monitoring must never interrupt the student's exam flow.
+                catch
+                {
+                    // Monitoring must never interrupt the student's exam flow.
+                    if (cancellationToken.IsCancellationRequested) break;
+                    try { await Task.Delay(2000, cancellationToken); } catch { }
+                }
             }
         }
 
