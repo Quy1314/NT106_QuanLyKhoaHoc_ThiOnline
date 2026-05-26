@@ -10,23 +10,25 @@ namespace CourseGuard.Backend.Services.Monitoring
         public const int MaxFrameBytes = 5 * 1024 * 1024;
         public static readonly byte[] Magic = { (byte)'C', (byte)'G', (byte)'S', (byte)'F' };
         public const byte Version = 1;
-        public const int HeaderLength = 29;
+        public const int HeaderLength = 30; // Updated from 29 to 30 to include FrameType
 
-        public static byte[] BuildHeader(int examId, int studentId, int attemptId, long unixMillis, int jpegLength)
+        public static byte[] BuildHeader(byte frameType, int examId, int studentId, int attemptId, long unixMillis, int jpegLength)
         {
             var header = new byte[HeaderLength];
             Magic.CopyTo(header, 0);
             header[4] = Version;
-            BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(5, 4), examId);
-            BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(9, 4), studentId);
-            BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(13, 4), attemptId);
-            BinaryPrimitives.WriteInt64BigEndian(header.AsSpan(17, 8), unixMillis);
-            BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(25, 4), jpegLength);
+            header[5] = frameType;
+            BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(6, 4), examId);
+            BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(10, 4), studentId);
+            BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(14, 4), attemptId);
+            BinaryPrimitives.WriteInt64BigEndian(header.AsSpan(18, 8), unixMillis);
+            BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(26, 4), jpegLength);
             return header;
         }
 
-        public static bool TryReadHeader(byte[] header, out int examId, out int studentId, out int attemptId, out long unixMillis, out int jpegLength)
+        public static bool TryReadHeader(byte[] header, out byte frameType, out int examId, out int studentId, out int attemptId, out long unixMillis, out int jpegLength)
         {
+            frameType = 0;
             examId = studentId = attemptId = jpegLength = 0;
             unixMillis = 0;
             if (header.Length != HeaderLength)
@@ -38,11 +40,13 @@ namespace CourseGuard.Backend.Services.Monitoring
             }
             if (header[4] != Version)
                 return false;
-            examId = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(5, 4));
-            studentId = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(9, 4));
-            attemptId = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(13, 4));
-            unixMillis = BinaryPrimitives.ReadInt64BigEndian(header.AsSpan(17, 8));
-            jpegLength = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(25, 4));
+            
+            frameType = header[5];
+            examId = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(6, 4));
+            studentId = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(10, 4));
+            attemptId = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(14, 4));
+            unixMillis = BinaryPrimitives.ReadInt64BigEndian(header.AsSpan(18, 8));
+            jpegLength = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(26, 4));
             return jpegLength > 0 && jpegLength <= MaxFrameBytes;
         }
 
