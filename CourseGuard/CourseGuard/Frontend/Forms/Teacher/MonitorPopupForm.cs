@@ -19,7 +19,6 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private readonly int _studentId;
         private readonly int _attemptId;
         private readonly CancellationTokenSource _cts = new();
-        private readonly TcpScreenMonitorService _service = new();
         private readonly PictureBox _picture = new();
         private readonly Label _status = new();
         
@@ -44,12 +43,12 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             SetupLayout();
 
-            _service.FrameReceived += Service_FrameReceived;
-            _service.StatusChanged += (_, e) => SetStatus(e.Status);
+            TcpScreenMonitorService.Instance.FrameReceived += Service_FrameReceived;
+            TcpScreenMonitorService.Instance.StatusChanged += (_, e) => SetStatus(e.Status);
             FormClosing += (_, _) =>
             {
+                TcpScreenMonitorService.Instance.FrameReceived -= Service_FrameReceived;
                 _cts.Cancel();
-                _service.Dispose();
                 _picture.Image?.Dispose();
             };
         }
@@ -57,7 +56,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
-            _ = Task.Run(() => _service.StartAsync(_examId, _studentId, _attemptId, _cts.Token));
+            TcpScreenMonitorService.Instance.StartListening();
             _ = LoadViolationsAsync();
         }
 
@@ -204,18 +203,22 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void Service_FrameReceived(object? sender, ScreenFrameReceivedEventArgs e)
         {
+            if (e.StudentId != _studentId) return;
+
             try
             {
                 using var ms = new MemoryStream(e.JpegBytes);
                 using var source = Image.FromStream(ms);
                 var frame = new Bitmap(source);
+                if (IsDisposed) return;
+                
                 if (InvokeRequired)
                 {
-                    BeginInvoke(new MethodInvoker(() => SetFrame(frame)));
+                    BeginInvoke(new MethodInvoker(() => { if (!IsDisposed) SetFrame(frame, e.FrameType); }));
                 }
                 else
                 {
-                    SetFrame(frame);
+                    SetFrame(frame, e.FrameType);
                 }
             }
             catch
@@ -224,20 +227,26 @@ namespace CourseGuard.Frontend.Forms.Teacher
             }
         }
 
-        private void SetFrame(Image frame)
+        private void SetFrame(Image frame, byte frameType)
         {
-            if (_picture.Image != null)
-            {
-                Image old = _picture.Image;
-                _picture.Image = null;
-                old.Dispose();
-            }
-            
+            Image? old = _picture.Image;
             _picture.Image = frame;
+            old?.Dispose();
+            
             _picture.Refresh(); // Ép vẽ lại ngay lập tức để tránh dính ảnh cũ
             
-            _status.Text = "Đang nhận hình liên tục (Real-time)";
-            _status.ForeColor = MetaTheme.Colors.Success;
+            if (frameType == 1) // Cảnh báo gian lận
+            {
+                _status.Text = "🚨 PHÁT HIỆN GIAN LẬN: SINH VIÊN CỐ TÌNH CHUYỂN TAB 🚨";
+                _status.ForeColor = Color.Red;
+                _status.BackColor = Color.Yellow;
+            }
+            else
+            {
+                _status.Text = "Đang nhận hình liên tục (Real-time)";
+                _status.ForeColor = MetaTheme.Colors.Success;
+                _status.BackColor = Color.Transparent;
+            }
         }
 
         private void SetStatus(string status)
