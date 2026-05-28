@@ -8,9 +8,11 @@ namespace CourseGuard.Frontend.UserControls.Teacher
     {
         public UC_ExamMonitor(int teacherId) : base(teacherId, "Giám sát thi", "Chỉ hiển thị kỳ thi đang diễn ra thuộc khóa học của giảng viên.", "Phiên thi đang hoạt động")
         {
-            AddButton.Text = "Giám sát";
+            AddButton.Text = "Giám sát cá nhân";
             TeacherTabChrome.FitButtonToText(AddButton);
-            EditButton.Visible = false;
+            EditButton.Visible = true;
+            EditButton.Text = "Giám sát tất cả";
+            TeacherTabChrome.FitButtonToText(EditButton);
             DeleteButton.Visible = false;
         }
 
@@ -29,6 +31,17 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 var popup = new MonitorPopupForm(TeacherId, examId, studentId, attemptId);
                 popup.Show(FindForm());
             }
+            else
+            {
+                Theme.MetaTheme.ShowModernDialog("Vui lòng chọn một sinh viên đang trong phiên thi để giám sát.", "Thông báo");
+            }
+            return Task.CompletedTask;
+        }
+
+        protected override Task EditAsync()
+        {
+            var form = new MonitorAllForm();
+            form.Show(FindForm());
             return Task.CompletedTask;
         }
     }

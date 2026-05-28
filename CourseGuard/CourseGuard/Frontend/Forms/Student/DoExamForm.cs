@@ -36,8 +36,20 @@ namespace CourseGuard.Frontend.Forms.Student
             ApplyAcademicExamTheme();
             WireEvents();
             RoundedButtonHelper.Apply(10, btnSubmit, btnPrev, btnNext);
+            
+            this.WindowState = FormWindowState.Maximized;
+            this.TopMost = true;
+
             Shown += DoExamForm_Shown;
             this.FormClosing += DoExamForm_FormClosing;
+
+            LowLevelKeyboardHook.OnCheatKeyPressed += LowLevelKeyboardHook_OnCheatKeyPressed;
+            LowLevelKeyboardHook.SetHook();
+        }
+
+        private void LowLevelKeyboardHook_OnCheatKeyPressed(object? sender, EventArgs e)
+        {
+            _screenStreamClient?.SendWarning();
         }
 
         private void DoExamForm_Shown(object? sender, EventArgs e)
@@ -329,6 +341,9 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private void DoExamForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
+            LowLevelKeyboardHook.Unhook();
+            LowLevelKeyboardHook.OnCheatKeyPressed -= LowLevelKeyboardHook_OnCheatKeyPressed;
+            
             _timer.Stop();
             _monitoringCts.Cancel();
             _screenStreamClient?.Dispose();
