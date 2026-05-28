@@ -22,6 +22,18 @@ namespace CourseGuard.Backend.Data
             using var connection = _dbContext.CreateConnection();
             connection.Open();
 
+            using var activeExamsCmd = new NpgsqlCommand(@"
+                SELECT COUNT(*)
+                FROM exams ex
+                JOIN courses c ON c.id = ex.course_id
+                WHERE c.teacher_id = @teacher_id
+                  AND UPPER(COALESCE(ex.status, '')) = 'ACTIVE'
+                  AND (ex.open_time IS NULL OR ex.open_time <= @now)
+                  AND (ex.close_time IS NULL OR ex.close_time >= @now)", connection);
+            activeExamsCmd.Parameters.AddWithValue("@teacher_id", teacherId);
+            activeExamsCmd.Parameters.AddWithValue("@now", DateTime.Now);
+            int activeExamsCount = Convert.ToInt32(activeExamsCmd.ExecuteScalar());
+
             var summary = new TeacherDashboardSummaryModel
             {
                 TotalCourses = Count(connection, "SELECT COUNT(*) FROM courses WHERE teacher_id = @teacher_id", teacherId),
@@ -35,13 +47,7 @@ namespace CourseGuard.Backend.Data
                     FROM enrollments e
                     JOIN courses c ON c.id = e.course_id
                     WHERE c.teacher_id = @teacher_id AND UPPER(e.status) IN ('ACTIVE', 'APPROVED')", teacherId),
-                ActiveExams = Count(connection, @"
-                    SELECT COUNT(*)
-                    FROM exams ex
-                    JOIN courses c ON c.id = ex.course_id
-                    WHERE c.teacher_id = @teacher_id
-                      AND (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
-                      AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)", teacherId)
+                ActiveExams = activeExamsCount
             };
 
             using var activityCommand = new NpgsqlCommand(@"
@@ -673,8 +679,11 @@ namespace CourseGuard.Backend.Data
                 JOIN users s ON s.id = a.student_id
                 WHERE c.teacher_id = @teacher_id
                   AND UPPER(COALESCE(a.status, '')) = 'IN_PROGRESS'
+                  AND (ex.open_time IS NULL OR ex.open_time <= @now)
+                  AND (ex.close_time IS NULL OR ex.close_time >= @now)
                 ORDER BY a.start_time DESC", connection);
             command.Parameters.AddWithValue("@teacher_id", teacherId);
+            command.Parameters.AddWithValue("@now", DateTime.Now);
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {

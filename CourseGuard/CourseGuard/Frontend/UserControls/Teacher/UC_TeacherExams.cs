@@ -39,7 +39,15 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             using var dialog = new TeacherExamDialog(Controller.GetCourses(TeacherId));
             if (dialog.ShowDialog(FindForm()) == System.Windows.Forms.DialogResult.OK)
             {
-                Controller.CreateExam(TeacherId, new TeacherExamModel { CourseId = dialog.CourseId, Title = dialog.ItemTitle, OpenTime = dialog.SelectedDate, CloseTime = dialog.SelectedDate.AddHours(1), DurationMinutes = 60, MaxAttempts = 1, Status = WorkflowConstants.ExamStatus.Draft });
+                Controller.CreateExam(TeacherId, new TeacherExamModel { 
+                    CourseId = dialog.CourseId, 
+                    Title = dialog.ItemTitle, 
+                    OpenTime = dialog.OpenTime, 
+                    CloseTime = dialog.CloseTime, 
+                    DurationMinutes = dialog.DurationMinutes, 
+                    MaxAttempts = dialog.MaxAttempts, 
+                    Status = dialog.Status 
+                });
                 await LoadDataAsync();
             }
         }
@@ -48,8 +56,27 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         {
             int id = CurrentInt("Id");
             if (id <= 0) return;
-            int currentCourseId = CurrentInt("CourseId");
-            using var dialog = new TeacherSimpleItemDialog("Sửa bài kiểm tra", Controller.GetCourses(TeacherId), CurrentString("Tên kỳ thi"), string.Empty, CurrentString("Trạng thái"));
+            
+            var currentExam = new TeacherExamModel
+            {
+                Id = id,
+                CourseId = CurrentInt("CourseId"),
+                Title = CurrentString("Tên kỳ thi"),
+                Status = CurrentString("Trạng thái")
+            };
+            
+            string openTimeStr = CurrentString("Mở");
+            if (!string.IsNullOrEmpty(openTimeStr) && System.DateTime.TryParseExact(openTimeStr, "dd/MM/yyyy HH:mm", null, System.Globalization.DateTimeStyles.None, out var openTime))
+                currentExam.OpenTime = openTime;
+                
+            string closeTimeStr = CurrentString("Đóng");
+            if (!string.IsNullOrEmpty(closeTimeStr) && System.DateTime.TryParseExact(closeTimeStr, "dd/MM/yyyy HH:mm", null, System.Globalization.DateTimeStyles.None, out var closeTime))
+                currentExam.CloseTime = closeTime;
+                
+            currentExam.DurationMinutes = CurrentInt("Thời lượng");
+            currentExam.MaxAttempts = CurrentInt("Lượt");
+
+            using var dialog = new TeacherExamDialog(Controller.GetCourses(TeacherId), currentExam);
             if (dialog.ShowDialog(FindForm()) == System.Windows.Forms.DialogResult.OK)
             {
                 if (dialog.Status == WorkflowConstants.ExamStatus.Active && !Controller.CanActivateExam(TeacherId, id))
@@ -58,7 +85,16 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     return;
                 }
 
-                Controller.UpdateExam(TeacherId, new TeacherExamModel { Id = id, CourseId = currentCourseId, Title = dialog.ItemTitle, OpenTime = dialog.SelectedDate, CloseTime = dialog.SelectedDate.AddHours(1), DurationMinutes = 60, MaxAttempts = 1, Status = dialog.Status });
+                Controller.UpdateExam(TeacherId, new TeacherExamModel { 
+                    Id = id, 
+                    CourseId = dialog.CourseId, 
+                    Title = dialog.ItemTitle, 
+                    OpenTime = dialog.OpenTime, 
+                    CloseTime = dialog.CloseTime, 
+                    DurationMinutes = dialog.DurationMinutes, 
+                    MaxAttempts = dialog.MaxAttempts, 
+                    Status = dialog.Status 
+                });
                 await LoadDataAsync();
             }
         }
