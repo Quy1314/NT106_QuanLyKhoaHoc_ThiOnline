@@ -57,7 +57,14 @@ namespace CourseGuard.Frontend.Forms.Student
             btnSubmit.Click += (_, _) => SubmitExam(confirm: true);
             btnPrev.Click += (_, _) => MoveQuestion(-1);
             btnNext.Click += (_, _) => MoveQuestion(1);
-            chkMark.CheckedChanged += (_, _) => UpdateQuestionButtons();
+            chkMark.CheckedChanged += (_, _) => 
+            {
+                if (_session != null && !_loadingQuestion)
+                {
+                    _session.Questions[_currentIndex].IsMarkedForReview = chkMark.Checked;
+                    UpdateQuestionButtons();
+                }
+            };
             rbA.CheckedChanged += (_, _) => SaveSelectedAnswer("A");
             rbB.CheckedChanged += (_, _) => SaveSelectedAnswer("B");
             rbC.CheckedChanged += (_, _) => SaveSelectedAnswer("C");
@@ -182,11 +189,11 @@ namespace CourseGuard.Frontend.Forms.Student
                 case "C": rbC.Checked = true; break;
                 case "D": rbD.Checked = true; break;
             }
+            chkMark.Checked = question.IsMarkedForReview;
             _loadingQuestion = false;
 
             btnPrev.Enabled = index > 0;
             btnNext.Enabled = index < _session.Questions.Count - 1;
-            chkMark.Checked = false;
             UpdateQuestionButtons();
         }
 
@@ -226,7 +233,12 @@ namespace CourseGuard.Frontend.Forms.Student
 
             if (confirm)
             {
-                DialogResult res = MetaTheme.ShowModernDialog("Bạn có chắc chắn muốn nộp bài không?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                int unansweredCount = _session.Questions.Count(q => string.IsNullOrWhiteSpace(q.SelectedOption));
+                string message = unansweredCount > 0 
+                    ? $"Bạn còn {unansweredCount} câu chưa trả lời. Bạn có chắc chắn muốn nộp bài không?" 
+                    : "Bạn có chắc chắn muốn nộp bài không?";
+
+                DialogResult res = MetaTheme.ShowModernDialog(message, "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (res != DialogResult.Yes)
                     return;
             }
@@ -256,8 +268,14 @@ namespace CourseGuard.Frontend.Forms.Student
 
             DateTime end = _session.StartTime.AddMinutes(_session.DurationMinutes);
             TimeSpan remaining = end - DateTime.Now;
-            if (remaining < TimeSpan.Zero)
-                remaining = TimeSpan.Zero;
+            if (remaining <= TimeSpan.Zero)
+            {
+                _timer.Stop();
+                lblTimer.Text = "00:00";
+                MetaTheme.ShowModernDialog("Đã hết thời gian làm bài. Hệ thống sẽ tự động nộp bài.", "Hết giờ", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                SubmitExam(confirm: false);
+                return;
+            }
             lblTimer.Text = $"{(int)remaining.TotalMinutes:00}:{remaining.Seconds:00}";
         }
 
@@ -271,14 +289,33 @@ namespace CourseGuard.Frontend.Forms.Student
                 if (flpQuestions.Controls[i] is not Button button)
                     continue;
 
-                bool answered = !string.IsNullOrWhiteSpace(_session.Questions[i].SelectedOption);
-                button.BackColor = i == _currentIndex
-                    ? AcademicTheme.Primary
-                    : answered
-                        ? Color.FromArgb(220, 252, 231)
-                        : Color.White;
-                button.ForeColor = i == _currentIndex ? Color.White : Color.FromArgb(15, 23, 42);
-                button.FlatAppearance.BorderColor = i == _currentIndex ? AcademicTheme.Primary : AcademicTheme.BorderSoft;
+                var question = _session.Questions[i];
+                bool answered = !string.IsNullOrWhiteSpace(question.SelectedOption);
+                
+                if (i == _currentIndex)
+                {
+                    button.BackColor = AcademicTheme.Primary;
+                    button.ForeColor = Color.White;
+                    button.FlatAppearance.BorderColor = AcademicTheme.Primary;
+                }
+                else if (question.IsMarkedForReview)
+                {
+                    button.BackColor = Color.Orange;
+                    button.ForeColor = Color.White;
+                    button.FlatAppearance.BorderColor = Color.DarkOrange;
+                }
+                else if (answered)
+                {
+                    button.BackColor = Color.FromArgb(220, 252, 231);
+                    button.ForeColor = Color.FromArgb(15, 23, 42);
+                    button.FlatAppearance.BorderColor = AcademicTheme.BorderSoft;
+                }
+                else
+                {
+                    button.BackColor = Color.White;
+                    button.ForeColor = Color.FromArgb(15, 23, 42);
+                    button.FlatAppearance.BorderColor = AcademicTheme.BorderSoft;
+                }
             }
         }
 

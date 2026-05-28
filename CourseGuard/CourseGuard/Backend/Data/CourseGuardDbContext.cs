@@ -527,9 +527,9 @@ namespace CourseGuard.Backend.Data
                   AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'
                 ORDER BY
                   CASE
-                    WHEN (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
-                     AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP) THEN 0
-                    WHEN ex.open_time > CURRENT_TIMESTAMP THEN 1
+                    WHEN (ex.open_time IS NULL OR ex.open_time <= @now)
+                     AND (ex.close_time IS NULL OR ex.close_time >= @now) THEN 0
+                    WHEN ex.open_time > @now THEN 1
                     ELSE 2
                   END,
                   ex.open_time NULLS FIRST,
@@ -539,6 +539,7 @@ namespace CourseGuard.Backend.Data
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@student_id", studentId);
             command.Parameters.AddWithValue("@limit", safeLimit);
+            command.Parameters.AddWithValue("@now", DateTime.Now);
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
@@ -579,10 +580,11 @@ namespace CourseGuard.Backend.Data
 
                 using var insert = new NpgsqlCommand(@"
                     INSERT INTO exam_attempts (exam_id, student_id, start_time, status)
-                    VALUES (@exam_id, @student_id, CURRENT_TIMESTAMP, 'IN_PROGRESS')
+                    VALUES (@exam_id, @student_id, @now, 'IN_PROGRESS')
                     RETURNING id", connection, transaction);
                 insert.Parameters.AddWithValue("@exam_id", examId);
                 insert.Parameters.AddWithValue("@student_id", studentId);
+                insert.Parameters.AddWithValue("@now", DateTime.Now);
                 attemptId = Convert.ToInt32(insert.ExecuteScalar());
             }
 
@@ -603,7 +605,7 @@ namespace CourseGuard.Backend.Data
 
             using var command = new NpgsqlCommand(@"
                 INSERT INTO exam_attempt_answers (attempt_id, exam_question_id, selected_option, answered_at)
-                SELECT @attempt_id, @exam_question_id, @selected_option, CURRENT_TIMESTAMP
+                SELECT @attempt_id, @exam_question_id, @selected_option, @now
                 WHERE EXISTS (
                     SELECT 1
                     FROM exam_attempts a
@@ -614,11 +616,12 @@ namespace CourseGuard.Backend.Data
                       AND eq.id = @exam_question_id
                 )
                 ON CONFLICT (attempt_id, exam_question_id)
-                DO UPDATE SET selected_option = EXCLUDED.selected_option, answered_at = CURRENT_TIMESTAMP", connection);
+                DO UPDATE SET selected_option = EXCLUDED.selected_option, answered_at = @now", connection);
             command.Parameters.AddWithValue("@student_id", studentId);
             command.Parameters.AddWithValue("@attempt_id", attemptId);
             command.Parameters.AddWithValue("@exam_question_id", examQuestionId);
             command.Parameters.AddWithValue("@selected_option", option);
+            command.Parameters.AddWithValue("@now", DateTime.Now);
             return command.ExecuteNonQuery() > 0;
         }
 
@@ -690,12 +693,13 @@ namespace CourseGuard.Backend.Data
 
             using (var updateAttempt = new NpgsqlCommand(@"
                 UPDATE exam_attempts
-                SET score = @score, submit_time = CURRENT_TIMESTAMP, status = 'SUBMITTED'
+                SET score = @score, submit_time = @now, status = 'SUBMITTED'
                 WHERE id = @attempt_id AND student_id = @student_id", connection, transaction))
             {
                 updateAttempt.Parameters.AddWithValue("@attempt_id", attemptId);
                 updateAttempt.Parameters.AddWithValue("@student_id", studentId);
                 updateAttempt.Parameters.AddWithValue("@score", score);
+                updateAttempt.Parameters.AddWithValue("@now", DateTime.Now);
                 updateAttempt.ExecuteNonQuery();
             }
 
@@ -1059,8 +1063,8 @@ namespace CourseGuard.Backend.Data
                       AND UPPER(COALESCE(en.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
                       AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
                       AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'
-                      AND (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
-                      AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)
+                      AND (ex.open_time IS NULL OR ex.open_time <= @now)
+                      AND (ex.close_time IS NULL OR ex.close_time >= @now)
                       AND {questionExpression} > 0
                       AND (COALESCE(ex.max_attempts, 1) <= 0 OR {attemptsExpression} < COALESCE(ex.max_attempts, 1))
                       AND (
@@ -1074,6 +1078,7 @@ namespace CourseGuard.Backend.Data
                 command.Parameters.AddWithValue("@student_id", studentId);
                 command.Parameters.AddWithValue("@pattern", pattern);
                 command.Parameters.AddWithValue("@limit", safeLimit);
+                command.Parameters.AddWithValue("@now", DateTime.Now);
                 using var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
@@ -1187,10 +1192,10 @@ namespace CourseGuard.Backend.Data
                 : "0";
 
             string timeFilter = openNowOnly
-                ? @"AND (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
-                   AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)"
-                : @"AND (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
-                   AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)";
+                ? @"AND (ex.open_time IS NULL OR ex.open_time <= @now)
+                   AND (ex.close_time IS NULL OR ex.close_time >= @now)"
+                : @"AND (ex.open_time IS NULL OR ex.open_time <= @now)
+                   AND (ex.close_time IS NULL OR ex.close_time >= @now)";
 
             string query = $@"
                 SELECT COUNT(*)
@@ -1207,6 +1212,7 @@ namespace CourseGuard.Backend.Data
 
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@student_id", studentId);
+            command.Parameters.AddWithValue("@now", DateTime.Now);
             object? result = command.ExecuteScalar();
             return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
         }
@@ -1299,7 +1305,7 @@ namespace CourseGuard.Backend.Data
         {
             using var headerCommand = new NpgsqlCommand(@"
                 SELECT a.id, ex.id, COALESCE(ex.title, ''), COALESCE(c.name, ''),
-                       COALESCE(ex.duration_minutes, 0), COALESCE(a.start_time, CURRENT_TIMESTAMP)
+                       COALESCE(ex.duration_minutes, 0), COALESCE(a.start_time, @now)
                 FROM exam_attempts a
                 JOIN exams ex ON ex.id = a.exam_id
                 LEFT JOIN courses c ON c.id = ex.course_id
@@ -1308,6 +1314,7 @@ namespace CourseGuard.Backend.Data
                   AND UPPER(COALESCE(a.status, '')) = 'IN_PROGRESS'", connection, transaction);
             headerCommand.Parameters.AddWithValue("@attempt_id", attemptId);
             headerCommand.Parameters.AddWithValue("@student_id", studentId);
+            headerCommand.Parameters.AddWithValue("@now", DateTime.Now);
             using var reader = headerCommand.ExecuteReader();
             if (!reader.Read())
                 return null;
@@ -2158,20 +2165,21 @@ namespace CourseGuard.Backend.Data
             const string query = @"
                 WITH updated AS (
                     UPDATE DEVICES
-                    SET last_active = CURRENT_TIMESTAMP,
+                    SET last_active = @now,
                         ip_address = @ip_address,
                         status = 'ACTIVE'
                     WHERE user_id = @user_id AND device_name = @device_name
                     RETURNING id
                 )
                 INSERT INTO DEVICES (user_id, device_name, ip_address, status, last_active)
-                SELECT @user_id, @device_name, @ip_address, 'ACTIVE', CURRENT_TIMESTAMP
+                SELECT @user_id, @device_name, @ip_address, 'ACTIVE', @now
                 WHERE NOT EXISTS (SELECT 1 FROM updated)";
             
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@user_id", userId);
             command.Parameters.AddWithValue("@device_name", deviceName ?? "Unknown Device");
             command.Parameters.AddWithValue("@ip_address", ipAddress ?? "Unknown IP");
+            command.Parameters.AddWithValue("@now", DateTime.Now);
 
             command.ExecuteNonQuery();
         }
@@ -2561,7 +2569,7 @@ namespace CourseGuard.Backend.Data
 
             const string query = @"
                 INSERT INTO AUDIT_LOGS (USER_ID, ACTION, TARGET_TABLE, TARGET_ID, DETAILS, IP_ADDRESS, CREATED_AT)
-                VALUES (@user_id, @action, 'USERS', @target_id, @details, @ip_address, CURRENT_TIMESTAMP)";
+                VALUES (@user_id, @action, 'USERS', @target_id, @details, @ip_address, @now)";
 
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@user_id", userId.HasValue ? (object)userId.Value : DBNull.Value);
@@ -2569,6 +2577,7 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@target_id", userId.HasValue ? (object)userId.Value : DBNull.Value);
             command.Parameters.AddWithValue("@details", details ?? string.Empty);
             command.Parameters.AddWithValue("@ip_address", ipAddress ?? string.Empty);
+            command.Parameters.AddWithValue("@now", DateTime.Now);
             command.ExecuteNonQuery();
 
             if (string.Equals(action, "LOGIN", StringComparison.OrdinalIgnoreCase))
@@ -2586,7 +2595,7 @@ namespace CourseGuard.Backend.Data
 
             const string query = @"
                 INSERT INTO AUDIT_LOGS (USER_ID, ACTION, TARGET_TABLE, TARGET_ID, DETAILS, IP_ADDRESS, CREATED_AT)
-                VALUES (@user_id, @action, 'USERS', @target_id, @details, @ip_address, CURRENT_TIMESTAMP)";
+                VALUES (@user_id, @action, 'USERS', @target_id, @details, @ip_address, @now)";
 
             await using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@user_id", userId.HasValue ? (object)userId.Value : DBNull.Value);
@@ -2594,6 +2603,7 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@target_id", userId.HasValue ? (object)userId.Value : DBNull.Value);
             command.Parameters.AddWithValue("@details", details ?? string.Empty);
             command.Parameters.AddWithValue("@ip_address", ipAddress ?? string.Empty);
+            command.Parameters.AddWithValue("@now", DateTime.Now);
             await command.ExecuteNonQueryAsync(cancellationToken);
 
             if (string.Equals(action, "LOGIN", StringComparison.OrdinalIgnoreCase))
@@ -2922,20 +2932,21 @@ namespace CourseGuard.Backend.Data
             const string query = @"
                 WITH updated AS (
                     UPDATE DEVICES
-                    SET last_active = CURRENT_TIMESTAMP,
+                    SET last_active = @now,
                         ip_address = @ip_address,
                         status = 'ACTIVE'
                     WHERE user_id = @user_id AND device_name = @device_name
                     RETURNING id
                 )
                 INSERT INTO DEVICES (user_id, device_name, ip_address, status, last_active)
-                SELECT @user_id, @device_name, @ip_address, 'ACTIVE', CURRENT_TIMESTAMP
+                SELECT @user_id, @device_name, @ip_address, 'ACTIVE', @now
                 WHERE NOT EXISTS (SELECT 1 FROM updated)";
 
             await using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@user_id", userId);
             command.Parameters.AddWithValue("@device_name", deviceName ?? "Unknown Device");
             command.Parameters.AddWithValue("@ip_address", ipAddress ?? "Unknown IP");
+            command.Parameters.AddWithValue("@now", DateTime.Now);
 
             await command.ExecuteNonQueryAsync(cancellationToken);
         }

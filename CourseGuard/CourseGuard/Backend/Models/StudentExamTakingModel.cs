@@ -24,6 +24,7 @@ namespace CourseGuard.Backend.Models
         public string OptionC { get; set; } = string.Empty;
         public string OptionD { get; set; } = string.Empty;
         public string SelectedOption { get; set; } = string.Empty;
+        public bool IsMarkedForReview { get; set; }
     }
 
     public class StudentExamSubmitResultModel
