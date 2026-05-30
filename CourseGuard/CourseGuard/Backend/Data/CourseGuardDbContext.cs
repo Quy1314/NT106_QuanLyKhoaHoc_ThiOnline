@@ -2987,6 +2987,136 @@ namespace CourseGuard.Backend.Data
             return users;
         }
 
+        public async Task<List<StudentAssignmentRow>> GetStudentAssignmentsAsync(int studentId, CancellationToken cancellationToken = default)
+        {
+            var result = new List<StudentAssignmentRow>();
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            const string query = @"
+                SELECT a.id AS assignment_id,
+                       c.id AS course_id,
+                       c.name AS course_name,
+                       a.title,
+                       COALESCE(a.description, '') AS description,
+                       a.due_at AS due_date,
+                       a.status,
+                       COALESCE(a.file_name, '') AS teacher_file_name,
+                       COALESCE(a.file_size, 0) AS teacher_file_size,
+                       (a.file_content IS NOT NULL) AS has_teacher_file,
+                       s.id AS submission_id,
+                       COALESCE(s.file_name, '') AS student_file_name,
+                       s.submitted_at,
+                       s.score,
+                       COALESCE(s.feedback, '') AS feedback
+                FROM teacher_assignments a
+                JOIN courses c ON c.id = a.course_id
+                JOIN enrollments e ON e.course_id = c.id
+                LEFT JOIN assignment_submissions s ON s.assignment_id = a.id AND s.student_id = e.student_id
+                WHERE e.student_id = @student_id
+                  AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'
+                ORDER BY a.due_at DESC, a.id DESC";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@student_id", studentId);
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                result.Add(new StudentAssignmentRow
+                {
+                    AssignmentId = reader.GetInt32(0),
+                    CourseId = reader.GetInt32(1),
+                    CourseName = reader.GetString(2),
+                    Title = reader.GetString(3),
+                    Description = reader.GetString(4),
+                    DueDate = reader.GetDateTime(5),
+                    Status = reader.GetString(6),
+                    TeacherFileName = reader.GetString(7),
+                    TeacherFileSize = reader.GetInt64(8),
+                    HasTeacherFile = reader.GetBoolean(9),
+                    SubmissionId = reader.IsDBNull(10) ? null : reader.GetInt32(10),
+                    StudentFileName = reader.GetString(11),
+                    SubmittedAt = reader.IsDBNull(12) ? null : reader.GetDateTime(12),
+                    Score = reader.IsDBNull(13) ? null : reader.GetDecimal(13),
+                    Feedback = reader.GetString(14)
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<byte[]?> GetAssignmentContentAsync(int assignmentId, int studentId, CancellationToken cancellationToken = default)
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            
+            const string query = @"
+                SELECT a.file_content
+                FROM teacher_assignments a
+                JOIN courses c ON c.id = a.course_id
+                JOIN enrollments e ON e.course_id = c.id
+                WHERE a.id = @assignment_id
+                  AND e.student_id = @student_id
+                  AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@assignment_id", assignmentId);
+            command.Parameters.AddWithValue("@student_id", studentId);
+            
+            object? value = await command.ExecuteScalarAsync(cancellationToken);
+            return value == null || value == DBNull.Value ? null : (byte[])value;
+        }
+
+        public async Task<bool> SubmitAssignmentAsync(AssignmentSubmissionModel submission, CancellationToken cancellationToken = default)
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            const string checkQuery = "SELECT id FROM assignment_submissions WHERE assignment_id = @assignment_id AND student_id = @student_id LIMIT 1";
+            await using var checkCommand = new NpgsqlCommand(checkQuery, connection);
+            checkCommand.Parameters.AddWithValue("@assignment_id", submission.AssignmentId);
+            checkCommand.Parameters.AddWithValue("@student_id", submission.StudentId);
+            
+            object? existingId = await checkCommand.ExecuteScalarAsync(cancellationToken);
+
+            string query;
+            if (existingId != null)
+            {
+                query = @"
+                    UPDATE assignment_submissions SET
+                        file_name = @file_name,
+                        content_type = @content_type,
+                        file_size = @file_size,
+                        file_content = @file_content,
+                        submitted_at = @submitted_at
+                    WHERE id = @id";
+            }
+            else
+            {
+                query = @"
+                    INSERT INTO assignment_submissions (assignment_id, student_id, file_name, content_type, file_size, file_content, submitted_at)
+                    VALUES (@assignment_id, @student_id, @file_name, @content_type, @file_size, @file_content, @submitted_at)";
+            }
+
+            await using var command = new NpgsqlCommand(query, connection);
+            if (existingId != null)
+                command.Parameters.AddWithValue("@id", existingId);
+            
+            command.Parameters.AddWithValue("@assignment_id", submission.AssignmentId);
+            command.Parameters.AddWithValue("@student_id", submission.StudentId);
+            command.Parameters.AddWithValue("@file_name", submission.FileName ?? string.Empty);
+            command.Parameters.AddWithValue("@content_type", submission.ContentType ?? string.Empty);
+            command.Parameters.AddWithValue("@file_size", submission.FileSize);
+            command.Parameters.AddWithValue("@file_content", submission.FileContent ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@submitted_at", DateTime.Now);
+
+            int rows = await command.ExecuteNonQueryAsync(cancellationToken);
+            return rows > 0;
+        }
+
         /// <summary>
         /// Ensures default seed accounts exist in the database.
         /// Safe to call multiple times (uses ON CONFLICT DO NOTHING).
