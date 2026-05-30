@@ -197,6 +197,15 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
                     File.WriteAllText(sfd.FileName, sb.ToString(), Encoding.UTF8);
                     MessageBox.Show("Xuất file thành công!");
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = sfd.FileName,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch { /* Ignore if no default app */ }
                 }
                 catch (Exception ex)
                 {

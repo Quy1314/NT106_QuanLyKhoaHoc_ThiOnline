@@ -416,6 +416,11 @@ namespace CourseGuard.Frontend.UserControls.Student
 
                 File.WriteAllBytes(save.FileName, content);
                 MetaTheme.ShowModernDialog("Đã tải tài liệu.", "Thông báo");
+                try
+                {
+                    Process.Start(new ProcessStartInfo(save.FileName) { UseShellExecute = true });
+                }
+                catch { /* Ignore if no default app */ }
                 return;
             }
 
