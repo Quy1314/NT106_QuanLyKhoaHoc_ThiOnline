@@ -223,7 +223,16 @@ namespace CourseGuard.Frontend.Forms.Teacher
                     }
 
                     await File.WriteAllBytesAsync(saveDialog.FileName, content);
-                    MetaTheme.ShowModernDialog("Tải file thành công!", "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MetaTheme.ShowModernDialog("Tải file thành công!", "Thành công", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = saveDialog.FileName,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch { /* Ignore if no default app */ }
                 }
                 catch (Exception ex)
                 {

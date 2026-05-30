@@ -196,7 +196,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 { "Bài kiểm tra", () => new UC_TakeExam() },
                 { "Bài tập",      () => new UC_StudentAssignments() },
                 { "Kết quả",      () => new UC_Result() },
-                { "Tài liệu",     () => new UC_Documents() },
+                { "Tài liệu",     () => new UC_StudentLessons() },
                 { "Lịch học",     () => new UC_Schedule() },
                 { "Tin nhắn",     () => new UC_Chat() },
                 { "Thông báo",    () => new UC_Notification() },

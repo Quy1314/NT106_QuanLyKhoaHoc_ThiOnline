@@ -153,5 +153,8 @@ namespace CourseGuard.Backend.Controllers
 
         public System.Threading.Tasks.Task<bool> UpdateGradeAsync(int teacherId, int submissionId, decimal score, string feedback) =>
             teacherId > 0 && submissionId > 0 ? _repository.UpdateGradeAsync(submissionId, score, feedback) : System.Threading.Tasks.Task.FromResult(false);
+
+        public System.Threading.Tasks.Task<byte[]?> GetLessonFileContentAsync(int teacherId, int lessonId) =>
+            teacherId <= 0 || lessonId <= 0 ? System.Threading.Tasks.Task.FromResult<byte[]?>(null) : _repository.GetLessonFileContentAsync(lessonId);
     }
 }

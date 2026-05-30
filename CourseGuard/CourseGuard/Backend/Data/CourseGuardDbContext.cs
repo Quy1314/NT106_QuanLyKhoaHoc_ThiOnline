@@ -2987,6 +2987,77 @@ namespace CourseGuard.Backend.Data
             return users;
         }
 
+        public async Task<List<TeacherLessonModel>> GetStudentLessonsAsync(int studentId, CancellationToken cancellationToken = default)
+        {
+            var result = new List<TeacherLessonModel>();
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            const string query = @"
+                SELECT l.id,
+                       c.id AS course_id,
+                       c.name AS course_name,
+                       l.title,
+                       COALESCE(l.content, '') AS content,
+                       l.publish_at,
+                       l.status,
+                       COALESCE(l.file_name, '') AS file_name,
+                       COALESCE(l.file_size, 0) AS file_size,
+                       (l.file_content IS NOT NULL) AS has_stored_content
+                FROM teacher_lessons l
+                JOIN courses c ON c.id = l.course_id
+                JOIN enrollments e ON e.course_id = c.id
+                WHERE e.student_id = @student_id
+                  AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'
+                  AND UPPER(COALESCE(l.status, '')) = 'PUBLISHED'
+                ORDER BY l.publish_at DESC, l.id DESC";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@student_id", studentId);
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                result.Add(new TeacherLessonModel
+                {
+                    Id = reader.GetInt32(0),
+                    CourseId = reader.GetInt32(1),
+                    CourseName = reader.GetString(2),
+                    Title = reader.GetString(3),
+                    Content = reader.GetString(4),
+                    PublishAt = reader.IsDBNull(5) ? null : reader.GetDateTime(5),
+                    Status = reader.GetString(6),
+                    FileName = reader.GetString(7),
+                    FileSize = reader.GetInt64(8),
+                    HasStoredContent = reader.GetBoolean(9)
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<byte[]?> GetStudentLessonFileContentAsync(int lessonId, int studentId, CancellationToken cancellationToken = default)
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            await using var command = new NpgsqlCommand(@"
+                SELECT l.file_content
+                FROM teacher_lessons l
+                JOIN courses c ON c.id = l.course_id
+                JOIN enrollments e ON e.course_id = c.id
+                WHERE l.id = @lesson_id
+                  AND e.student_id = @student_id
+                  AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'
+                  AND UPPER(COALESCE(l.status, '')) = 'PUBLISHED'", connection);
+            command.Parameters.AddWithValue("@lesson_id", lessonId);
+            command.Parameters.AddWithValue("@student_id", studentId);
+            
+            var result = await command.ExecuteScalarAsync(cancellationToken);
+            return result == null || result == DBNull.Value ? null : (byte[])result;
+        }
+
         public async Task<List<StudentAssignmentRow>> GetStudentAssignmentsAsync(int studentId, CancellationToken cancellationToken = default)
         {
             var result = new List<StudentAssignmentRow>();

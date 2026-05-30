@@ -255,6 +255,15 @@ namespace CourseGuard.Frontend.Forms.Student
                 {
                     await File.WriteAllBytesAsync(sfd.FileName, content);
                     MetaTheme.ShowModernDialog("Tải file thành công!", "Thông báo");
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = sfd.FileName,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch { /* Ignore if no default app */ }
                 }
             }
             catch (Exception ex)

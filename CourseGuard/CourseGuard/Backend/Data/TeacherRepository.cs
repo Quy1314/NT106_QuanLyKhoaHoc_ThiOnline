@@ -290,8 +290,8 @@ namespace CourseGuard.Backend.Data
         public int CreateLesson(int teacherId, TeacherLessonModel input) => InsertCourseChild(
             teacherId,
             input.CourseId,
-            @"INSERT INTO teacher_lessons (course_id, title, content, publish_at, status)
-              SELECT @course_id, @title, @content, @publish_at, @status
+            @"INSERT INTO teacher_lessons (course_id, title, content, publish_at, status, file_name, file_path, content_type, file_size, file_content)
+              SELECT @course_id, @title, @content, @publish_at, @status, @file_name, @file_path, @content_type, @file_size, @file_content
               WHERE EXISTS (SELECT 1 FROM courses WHERE id = @course_id AND teacher_id = @teacher_id)
               RETURNING id",
             command =>
@@ -300,13 +300,19 @@ namespace CourseGuard.Backend.Data
                 command.Parameters.AddWithValue("@content", input.Content);
                 command.Parameters.AddWithValue("@publish_at", input.PublishAt.HasValue ? input.PublishAt.Value : DBNull.Value);
                 command.Parameters.AddWithValue("@status", string.IsNullOrWhiteSpace(input.Status) ? "DRAFT" : input.Status);
+                command.Parameters.AddWithValue("@file_name", string.IsNullOrWhiteSpace(input.FileName) ? DBNull.Value : input.FileName);
+                command.Parameters.AddWithValue("@file_path", string.IsNullOrWhiteSpace(input.FilePath) ? DBNull.Value : input.FilePath);
+                command.Parameters.AddWithValue("@content_type", string.IsNullOrWhiteSpace(input.ContentType) ? DBNull.Value : input.ContentType);
+                command.Parameters.AddWithValue("@file_size", input.FileSize.HasValue ? input.FileSize.Value : DBNull.Value);
+                command.Parameters.AddWithValue("@file_content", input.FileContent == null || input.FileContent.Length == 0 ? DBNull.Value : input.FileContent);
             });
 
         public bool UpdateLesson(int teacherId, TeacherLessonModel input) => ExecuteCourseChild(
             teacherId,
             input.CourseId,
             @"UPDATE teacher_lessons l
-              SET title = @title, content = @content, publish_at = @publish_at, status = @status
+              SET title = @title, content = @content, publish_at = @publish_at, status = @status,
+                  file_name = @file_name, file_path = @file_path, content_type = @content_type, file_size = @file_size, file_content = CASE WHEN @update_file = 1 THEN @file_content ELSE l.file_content END
               FROM courses c
               WHERE l.course_id = c.id AND c.teacher_id = @teacher_id AND l.id = @id AND l.course_id = @course_id",
             command =>
@@ -316,6 +322,26 @@ namespace CourseGuard.Backend.Data
                 command.Parameters.AddWithValue("@content", input.Content);
                 command.Parameters.AddWithValue("@publish_at", input.PublishAt.HasValue ? input.PublishAt.Value : DBNull.Value);
                 command.Parameters.AddWithValue("@status", string.IsNullOrWhiteSpace(input.Status) ? "DRAFT" : input.Status);
+                command.Parameters.AddWithValue("@file_name", string.IsNullOrWhiteSpace(input.FileName) ? DBNull.Value : input.FileName);
+                command.Parameters.AddWithValue("@file_path", string.IsNullOrWhiteSpace(input.FilePath) ? DBNull.Value : input.FilePath);
+                command.Parameters.AddWithValue("@content_type", string.IsNullOrWhiteSpace(input.ContentType) ? DBNull.Value : input.ContentType);
+                command.Parameters.AddWithValue("@file_size", input.FileSize.HasValue ? input.FileSize.Value : DBNull.Value);
+                
+                if (input.FileContent != null && input.FileContent.Length > 0)
+                {
+                    command.Parameters.AddWithValue("@update_file", 1);
+                    command.Parameters.AddWithValue("@file_content", input.FileContent);
+                }
+                else if (input.HasStoredContent && input.FileContent == null) 
+                {
+                    command.Parameters.AddWithValue("@update_file", 0);
+                    command.Parameters.AddWithValue("@file_content", DBNull.Value); 
+                }
+                else 
+                {
+                    command.Parameters.AddWithValue("@update_file", 1);
+                    command.Parameters.AddWithValue("@file_content", DBNull.Value);
+                }
             });
 
         public bool DeleteLesson(int teacherId, int lessonId) => ExecuteOwnedDelete(
@@ -323,6 +349,19 @@ namespace CourseGuard.Backend.Data
             @"DELETE FROM teacher_lessons l USING courses c
               WHERE l.course_id = c.id AND c.teacher_id = @teacher_id AND l.id = @id",
             lessonId);
+
+        public async Task<byte[]?> GetLessonFileContentAsync(int lessonId, System.Threading.CancellationToken cancellationToken = default)
+        {
+            await using var connection = _dbContext.CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            string query = "SELECT file_content FROM teacher_lessons WHERE id = @id LIMIT 1";
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@id", lessonId);
+
+            object? result = await command.ExecuteScalarAsync(cancellationToken);
+            return result != DBNull.Value && result is byte[] bytes ? bytes : null;
+        }
 
         public int CreateAssignment(int teacherId, TeacherAssignmentModel input) => InsertCourseChild(
             teacherId,
@@ -721,7 +760,10 @@ namespace CourseGuard.Backend.Data
             connection.Open();
             string query = @"
                 SELECT l.id, l.course_id, COALESCE(c.name, ''), COALESCE(l.title, ''),
-                       COALESCE(l.content, ''), l.publish_at, COALESCE(l.status, 'DRAFT')
+                       COALESCE(l.content, ''), l.publish_at, COALESCE(l.status, 'DRAFT'),
+                       COALESCE(l.file_name, ''), COALESCE(l.file_path, ''),
+                       COALESCE(l.content_type, ''), COALESCE(l.file_size, 0),
+                       l.file_content IS NOT NULL
                 FROM teacher_lessons l
                 JOIN courses c ON c.id = l.course_id
                 WHERE c.teacher_id = @teacher_id";
@@ -743,7 +785,12 @@ namespace CourseGuard.Backend.Data
                     Title = reader.GetString(3),
                     Content = reader.GetString(4),
                     PublishAt = reader.IsDBNull(5) ? null : reader.GetDateTime(5),
-                    Status = reader.GetString(6)
+                    Status = reader.GetString(6),
+                    FileName = reader.GetString(7),
+                    FilePath = reader.GetString(8),
+                    ContentType = reader.GetString(9),
+                    FileSize = reader.GetInt64(10),
+                    HasStoredContent = reader.GetBoolean(11)
                 });
             }
             return rows;
@@ -1293,6 +1340,13 @@ namespace CourseGuard.Backend.Data
                 ALTER TABLE materials
                     ADD COLUMN IF NOT EXISTS content_type VARCHAR(120),
                     ADD COLUMN IF NOT EXISTS file_size BIGINT NOT NULL DEFAULT 0,
+                    ADD COLUMN IF NOT EXISTS file_content BYTEA;
+
+                ALTER TABLE teacher_lessons
+                    ADD COLUMN IF NOT EXISTS file_name VARCHAR(255),
+                    ADD COLUMN IF NOT EXISTS file_path VARCHAR(500),
+                    ADD COLUMN IF NOT EXISTS content_type VARCHAR(120),
+                    ADD COLUMN IF NOT EXISTS file_size BIGINT,
                     ADD COLUMN IF NOT EXISTS file_content BYTEA;
 
                 CREATE TABLE IF NOT EXISTS student_hidden_results (
