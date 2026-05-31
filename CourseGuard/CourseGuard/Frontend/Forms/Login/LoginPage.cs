@@ -686,7 +686,7 @@ namespace CourseGuard.Frontend.Forms.Login
 
             if (string.IsNullOrEmpty(user) || string.IsNullOrEmpty(name) || string.IsNullOrEmpty(email) || string.IsNullOrEmpty(pass))
             {
-                MessageBox.Show("Vui lòng nhập đầy đủ thông tin đăng ký!");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng nhập đầy đủ thông tin đăng ký!");
                 return;
             }
 
@@ -701,7 +701,7 @@ namespace CourseGuard.Frontend.Forms.Login
 
             if (success)
             {
-                MessageBox.Show("Yêu cầu đăng ký đã được gửi tới Admin chờ phê duyệt", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Yêu cầu đăng ký đã được gửi tới Admin chờ phê duyệt", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 ClearRegisterInputs();
                 ShowPanel(LoginPanel);
             }
@@ -710,7 +710,7 @@ namespace CourseGuard.Frontend.Forms.Login
                 string detail = string.IsNullOrWhiteSpace(AuthService.LastErrorMessage)
                     ? "Đăng ký thất bại. Tên đăng nhập có thể đã tồn tại."
                     : AuthService.LastErrorMessage;
-                MessageBox.Show(detail, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(detail, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
@@ -729,7 +729,7 @@ namespace CourseGuard.Frontend.Forms.Login
 
             if (string.IsNullOrEmpty(user) || string.IsNullOrEmpty(email))
             {
-                MessageBox.Show("Vui lòng nhập Username và Email!");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng nhập Username và Email!");
                 return;
             }
 
@@ -737,14 +737,14 @@ namespace CourseGuard.Frontend.Forms.Login
 
             if (success)
             {
-                MessageBox.Show("Yêu cầu cấp lại mật khẩu đã được báo cáo lên Admin", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Yêu cầu cấp lại mật khẩu đã được báo cáo lên Admin", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 txtForgotUsername.Clear();
                 txtForgotEmail.Clear();
                 ShowPanel(LoginPanel);
             }
             else
             {
-                MessageBox.Show("Thông tin không chính xác hoặc không tồn tại.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Thông tin không chính xác hoặc không tồn tại.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -755,7 +755,7 @@ namespace CourseGuard.Frontend.Forms.Login
 
             if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
             {
-                MessageBox.Show("Vui lòng nhập đầy đủ thông tin!");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng nhập đầy đủ thông tin!");
                 return;
             }
 
@@ -770,7 +770,7 @@ namespace CourseGuard.Frontend.Forms.Login
 
                 if (user == null)
                 {
-                    MessageBox.Show("Tên đăng nhập hoặc mật khẩu không đúng!", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Tên đăng nhập hoặc mật khẩu không đúng!", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
@@ -783,14 +783,14 @@ namespace CourseGuard.Frontend.Forms.Login
 
                 if (!string.Equals(finalUser.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
                 {
-                    MessageBox.Show($"Tài khoản của bạn đang ở trạng thái '{finalUser.Status}'. Vui lòng liên hệ quản trị viên.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog($"Tài khoản của bạn đang ở trạng thái '{finalUser.Status}'. Vui lòng liên hệ quản trị viên.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
                 string normalizedRole = (finalUser.Role ?? string.Empty).Trim().ToUpperInvariant();
                 if (normalizedRole != "ADMIN" && normalizedRole != "TEACHER" && normalizedRole != "STUDENT")
                 {
-                    MessageBox.Show($"Quyền tài khoản không hợp lệ: {finalUser.Role}. Vui lòng liên hệ quản trị viên.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog($"Quyền tài khoản không hợp lệ: {finalUser.Role}. Vui lòng liên hệ quản trị viên.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
@@ -808,7 +808,7 @@ namespace CourseGuard.Frontend.Forms.Login
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi kết nối bộ máy chủ Database!\n\nChi tiết kỹ thuật:\n" + ex.ToString(), "Lỗi Hệ Thống", MessageBoxButtons.OK, MessageBoxIcon.Stop);
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi kết nối bộ máy chủ Database!\n\nChi tiết kỹ thuật:\n" + ex.ToString(), "Lỗi Hệ Thống", MessageBoxButtons.OK, MessageBoxIcon.Stop);
             }
             finally
             {

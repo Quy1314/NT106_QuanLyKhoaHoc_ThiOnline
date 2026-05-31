@@ -864,8 +864,8 @@ namespace CourseGuard.Frontend.Theme
 
             profileItem.Click += (s, e) => NavigateToProfile(false);
             pwdItem.Click += (s, e) => NavigateToProfile(true);
-            historyItem.Click += (s, e) => MessageBox.Show("Chức năng đang phát triển", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            settingsItem.Click += (s, e) => MessageBox.Show("Chức năng đang phát triển", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            historyItem.Click += (s, e) => CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Chức năng đang phát triển", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            settingsItem.Click += (s, e) => CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Chức năng đang phát triển", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
             _accountMenu.Items.Add(profileItem);
             _accountMenu.Items.Add(pwdItem);

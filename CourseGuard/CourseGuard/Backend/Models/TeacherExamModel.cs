@@ -10,7 +10,7 @@ namespace CourseGuard.Backend.Models
         public string Title { get; set; } = string.Empty;
         public DateTime? OpenTime { get; set; }
         public DateTime? CloseTime { get; set; }
-        public int DurationMinutes { get; set; }
+        public int DurationMinutes { get; set; } = 60;
         public int MaxAttempts { get; set; } = 1;
         public int QuestionCount { get; set; }
         public string Status { get; set; } = WorkflowConstants.ExamStatus.Draft;

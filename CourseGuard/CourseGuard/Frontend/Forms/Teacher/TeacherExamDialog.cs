@@ -92,13 +92,13 @@ namespace CourseGuard.Frontend.Forms.Teacher
             {
                 if (CourseId <= 0 || string.IsNullOrWhiteSpace(ItemTitle))
                 {
-                    MessageBox.Show("Vui lòng chọn khóa học và nhập tiêu đề.", "Lỗi nhập liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MetaTheme.ShowModernDialog("Vui lòng chọn khóa học và nhập tiêu đề.", "Lỗi nhập liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     DialogResult = DialogResult.None;
                     return;
                 }
                 if (_openTime.Checked && _closeTime.Checked && _closeTime.Value <= _openTime.Value)
                 {
-                    MessageBox.Show("Thời gian đóng phải sau thời gian mở.", "Lỗi nhập liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MetaTheme.ShowModernDialog("Thời gian đóng phải sau thời gian mở.", "Lỗi nhập liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     DialogResult = DialogResult.None;
                     return;
                 }

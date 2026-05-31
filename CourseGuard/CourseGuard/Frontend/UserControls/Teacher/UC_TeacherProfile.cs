@@ -1022,7 +1022,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         private static string FormatDateTime(DateTime value)
         {
-            return value == DateTime.MinValue ? string.Empty : value.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+            return SystemTimeFormatter.FormatVietnamTime(value);
         }
 
         private static string EmptyText(string value) => string.IsNullOrWhiteSpace(value) ? "Chưa cập nhật" : value.Trim();

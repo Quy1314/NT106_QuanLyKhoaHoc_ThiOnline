@@ -134,11 +134,30 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 TextAlign = ContentAlignment.MiddleLeft,
                 UseCompatibleTextRendering = false
             }, 0, 0);
-            content.Dock = DockStyle.Fill;
-            content.Margin = Padding.Empty;
-            grid.Controls.Add(content, 0, 1);
+            Control body = content is DataGridView ? CreateRoundedContentBody(content) : content;
+            body.Dock = DockStyle.Fill;
+            body.Margin = Padding.Empty;
+            grid.Controls.Add(body, 0, 1);
             card.Controls.Add(grid);
             return card;
+        }
+
+        private static RoundedPanel CreateRoundedContentBody(Control content)
+        {
+            var body = new RoundedPanel
+            {
+                Dock = DockStyle.Fill,
+                FillColor = AppColors.BgCard,
+                BorderColor = Color.Transparent,
+                CornerRadius = 10,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+
+            content.Dock = DockStyle.Fill;
+            content.Margin = Padding.Empty;
+            body.Controls.Add(content);
+            return body;
         }
 
         public static RoundedPanel CreateTableBody(DataGridView grid, out Label emptyLabel)
@@ -148,7 +167,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 Dock = DockStyle.Fill,
                 FillColor = AppColors.BgCard,
                 BorderColor = Color.Transparent,
-                CornerRadius = 12,
+                CornerRadius = 10,
+                Margin = Padding.Empty,
                 Padding = Padding.Empty
             };
 
@@ -318,26 +338,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         public static void StyleGrid(DataGridView grid)
         {
-            grid.BorderStyle = BorderStyle.None;
-            grid.BackgroundColor = AppColors.BgCard;
-            grid.ReadOnly = true;
-            grid.AllowUserToAddRows = false;
-            grid.AllowUserToDeleteRows = false;
-            grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            grid.MultiSelect = false;
-            grid.EnableHeadersVisualStyles = false;
-            grid.RowHeadersVisible = false;
-            grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-            grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
-            grid.AllowUserToResizeRows = false;
-            grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            MetaTheme.StyleGrid(grid);
-            grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            grid.ColumnHeadersHeight = 42;
-            grid.RowTemplate.Height = 40;
-            grid.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
-            grid.AlternatingRowsDefaultCellStyle.BackColor = AppColors.IsDarkMode ? AppColors.BgCard : ColorTranslator.FromHtml("#F8FAFC");
-            grid.GridColor = AppColors.GridBorder;
+            DashboardGridStyler.Apply(grid);
         }
 
         public static DataTable ToTable<T>(string[] columns, System.Collections.Generic.IEnumerable<T> rows, Func<T, object?[]> map)

@@ -73,7 +73,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     _source.Rows.Add(
                         notification.Id,
                         notification.IsRead,
-                        notification.CreatedAt.ToString("dd/MM/yyyy HH:mm"),
+                        SystemTimeFormatter.FormatVietnamTime(notification.CreatedAt),
                         notification.Category,
                         notification.NotificationType,
                         notification.Title,

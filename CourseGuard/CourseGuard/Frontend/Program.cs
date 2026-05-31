@@ -14,8 +14,6 @@ namespace CourseGuard
         [STAThread]
         static void Main()
         {
-            // To customize application configuration such as set high DPI settings or default font,
-            // see https://aka.ms/applicationconfiguration.
             ApplicationConfiguration.Initialize();
             AppEnvironment.LoadDotEnvIfExists();
 
@@ -27,22 +25,12 @@ namespace CourseGuard
             }
             catch (InvalidOperationException ex)
             {
-                MessageBox.Show(
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(
                     $"{ex.Message}\n\nVui lòng cấu hình biến môi trường trước khi chạy app.",
                     "Thiếu cấu hình môi trường",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
-            DotNetEnv.Env.Load(".env");
-            
-            // To customize application configuration such as set high DPI settings or default font,
-            // see https://aka.ms/applicationconfiguration.
-            ApplicationConfiguration.Initialize();
-
-            // Ensure default seed accounts exist (e.g. student/admin123)
-            new CourseGuardDbContext("").EnsureSeedAccounts();
-
-            System.Windows.Forms.Application.Run(new RedirectForm());
         }
     }
 }

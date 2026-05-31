@@ -116,13 +116,13 @@ namespace CourseGuard.Frontend.Forms.Teacher
         {
             if (string.IsNullOrWhiteSpace(_name.Text))
             {
-                MessageBox.Show("Tên khóa học không được để trống.");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Tên khóa học không được để trống.");
                 return false;
             }
 
             if (_startDate.Value.Date > _endDate.Value.Date)
             {
-                MessageBox.Show("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.");
                 return false;
             }
 
@@ -130,14 +130,14 @@ namespace CourseGuard.Frontend.Forms.Teacher
             TimeSpan end = _sessionEnd.Value.TimeOfDay;
             if (_generateSchedule.Checked && end <= start)
             {
-                MessageBox.Show("Giờ kết thúc phải sau giờ bắt đầu.");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Giờ kết thúc phải sau giờ bắt đầu.");
                 return false;
             }
 
             var days = _teachingDays.CheckedItems.Cast<DayItem>().Select(d => d.Day).ToList();
             if (_generateSchedule.Checked && days.Count == 0)
             {
-                MessageBox.Show("Vui lòng chọn ít nhất một thứ trong tuần để tạo lịch dạy.");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn ít nhất một thứ trong tuần để tạo lịch dạy.");
                 return false;
             }
 

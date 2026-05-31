@@ -54,7 +54,7 @@ namespace CourseGuard.Frontend.Forms.Admin
                                 dashboard = new StudentDashboard(user);
                                 break;
                             default:
-                                MessageBox.Show($"Quyền không xác định: {user.Role}");
+                                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog($"Quyền không xác định: {user.Role}");
                                 break;
                         }
 

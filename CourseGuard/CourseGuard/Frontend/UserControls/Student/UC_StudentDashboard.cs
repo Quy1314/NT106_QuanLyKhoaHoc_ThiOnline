@@ -113,7 +113,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 Padding = new Padding(24)
             };
             _rootGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            _rootGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 52f));
+            _rootGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 112f));
             _rootGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 168f));
             _rootGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
@@ -165,7 +165,9 @@ namespace CourseGuard.Frontend.UserControls.Student
             _contentGrid.Controls.Add(_noticePanel, 0, 0);
             _contentGrid.Controls.Add(_activityPanel, 1, 0);
 
-            _rootGrid.Controls.Add(lblTitle, 0, 0);
+            _rootGrid.Controls.Add(StudentTabChrome.CreateHeader(
+                "Tổng quan cá nhân",
+                "Theo dõi khóa học đang tham gia, bài kiểm tra, thông báo và hoạt động gần đây."), 0, 0);
             _rootGrid.Controls.Add(_statsGrid, 0, 1);
             _rootGrid.Controls.Add(_contentGrid, 0, 2);
             Controls.Add(_rootGrid);
@@ -662,7 +664,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private static string FormatDateTime(DateTime value)
         {
-            return value == DateTime.MinValue ? "" : value.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+            return SystemTimeFormatter.FormatVietnamTime(value);
         }
 
         private static int SafeCount(Func<int> getter)

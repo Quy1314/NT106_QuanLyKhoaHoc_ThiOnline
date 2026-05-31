@@ -54,7 +54,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         protected override async Task DeleteAsync()
         {
             int id = CurrentInt("Id");
-            if (id > 0 && System.Windows.Forms.MessageBox.Show("Xóa khóa học đã chọn?", "Xác nhận", System.Windows.Forms.MessageBoxButtons.YesNo) == System.Windows.Forms.DialogResult.Yes)
+            if (id > 0 && CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Xóa khóa học đã chọn?", "Xác nhận", System.Windows.Forms.MessageBoxButtons.YesNo) == System.Windows.Forms.DialogResult.Yes)
             {
                 Controller.DeleteCourse(TeacherId, id);
                 await LoadDataAsync();
