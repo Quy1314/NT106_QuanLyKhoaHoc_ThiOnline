@@ -112,7 +112,7 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private void ShowErrorAndClose(string message)
         {
-            MetaTheme.ShowModernDialog(message, "Thông báo");
+            MetaTheme.ShowModernDialog(this, message, "Thông báo");
             Close();
         }
 
@@ -250,7 +250,7 @@ namespace CourseGuard.Frontend.Forms.Student
                     ? $"Bạn còn {unansweredCount} câu chưa trả lời. Bạn có chắc chắn muốn nộp bài không?" 
                     : "Bạn có chắc chắn muốn nộp bài không?";
 
-                DialogResult res = MetaTheme.ShowModernDialog(message, "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                DialogResult res = MetaTheme.ShowModernDialog(this, message, "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (res != DialogResult.Yes)
                     return;
             }
@@ -258,15 +258,22 @@ namespace CourseGuard.Frontend.Forms.Student
             StudentExamSubmitResultModel result = _dbContext.SubmitStudentExamAttempt(UserSessionContext.CurrentUserId ?? 0, _session.AttemptId);
             if (!result.Success)
             {
-                MetaTheme.ShowModernDialog(result.Message, "Thông báo");
+                MetaTheme.ShowModernDialog(this, result.Message, "Thông báo");
                 return;
             }
 
             _submitted = true;
             int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
             string username = UserSessionContext.CurrentUsername ?? "không xác định";
-            _authController.LogUserActivity(userId, "EXAM_SUBMIT", $"Người dùng {username} đã nộp bài thi ID={_examId}, điểm={result.Score:0.##}.", string.Empty);
-            MetaTheme.ShowModernDialog($"Đã nộp bài. Điểm của bạn: {result.Score:0.##}/10", "Hoàn tất");
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    _authController.LogUserActivity(userId, "EXAM_SUBMIT", $"Người dùng {username} đã nộp bài thi ID={_examId}, điểm={result.Score:0.##}.", string.Empty);
+                }
+                catch { }
+            });
+            MetaTheme.ShowModernDialog(this, $"Đã nộp bài. Điểm của bạn: {result.Score:0.##}/10", "Hoàn tất");
             Close();
         }
 
@@ -284,7 +291,7 @@ namespace CourseGuard.Frontend.Forms.Student
             {
                 _timer.Stop();
                 lblTimer.Text = "00:00";
-                MetaTheme.ShowModernDialog("Đã hết thời gian làm bài. Hệ thống sẽ tự động nộp bài.", "Hết giờ", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MetaTheme.ShowModernDialog(this, "Đã hết thời gian làm bài. Hệ thống sẽ tự động nộp bài.", "Hết giờ", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 SubmitExam(confirm: false);
                 return;
             }
@@ -349,7 +356,14 @@ namespace CourseGuard.Frontend.Forms.Student
             _screenStreamClient?.Dispose();
             int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
             string username = UserSessionContext.CurrentUsername ?? "không xác định";
-            _authController.LogUserActivity(userId, "EXAM_EXIT", $"Người dùng {username} đã thoát màn hình làm bài thi ID={_examId}.", string.Empty);
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    _authController.LogUserActivity(userId, "EXAM_EXIT", $"Người dùng {username} đã thoát màn hình làm bài thi ID={_examId}.", string.Empty);
+                }
+                catch { }
+            });
         }
     }
 }

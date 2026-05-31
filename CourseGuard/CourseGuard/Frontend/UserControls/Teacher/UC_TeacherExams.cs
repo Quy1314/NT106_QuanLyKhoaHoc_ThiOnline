@@ -32,7 +32,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 return;
             }
 
-            using var dialog = new TeacherExamQuestionsDialog(TeacherId, id, CurrentString("Tên kỳ thi"));
+            int courseId = CurrentInt("CourseId");
+            using var dialog = new TeacherExamQuestionsDialog(TeacherId, id, CurrentString("Tên kỳ thi"), courseId);
             dialog.ShowDialog(FindForm());
             await LoadDataAsync();
         }

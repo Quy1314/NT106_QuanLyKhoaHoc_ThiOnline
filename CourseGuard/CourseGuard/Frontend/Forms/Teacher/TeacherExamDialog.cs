@@ -49,7 +49,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 _course.Items.Add(course);
 
             _status.DropDownStyle = ComboBoxStyle.DropDownList;
-            _status.Items.AddRange(new object[] { "DRAFT", "OPEN", "ACTIVE", "PENDING", "CLOSED" });
+            _status.Items.AddRange(new object[] { "DRAFT", "ACTIVE", "CLOSED" });
             
             if (existing != null)
             {

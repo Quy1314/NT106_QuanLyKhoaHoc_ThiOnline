@@ -1305,7 +1305,8 @@ namespace CourseGuard.Backend.Data
         {
             using var headerCommand = new NpgsqlCommand(@"
                 SELECT a.id, ex.id, COALESCE(ex.title, ''), COALESCE(c.name, ''),
-                       COALESCE(ex.duration_minutes, 0), COALESCE(a.start_time, @now)
+                       COALESCE(ex.duration_minutes, 0), COALESCE(a.start_time, @now),
+                       COALESCE(ex.shuffle_questions, FALSE)
                 FROM exam_attempts a
                 JOIN exams ex ON ex.id = a.exam_id
                 LEFT JOIN courses c ON c.id = ex.course_id
@@ -1328,6 +1329,7 @@ namespace CourseGuard.Backend.Data
                 DurationMinutes = reader.GetInt32(4),
                 StartTime = reader.GetDateTime(5)
             };
+            bool shuffleQuestions = reader.GetBoolean(6);
             reader.Close();
 
             using var questionCommand = new NpgsqlCommand(@"
@@ -1357,9 +1359,200 @@ namespace CourseGuard.Backend.Data
                 });
             }
 
+            if (shuffleQuestions && session.Questions.Count > 1)
+            {
+                var random = new Random(session.AttemptId); // Use attempt id as seed so it's consistent for the same attempt
+                int n = session.Questions.Count;
+                while (n > 1)
+                {
+                    n--;
+                    int k = random.Next(n + 1);
+                    var value = session.Questions[k];
+                    session.Questions[k] = session.Questions[n];
+                    session.Questions[n] = value;
+                }
+                
+                // Re-assign display order after shuffling
+                for (int i = 0; i < session.Questions.Count; i++)
+                {
+                    session.Questions[i].DisplayOrder = i + 1;
+                }
+            }
+
             return session;
         }
 
+        public async Task BulkInsertQuestionsAndMapToExamAsync(int examId, int courseId, List<TeacherExamQuestionModel> questions, CancellationToken cancellationToken = default)
+        {
+            if (questions == null || questions.Count == 0) return;
+
+            using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+            try
+            {
+                // We use a single string builder to insert all questions into the QUESTIONS table
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("INSERT INTO questions (course_id, content, type, correct_answer, score) VALUES ");
+
+                for (int i = 0; i < questions.Count; i++)
+                {
+                    sb.Append($"(@course_id, @q_content_{i}, 'SINGLE', @q_correct_{i}, @q_score_{i})");
+                    if (i < questions.Count - 1) sb.AppendLine(",");
+                }
+                sb.AppendLine(" RETURNING id;");
+
+                using var qCommand = new NpgsqlCommand(sb.ToString(), connection, transaction);
+                qCommand.Parameters.AddWithValue("@course_id", courseId);
+
+                for (int i = 0; i < questions.Count; i++)
+                {
+                    // Escape is not strictly needed for parameterized queries, but we are using parameters to be safe!
+                    var q = questions[i];
+                    string fullContent = $"{q.QuestionText}\nA. {q.OptionA}\nB. {q.OptionB}\nC. {q.OptionC}\nD. {q.OptionD}";
+                    qCommand.Parameters.AddWithValue($"@q_content_{i}", fullContent);
+                    qCommand.Parameters.AddWithValue($"@q_correct_{i}", q.CorrectOption ?? "A");
+                    qCommand.Parameters.AddWithValue($"@q_score_{i}", q.Points);
+                }
+
+                var insertedQuestionIds = new List<int>();
+                using (var reader = await qCommand.ExecuteReaderAsync(cancellationToken))
+                {
+                    while (await reader.ReadAsync(cancellationToken))
+                    {
+                        insertedQuestionIds.Add(reader.GetInt32(0));
+                    }
+                }
+
+                // Now insert into exam_questions
+                var sbEq = new System.Text.StringBuilder();
+                sbEq.AppendLine("INSERT INTO exam_questions (exam_id, question_id, question_text, option_a, option_b, option_c, option_d, correct_option, points, display_order) VALUES ");
+                for (int i = 0; i < insertedQuestionIds.Count; i++)
+                {
+                    sbEq.Append($"(@exam_id, @q_id_{i}, @text_{i}, @opt_a_{i}, @opt_b_{i}, @opt_c_{i}, @opt_d_{i}, @corr_{i}, @pts_{i}, @ord_{i})");
+                    if (i < insertedQuestionIds.Count - 1) sbEq.AppendLine(",");
+                }
+
+                using var eqCommand = new NpgsqlCommand(sbEq.ToString(), connection, transaction);
+                eqCommand.Parameters.AddWithValue("@exam_id", examId);
+
+                for (int i = 0; i < insertedQuestionIds.Count; i++)
+                {
+                    var q = questions[i];
+                    eqCommand.Parameters.AddWithValue($"@q_id_{i}", insertedQuestionIds[i]);
+                    eqCommand.Parameters.AddWithValue($"@text_{i}", q.QuestionText ?? "");
+                    eqCommand.Parameters.AddWithValue($"@opt_a_{i}", q.OptionA ?? "");
+                    eqCommand.Parameters.AddWithValue($"@opt_b_{i}", q.OptionB ?? "");
+                    eqCommand.Parameters.AddWithValue($"@opt_c_{i}", q.OptionC ?? "");
+                    eqCommand.Parameters.AddWithValue($"@opt_d_{i}", q.OptionD ?? "");
+                    eqCommand.Parameters.AddWithValue($"@corr_{i}", q.CorrectOption ?? "A");
+                    eqCommand.Parameters.AddWithValue($"@pts_{i}", q.Points);
+                    eqCommand.Parameters.AddWithValue($"@ord_{i}", i + 1);
+                }
+
+                await eqCommand.ExecuteNonQueryAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        public async Task AddQuestionsFromBankAsync(int examId, List<int> questionIds, CancellationToken cancellationToken = default)
+        {
+            if (questionIds == null || questionIds.Count == 0) return;
+
+            using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine(@"INSERT INTO exam_questions (exam_id, question_id, question_text, option_a, option_b, option_c, option_d, correct_option, points, display_order) 
+                                SELECT @exam_id, id, split_part(content, E'\nA.', 1), 
+                                       split_part(split_part(content, E'\nA. ', 2), E'\nB. ', 1),
+                                       split_part(split_part(content, E'\nB. ', 2), E'\nC. ', 1),
+                                       split_part(split_part(content, E'\nC. ', 2), E'\nD. ', 1),
+                                       substring(content from E'\\nD. (.*)$'),
+                                       correct_answer, score, row_number() over (order by id)
+                                FROM questions WHERE id IN (");
+                
+                for (int i = 0; i < questionIds.Count; i++)
+                {
+                    sb.Append($"@qid_{i}");
+                    if (i < questionIds.Count - 1) sb.Append(", ");
+                }
+                sb.Append(") ON CONFLICT DO NOTHING;");
+
+                using var command = new NpgsqlCommand(sb.ToString(), connection, transaction);
+                command.Parameters.AddWithValue("@exam_id", examId);
+                for (int i = 0; i < questionIds.Count; i++)
+                {
+                    command.Parameters.AddWithValue($"@qid_{i}", questionIds[i]);
+                }
+
+                await command.ExecuteNonQueryAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        public List<TeacherExamQuestionModel> GetQuestionsByCourseId(int courseId)
+        {
+            var result = new List<TeacherExamQuestionModel>();
+            using var connection = CreateConnection();
+            connection.Open();
+
+            // Extract parts back from content string
+            string query = @"SELECT id, content, correct_answer, score FROM questions WHERE course_id = @course_id ORDER BY id DESC";
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@course_id", courseId);
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                string content = reader.GetString(1);
+                string text = content;
+                string a = "", b = "", c = "", d = "";
+
+                // Very basic split to reverse the format stored in DB
+                int idxA = content.IndexOf("\nA. ");
+                int idxB = content.IndexOf("\nB. ");
+                int idxC = content.IndexOf("\nC. ");
+                int idxD = content.IndexOf("\nD. ");
+
+                if (idxA > 0 && idxB > idxA && idxC > idxB && idxD > idxC)
+                {
+                    text = content.Substring(0, idxA).Trim();
+                    a = content.Substring(idxA + 4, idxB - (idxA + 4)).Trim();
+                    b = content.Substring(idxB + 4, idxC - (idxB + 4)).Trim();
+                    c = content.Substring(idxC + 4, idxD - (idxC + 4)).Trim();
+                    d = content.Substring(idxD + 4).Trim();
+                }
+
+                result.Add(new TeacherExamQuestionModel
+                {
+                    Id = reader.GetInt32(0),
+                    QuestionText = text,
+                    OptionA = a,
+                    OptionB = b,
+                    OptionC = c,
+                    OptionD = d,
+                    CorrectOption = reader.GetString(2),
+                    Points = reader.GetDecimal(3)
+                });
+            }
+
+            return result;
+        }
         private static string NormalizeOption(string? value)
         {
             string option = (value ?? string.Empty).Trim().ToUpperInvariant();
@@ -1368,8 +1561,15 @@ namespace CourseGuard.Backend.Data
 
         private static string BuildResultStatus(double score, string rawStatus)
         {
-            if (!string.IsNullOrWhiteSpace(rawStatus)
-                && !string.Equals(rawStatus, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(rawStatus, "SUBMITTED", StringComparison.OrdinalIgnoreCase))
+            {
+                return score < 5.0 ? "Không đạt" : "Đạt";
+            }
+            if (string.Equals(rawStatus, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Đang làm";
+            }
+            if (!string.IsNullOrWhiteSpace(rawStatus))
             {
                 return rawStatus;
             }
