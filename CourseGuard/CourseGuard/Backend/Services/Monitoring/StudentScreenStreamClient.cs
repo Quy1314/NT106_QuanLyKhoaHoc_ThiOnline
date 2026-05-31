@@ -17,6 +17,8 @@ namespace CourseGuard.Backend.Services.Monitoring
         private readonly string _host;
         private TcpClient? _client;
 
+        private volatile bool _pendingWarning;
+
         public StudentScreenStreamClient(int examId, int studentId, int attemptId = 0, string host = "127.0.0.1")
         {
             _examId = examId;
@@ -25,26 +27,44 @@ namespace CourseGuard.Backend.Services.Monitoring
             _host = host;
         }
 
+        public void SendWarning()
+        {
+            _pendingWarning = true;
+        }
+
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            try
+            while (!cancellationToken.IsCancellationRequested)
             {
-                _client = new TcpClient();
-                await _client.ConnectAsync(_host, ScreenStreamProtocol.DefaultPort, cancellationToken);
-                await using NetworkStream stream = _client.GetStream();
-                while (!cancellationToken.IsCancellationRequested)
+                try
                 {
-                    byte[] jpeg = CaptureJpeg();
-                    byte[] header = ScreenStreamProtocol.BuildHeader(_examId, _studentId, _attemptId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), jpeg.Length);
-                    await stream.WriteAsync(header, cancellationToken);
-                    await stream.WriteAsync(jpeg, cancellationToken);
-                    await stream.FlushAsync(cancellationToken);
-                    await Task.Delay(1000, cancellationToken);
+                    _client?.Dispose();
+                    _client = new TcpClient();
+                    await _client.ConnectAsync(_host, ScreenStreamProtocol.DefaultPort, cancellationToken);
+                    await using NetworkStream stream = _client.GetStream();
+                    while (!cancellationToken.IsCancellationRequested)
+                    {
+                        byte frameType = 0;
+                        if (_pendingWarning)
+                        {
+                            frameType = 1;
+                            _pendingWarning = false;
+                        }
+
+                        byte[] jpeg = CaptureJpeg();
+                        byte[] header = ScreenStreamProtocol.BuildHeader(frameType, _examId, _studentId, _attemptId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), jpeg.Length);
+                        await stream.WriteAsync(header, cancellationToken);
+                        await stream.WriteAsync(jpeg, cancellationToken);
+                        await stream.FlushAsync(cancellationToken);
+                        await Task.Delay(1000, cancellationToken);
+                    }
                 }
-            }
-            catch
-            {
-                // Monitoring must never interrupt the student's exam flow.
+                catch
+                {
+                    // Monitoring must never interrupt the student's exam flow.
+                    if (cancellationToken.IsCancellationRequested) break;
+                    try { await Task.Delay(2000, cancellationToken); } catch { }
+                }
             }
         }
 

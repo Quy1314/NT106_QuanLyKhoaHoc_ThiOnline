@@ -52,6 +52,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 sb.AppendLine($"B. {q.OptionB}");
                 sb.AppendLine($"C. {q.OptionC}");
                 sb.AppendLine($"D. {q.OptionD}");
+                sb.AppendLine($"Bạn chọn: {(string.IsNullOrWhiteSpace(q.SelectedOption) ? "Chưa chọn" : q.SelectedOption)}");
                 sb.AppendLine($"Đáp án đúng: {q.CorrectOption}");
                 sb.AppendLine();
             }

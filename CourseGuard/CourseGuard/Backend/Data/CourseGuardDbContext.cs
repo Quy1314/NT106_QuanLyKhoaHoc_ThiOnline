@@ -327,134 +327,6 @@ namespace CourseGuard.Backend.Data
             return result is bool exists && exists;
         }
 
-        private static void EnsureStudentExamTakingSchema(NpgsqlConnection connection)
-        {
-            using var command = new NpgsqlCommand(@"
-                CREATE TABLE IF NOT EXISTS exam_questions (
-                    id SERIAL PRIMARY KEY,
-                    exam_id INT NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
-                    question_text TEXT NOT NULL,
-                    option_a TEXT NOT NULL,
-                    option_b TEXT NOT NULL,
-                    option_c TEXT NOT NULL,
-                    option_d TEXT NOT NULL,
-                    correct_option CHAR(1) NOT NULL DEFAULT 'A',
-                    points NUMERIC(6,2) NOT NULL DEFAULT 0,
-                    display_order INT NOT NULL DEFAULT 1,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-
-                DO $$
-                DECLARE
-                    existing_primary_key TEXT;
-                BEGIN
-                    ALTER TABLE exam_questions
-                        ADD COLUMN IF NOT EXISTS id INTEGER;
-
-                    CREATE SEQUENCE IF NOT EXISTS exam_questions_id_seq;
-
-                    UPDATE exam_questions
-                    SET id = nextval('exam_questions_id_seq')
-                    WHERE id IS NULL;
-
-                    PERFORM setval(
-                        'exam_questions_id_seq',
-                        COALESCE((SELECT MAX(id) FROM exam_questions), 1),
-                        (SELECT COALESCE(MAX(id), 0) > 0 FROM exam_questions)
-                    );
-
-                    ALTER TABLE exam_questions
-                        ALTER COLUMN id SET DEFAULT nextval('exam_questions_id_seq');
-
-                    SELECT c.conname
-                    INTO existing_primary_key
-                    FROM pg_constraint c
-                    WHERE c.conrelid = 'exam_questions'::regclass
-                      AND c.contype = 'p'
-                      AND NOT (
-                          array_length(c.conkey, 1) = 1
-                          AND c.conkey[1] = (
-                              SELECT a.attnum
-                              FROM pg_attribute a
-                              WHERE a.attrelid = 'exam_questions'::regclass
-                                AND a.attname = 'id'
-                                AND NOT a.attisdropped
-                          )
-                      )
-                    LIMIT 1;
-
-                    IF existing_primary_key IS NOT NULL THEN
-                        EXECUTE format('ALTER TABLE exam_questions DROP CONSTRAINT %I', existing_primary_key);
-                    END IF;
-
-                    IF EXISTS (
-                        SELECT 1
-                        FROM information_schema.columns
-                        WHERE table_schema = current_schema()
-                          AND table_name = 'exam_questions'
-                          AND column_name = 'question_id'
-                    ) THEN
-                        ALTER TABLE exam_questions
-                            ALTER COLUMN question_id DROP NOT NULL;
-                    END IF;
-
-                    IF NOT EXISTS (
-                        SELECT 1
-                        FROM pg_index i
-                        WHERE i.indrelid = 'exam_questions'::regclass
-                          AND i.indisprimary
-                    ) THEN
-                        ALTER TABLE exam_questions
-                            ADD CONSTRAINT exam_questions_pkey PRIMARY KEY (id);
-                    END IF;
-                END $$;
-
-                ALTER TABLE exam_questions
-                    ADD COLUMN IF NOT EXISTS question_text TEXT,
-                    ADD COLUMN IF NOT EXISTS option_a TEXT,
-                    ADD COLUMN IF NOT EXISTS option_b TEXT,
-                    ADD COLUMN IF NOT EXISTS option_c TEXT,
-                    ADD COLUMN IF NOT EXISTS option_d TEXT,
-                    ADD COLUMN IF NOT EXISTS correct_option CHAR(1) DEFAULT 'A',
-                    ADD COLUMN IF NOT EXISTS points NUMERIC(6,2) DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS display_order INT DEFAULT 1;
-
-                CREATE TABLE IF NOT EXISTS exam_attempts (
-                    id SERIAL PRIMARY KEY,
-                    exam_id INT NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
-                    student_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                    start_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    submit_time TIMESTAMP NULL,
-                    score FLOAT8 NULL,
-                    status VARCHAR(20) NOT NULL DEFAULT 'IN_PROGRESS'
-                );
-
-                CREATE TABLE IF NOT EXISTS answers (
-                    id SERIAL PRIMARY KEY,
-                    attempt_id INT NOT NULL REFERENCES exam_attempts(id) ON DELETE CASCADE,
-                    question_id INT NOT NULL REFERENCES exam_questions(id) ON DELETE CASCADE,
-                    answer_content TEXT NOT NULL,
-                    score NUMERIC(6,2) NULL,
-                    submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-                );
-
-                ALTER TABLE exam_attempts
-                    ADD COLUMN IF NOT EXISTS start_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    ADD COLUMN IF NOT EXISTS submit_time TIMESTAMP NULL,
-                    ADD COLUMN IF NOT EXISTS score FLOAT8 NULL,
-                    ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'IN_PROGRESS';
-
-                ALTER TABLE answers
-                    ADD COLUMN IF NOT EXISTS answer_content TEXT,
-                    ADD COLUMN IF NOT EXISTS score NUMERIC(6,2) NULL,
-                    ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
-
-                CREATE INDEX IF NOT EXISTS idx_exam_questions_exam ON exam_questions(exam_id);
-                CREATE INDEX IF NOT EXISTS idx_exam_attempts_student_exam ON exam_attempts(student_id, exam_id);
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_answers_attempt_question ON answers(attempt_id, question_id);", connection);
-            command.ExecuteNonQuery();
-        }
-
         public int CountActiveEnrollments(int studentId)
         {
             using var connection = CreateConnection();
@@ -616,6 +488,16 @@ namespace CourseGuard.Backend.Data
                 )"
                 : "0";
 
+            string inProgressAttemptsExpression = hasAttempts
+                ? @"(
+                    SELECT COUNT(*)
+                    FROM exam_attempts ea
+                    WHERE ea.exam_id = ex.id
+                      AND ea.student_id = @student_id
+                      AND UPPER(COALESCE(ea.status, '')) = 'IN_PROGRESS'
+                )"
+                : "0";
+
             string questionExpression = hasQuestions
                 ? @"(
                     SELECT COUNT(*)
@@ -634,6 +516,7 @@ namespace CourseGuard.Backend.Data
                        COALESCE(ex.duration_minutes, 0) AS duration_minutes,
                        COALESCE(ex.max_attempts, 1) AS max_attempts,
                        {attemptsExpression}::int AS attempt_count,
+                       {inProgressAttemptsExpression}::int AS in_progress_attempt_count,
                        {questionExpression}::int AS question_count
                 FROM exams ex
                 JOIN enrollments en ON en.course_id = ex.course_id
@@ -642,13 +525,11 @@ namespace CourseGuard.Backend.Data
                   AND UPPER(COALESCE(en.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
                   AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
                   AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'
-                  AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)
-                  AND (COALESCE(ex.max_attempts, 1) <= 0 OR {attemptsExpression} < COALESCE(ex.max_attempts, 1))
                 ORDER BY
                   CASE
-                    WHEN (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
-                     AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP) THEN 0
-                    WHEN ex.open_time > CURRENT_TIMESTAMP THEN 1
+                    WHEN (ex.open_time IS NULL OR ex.open_time <= @now)
+                     AND (ex.close_time IS NULL OR ex.close_time >= @now) THEN 0
+                    WHEN ex.open_time > @now THEN 1
                     ELSE 2
                   END,
                   ex.open_time NULLS FIRST,
@@ -658,6 +539,7 @@ namespace CourseGuard.Backend.Data
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@student_id", studentId);
             command.Parameters.AddWithValue("@limit", safeLimit);
+            command.Parameters.AddWithValue("@now", DateTime.Now);
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
@@ -672,335 +554,161 @@ namespace CourseGuard.Backend.Data
                     DurationMinutes = reader.GetInt32(6),
                     MaxAttempts = reader.GetInt32(7),
                     AttemptCount = reader.GetInt32(8),
-                    QuestionCount = reader.GetInt32(9)
+                    InProgressAttemptCount = reader.GetInt32(9),
+                    QuestionCount = reader.GetInt32(10),
+                    AttemptStorageAvailable = hasAttempts
                 });
             }
 
             return result;
         }
 
-        public StudentExamTakingModel? GetStudentExamForTaking(int studentId, int examId)
-        {
-            if (studentId <= 0 || examId <= 0)
-                return null;
-
-            using var connection = CreateConnection();
-            connection.Open();
-            EnsureStudentExamTakingSchema(connection);
-
-            using var headerCommand = new NpgsqlCommand(@"
-                SELECT ex.id,
-                       ex.course_id,
-                       COALESCE(ex.title, ''),
-                       COALESCE(c.name, ''),
-                       ex.open_time,
-                       ex.close_time,
-                       COALESCE(ex.duration_minutes, 0)
-                FROM exams ex
-                JOIN enrollments en ON en.course_id = ex.course_id
-                LEFT JOIN courses c ON c.id = ex.course_id
-                WHERE ex.id = @exam_id
-                  AND en.student_id = @student_id
-                  AND UPPER(COALESCE(en.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
-                  AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'
-                  AND (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
-                  AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)", connection);
-            headerCommand.Parameters.AddWithValue("@student_id", studentId);
-            headerCommand.Parameters.AddWithValue("@exam_id", examId);
-
-            using var reader = headerCommand.ExecuteReader(CommandBehavior.SingleRow);
-            if (!reader.Read())
-                return null;
-
-            var exam = new StudentExamTakingModel
-            {
-                ExamId = reader.GetInt32(0),
-                CourseId = reader.GetInt32(1),
-                ExamTitle = reader.GetString(2),
-                CourseName = reader.GetString(3),
-                OpenTime = reader.IsDBNull(4) ? null : reader.GetDateTime(4),
-                CloseTime = reader.IsDBNull(5) ? null : reader.GetDateTime(5),
-                DurationMinutes = reader.GetInt32(6)
-            };
-            reader.Close();
-
-            using (var questionCommand = new NpgsqlCommand(@"
-                SELECT id,
-                       COALESCE(display_order, 1),
-                       COALESCE(question_text, ''),
-                       COALESCE(option_a, ''),
-                       COALESCE(option_b, ''),
-                       COALESCE(option_c, ''),
-                       COALESCE(option_d, ''),
-                       COALESCE(correct_option, 'A'),
-                       COALESCE(points, 0)
-                FROM exam_questions
-                WHERE exam_id = @exam_id
-                ORDER BY COALESCE(display_order, 1), id", connection))
-            {
-                questionCommand.Parameters.AddWithValue("@exam_id", examId);
-                using var questionReader = questionCommand.ExecuteReader();
-                while (questionReader.Read())
-                {
-                    exam.Questions.Add(new StudentExamTakingQuestionModel
-                    {
-                        QuestionId = questionReader.GetInt32(0),
-                        DisplayOrder = questionReader.GetInt32(1),
-                        QuestionText = questionReader.GetString(2),
-                        OptionA = questionReader.GetString(3),
-                        OptionB = questionReader.GetString(4),
-                        OptionC = questionReader.GetString(5),
-                        OptionD = questionReader.GetString(6),
-                        CorrectOption = questionReader.GetString(7),
-                        Points = questionReader.GetDecimal(8)
-                    });
-                }
-            }
-
-            if (exam.Questions.Count == 0)
-                return exam;
-
-            StudentExamAttemptStateModel attempt = GetOrCreateStudentExamAttempt(studentId, examId);
-            exam.AttemptId = attempt.AttemptId;
-            exam.StartTime = attempt.StartTime;
-
-            using (var answerCommand = new NpgsqlCommand(@"
-                SELECT question_id, COALESCE(answer_content, '')
-                FROM answers
-                WHERE attempt_id = @attempt_id", connection))
-            {
-                answerCommand.Parameters.AddWithValue("@attempt_id", attempt.AttemptId);
-                using var answerReader = answerCommand.ExecuteReader();
-                while (answerReader.Read())
-                {
-                    int questionId = answerReader.GetInt32(0);
-                    string answer = answerReader.GetString(1);
-                    if (!string.IsNullOrWhiteSpace(answer))
-                        exam.SavedAnswers[questionId] = answer;
-                }
-            }
-
-            return exam;
-        }
-
-        public StudentExamAttemptStateModel GetOrCreateStudentExamAttempt(int studentId, int examId)
+        public StudentExamTakingModel? StartOrResumeStudentExam(int studentId, int examId)
         {
             using var connection = CreateConnection();
             connection.Open();
             EnsureStudentExamTakingSchema(connection);
+            if (!TableExists(connection, "exam_attempts") || !TableExists(connection, "exam_questions"))
+                return null;
 
-            using (var activeAttempt = new NpgsqlCommand(@"
-                SELECT id, start_time, COALESCE(status, ''), score, submit_time
-                FROM exam_attempts
-                WHERE student_id = @student_id
-                  AND exam_id = @exam_id
-                  AND UPPER(COALESCE(status, '')) = 'IN_PROGRESS'
-                ORDER BY id DESC
-                LIMIT 1", connection))
+            using var transaction = connection.BeginTransaction();
+            int attemptId = GetExistingInProgressAttempt(connection, transaction, studentId, examId);
+            if (attemptId <= 0)
             {
-                activeAttempt.Parameters.AddWithValue("@student_id", studentId);
-                activeAttempt.Parameters.AddWithValue("@exam_id", examId);
-                using var reader = activeAttempt.ExecuteReader(CommandBehavior.SingleRow);
-                if (reader.Read())
-                    return ReadAttemptState(reader);
+                if (!CanStartStudentExam(connection, transaction, studentId, examId))
+                    return null;
+
+                using var insert = new NpgsqlCommand(@"
+                    INSERT INTO exam_attempts (exam_id, student_id, start_time, status)
+                    VALUES (@exam_id, @student_id, @now, 'IN_PROGRESS')
+                    RETURNING id", connection, transaction);
+                insert.Parameters.AddWithValue("@exam_id", examId);
+                insert.Parameters.AddWithValue("@student_id", studentId);
+                insert.Parameters.AddWithValue("@now", DateTime.Now);
+                attemptId = Convert.ToInt32(insert.ExecuteScalar());
             }
 
-            int maxAttempts;
-            using (var examCommand = new NpgsqlCommand(@"
-                SELECT COALESCE(max_attempts, 1)
-                FROM exams ex
-                JOIN enrollments en ON en.course_id = ex.course_id
-                WHERE ex.id = @exam_id
-                  AND en.student_id = @student_id
-                  AND UPPER(COALESCE(en.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
-                  AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'
-                  AND (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
-                  AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)", connection))
-            {
-                examCommand.Parameters.AddWithValue("@student_id", studentId);
-                examCommand.Parameters.AddWithValue("@exam_id", examId);
-                object? maxAttemptsResult = examCommand.ExecuteScalar();
-                if (maxAttemptsResult == null || maxAttemptsResult == DBNull.Value)
-                    throw new InvalidOperationException("Bai kiem tra khong kha dung hoac chua den thoi gian lam bai.");
-
-                maxAttempts = Convert.ToInt32(maxAttemptsResult);
-            }
-
-            if (maxAttempts > 0)
-            {
-                using var countCommand = new NpgsqlCommand(@"
-                    SELECT COUNT(*)
-                    FROM exam_attempts
-                    WHERE student_id = @student_id
-                      AND exam_id = @exam_id", connection);
-                countCommand.Parameters.AddWithValue("@student_id", studentId);
-                countCommand.Parameters.AddWithValue("@exam_id", examId);
-                int attemptCount = Convert.ToInt32(countCommand.ExecuteScalar());
-                if (attemptCount >= maxAttempts)
-                    throw new InvalidOperationException("Ban da het luot lam bai kiem tra nay.");
-            }
-
-            using var insertCommand = new NpgsqlCommand(@"
-                INSERT INTO exam_attempts (exam_id, student_id, start_time, status)
-                VALUES (@exam_id, @student_id, CURRENT_TIMESTAMP, 'IN_PROGRESS')
-                RETURNING id, start_time, COALESCE(status, ''), score, submit_time", connection);
-            insertCommand.Parameters.AddWithValue("@student_id", studentId);
-            insertCommand.Parameters.AddWithValue("@exam_id", examId);
-            using var insertedReader = insertCommand.ExecuteReader(CommandBehavior.SingleRow);
-            if (!insertedReader.Read())
-                throw new InvalidOperationException("Khong tao duoc luot lam bai.");
-
-            return ReadAttemptState(insertedReader);
+            StudentExamTakingModel? session = LoadStudentExamSession(connection, transaction, studentId, attemptId);
+            transaction.Commit();
+            return session;
         }
 
-        public void SaveStudentAnswer(int studentId, int attemptId, int questionId, string answerOption)
+        public bool SaveStudentExamAnswer(int studentId, int attemptId, int examQuestionId, string selectedOption)
         {
-            string normalizedAnswer = (answerOption ?? string.Empty).Trim().ToUpperInvariant();
-            if (studentId <= 0 || attemptId <= 0 || questionId <= 0 || string.IsNullOrWhiteSpace(normalizedAnswer))
-                return;
+            string option = NormalizeOption(selectedOption);
+            if (string.IsNullOrEmpty(option))
+                return false;
 
             using var connection = CreateConnection();
             connection.Open();
             EnsureStudentExamTakingSchema(connection);
 
             using var command = new NpgsqlCommand(@"
-                INSERT INTO answers (attempt_id, question_id, answer_content, score, submitted_at)
-                SELECT a.id, eq.id, @answer_content, NULL, CURRENT_TIMESTAMP
-                FROM exam_attempts a
-                JOIN exam_questions eq ON eq.exam_id = a.exam_id AND eq.id = @question_id
-                WHERE a.id = @attempt_id
-                  AND a.student_id = @student_id
-                  AND UPPER(COALESCE(a.status, '')) = 'IN_PROGRESS'
-                ON CONFLICT (attempt_id, question_id)
-                DO UPDATE SET answer_content = EXCLUDED.answer_content,
-                              score = NULL,
-                              submitted_at = CURRENT_TIMESTAMP", connection);
+                INSERT INTO exam_attempt_answers (attempt_id, exam_question_id, selected_option, answered_at)
+                SELECT @attempt_id, @exam_question_id, @selected_option, @now
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM exam_attempts a
+                    JOIN exam_questions eq ON eq.exam_id = a.exam_id
+                    WHERE a.id = @attempt_id
+                      AND a.student_id = @student_id
+                      AND UPPER(COALESCE(a.status, '')) = 'IN_PROGRESS'
+                      AND eq.id = @exam_question_id
+                )
+                ON CONFLICT (attempt_id, exam_question_id)
+                DO UPDATE SET selected_option = EXCLUDED.selected_option, answered_at = @now", connection);
             command.Parameters.AddWithValue("@student_id", studentId);
             command.Parameters.AddWithValue("@attempt_id", attemptId);
-            command.Parameters.AddWithValue("@question_id", questionId);
-            command.Parameters.AddWithValue("@answer_content", normalizedAnswer);
-            command.ExecuteNonQuery();
+            command.Parameters.AddWithValue("@exam_question_id", examQuestionId);
+            command.Parameters.AddWithValue("@selected_option", option);
+            command.Parameters.AddWithValue("@now", DateTime.Now);
+            return command.ExecuteNonQuery() > 0;
         }
 
-        public SubmitStudentExamResultModel SubmitStudentExam(int studentId, int attemptId)
+        public StudentExamSubmitResultModel SubmitStudentExamAttempt(int studentId, int attemptId)
         {
             using var connection = CreateConnection();
             connection.Open();
             EnsureStudentExamTakingSchema(connection);
-
             using var transaction = connection.BeginTransaction();
-            try
+
+            if (!OwnsInProgressAttempt(connection, transaction, studentId, attemptId))
             {
-                int examId;
-                using (var attemptCommand = new NpgsqlCommand(@"
-                    SELECT exam_id
-                    FROM exam_attempts
-                    WHERE id = @attempt_id
-                      AND student_id = @student_id
-                      AND UPPER(COALESCE(status, '')) = 'IN_PROGRESS'
-                    FOR UPDATE", connection, transaction))
+                return new StudentExamSubmitResultModel
                 {
-                    attemptCommand.Parameters.AddWithValue("@student_id", studentId);
-                    attemptCommand.Parameters.AddWithValue("@attempt_id", attemptId);
-                    object? examIdResult = attemptCommand.ExecuteScalar();
-                    if (examIdResult == null || examIdResult == DBNull.Value)
-                        throw new InvalidOperationException("Khong tim thay luot lam bai dang mo.");
-
-                    examId = Convert.ToInt32(examIdResult);
-                }
-
-                var questions = new List<StudentExamScoringQuestion>();
-                using (var questionCommand = new NpgsqlCommand(@"
-                    SELECT id, COALESCE(correct_option, 'A'), COALESCE(points, 0)
-                    FROM exam_questions
-                    WHERE exam_id = @exam_id
-                    ORDER BY COALESCE(display_order, 1), id", connection, transaction))
-                {
-                    questionCommand.Parameters.AddWithValue("@exam_id", examId);
-                    using var questionReader = questionCommand.ExecuteReader();
-                    while (questionReader.Read())
-                    {
-                        questions.Add(new StudentExamScoringQuestion(
-                            questionReader.GetInt32(0),
-                            questionReader.GetString(1),
-                            questionReader.GetDecimal(2)));
-                    }
-                }
-
-                var answers = new Dictionary<int, string>();
-                using (var answerCommand = new NpgsqlCommand(@"
-                    SELECT question_id, COALESCE(answer_content, '')
-                    FROM answers
-                    WHERE attempt_id = @attempt_id", connection, transaction))
-                {
-                    answerCommand.Parameters.AddWithValue("@attempt_id", attemptId);
-                    using var answerReader = answerCommand.ExecuteReader();
-                    while (answerReader.Read())
-                    {
-                        string answer = answerReader.GetString(1);
-                        if (!string.IsNullOrWhiteSpace(answer))
-                            answers[answerReader.GetInt32(0)] = answer;
-                    }
-                }
-
-                StudentExamScoreResult score = StudentExamScoringService.Calculate(questions, answers);
-                foreach (StudentExamScoringQuestion question in questions)
-                {
-                    if (!answers.TryGetValue(question.QuestionId, out string? answer))
-                        continue;
-
-                    decimal questionScore = StudentExamScoringService.IsCorrect(question, answer) ? question.Points : 0;
-                    using var scoreCommand = new NpgsqlCommand(@"
-                        UPDATE answers
-                        SET score = @score,
-                            submitted_at = CURRENT_TIMESTAMP
-                        WHERE attempt_id = @attempt_id
-                          AND question_id = @question_id", connection, transaction);
-                    scoreCommand.Parameters.AddWithValue("@score", questionScore);
-                    scoreCommand.Parameters.AddWithValue("@attempt_id", attemptId);
-                    scoreCommand.Parameters.AddWithValue("@question_id", question.QuestionId);
-                    scoreCommand.ExecuteNonQuery();
-                }
-
-                using (var submitCommand = new NpgsqlCommand(@"
-                    UPDATE exam_attempts
-                    SET score = @score,
-                        status = 'SUBMITTED',
-                        submit_time = CURRENT_TIMESTAMP
-                    WHERE id = @attempt_id
-                      AND student_id = @student_id", connection, transaction))
-                {
-                    submitCommand.Parameters.AddWithValue("@score", score.Score);
-                    submitCommand.Parameters.AddWithValue("@attempt_id", attemptId);
-                    submitCommand.Parameters.AddWithValue("@student_id", studentId);
-                    submitCommand.ExecuteNonQuery();
-                }
-
-                transaction.Commit();
-                return new SubmitStudentExamResultModel
-                {
-                    AttemptId = attemptId,
-                    CorrectCount = score.CorrectCount,
-                    TotalQuestions = score.TotalQuestions,
-                    Score = score.Score
+                    Success = false,
+                    Message = "Không tìm thấy lượt làm bài đang mở."
                 };
             }
-            catch
-            {
-                transaction.Rollback();
-                throw;
-            }
-        }
 
-        private static StudentExamAttemptStateModel ReadAttemptState(NpgsqlDataReader reader)
-        {
-            return new StudentExamAttemptStateModel
+            var questions = new List<TeacherExamQuestionModel>();
+            using (var questionCommand = new NpgsqlCommand(@"
+                SELECT eq.id, COALESCE(eq.correct_option, 'A'), COALESCE(eq.points, 0)
+                FROM exam_questions eq
+                JOIN exam_attempts a ON a.exam_id = eq.exam_id
+                WHERE a.id = @attempt_id
+                ORDER BY COALESCE(eq.display_order, 1), eq.id", connection, transaction))
             {
-                AttemptId = reader.GetInt32(0),
-                StartTime = reader.GetDateTime(1),
-                Status = reader.GetString(2),
-                Score = reader.IsDBNull(3) ? null : reader.GetDouble(3),
-                SubmitTime = reader.IsDBNull(4) ? null : reader.GetDateTime(4)
+                questionCommand.Parameters.AddWithValue("@attempt_id", attemptId);
+                using var reader = questionCommand.ExecuteReader();
+                while (reader.Read())
+                {
+                    questions.Add(new TeacherExamQuestionModel
+                    {
+                        Id = reader.GetInt32(0),
+                        CorrectOption = reader.GetString(1),
+                        Points = reader.GetDecimal(2)
+                    });
+                }
+            }
+
+            var selected = new Dictionary<int, string>();
+            using (var answerCommand = new NpgsqlCommand(@"
+                SELECT exam_question_id, COALESCE(selected_option, '')
+                FROM exam_attempt_answers
+                WHERE attempt_id = @attempt_id", connection, transaction))
+            {
+                answerCommand.Parameters.AddWithValue("@attempt_id", attemptId);
+                using var reader = answerCommand.ExecuteReader();
+                while (reader.Read())
+                    selected[reader.GetInt32(0)] = reader.GetString(1);
+            }
+
+            decimal score = ExamScoringService.CalculateScore(questions, selected);
+
+            using (var answerScoreCommand = new NpgsqlCommand(@"
+                UPDATE exam_attempt_answers aa
+                SET is_correct = UPPER(COALESCE(aa.selected_option, '')) = UPPER(COALESCE(eq.correct_option, '')),
+                    score = CASE
+                        WHEN UPPER(COALESCE(aa.selected_option, '')) = UPPER(COALESCE(eq.correct_option, '')) THEN COALESCE(eq.points, 0)
+                        ELSE 0
+                    END
+                FROM exam_questions eq
+                WHERE aa.exam_question_id = eq.id
+                  AND aa.attempt_id = @attempt_id", connection, transaction))
+            {
+                answerScoreCommand.Parameters.AddWithValue("@attempt_id", attemptId);
+                answerScoreCommand.ExecuteNonQuery();
+            }
+
+            using (var updateAttempt = new NpgsqlCommand(@"
+                UPDATE exam_attempts
+                SET score = @score, submit_time = @now, status = 'SUBMITTED'
+                WHERE id = @attempt_id AND student_id = @student_id", connection, transaction))
+            {
+                updateAttempt.Parameters.AddWithValue("@attempt_id", attemptId);
+                updateAttempt.Parameters.AddWithValue("@student_id", studentId);
+                updateAttempt.Parameters.AddWithValue("@score", score);
+                updateAttempt.Parameters.AddWithValue("@now", DateTime.Now);
+                updateAttempt.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+            return new StudentExamSubmitResultModel
+            {
+                Success = true,
+                Score = score,
+                Message = "Đã nộp bài."
             };
         }
 
@@ -1044,8 +752,8 @@ namespace CourseGuard.Backend.Data
             if (TableExists(connection, "exam_attempts") && TableExists(connection, "exams") && TableExists(connection, "enrollments"))
             {
                 bool hasQuestions = TableExists(connection, "exam_questions");
-                bool hasAnswers = TableExists(connection, "answers");
                 bool hasHiddenResults = TableExists(connection, "student_hidden_results");
+                bool hasAttemptAnswers = TableExists(connection, "exam_attempt_answers");
                 string questionExpression = hasQuestions
                     ? @"(
                         SELECT COUNT(*)
@@ -1053,15 +761,14 @@ namespace CourseGuard.Backend.Data
                         WHERE eq.exam_id = ex.id
                     )"
                     : "0";
-                string correctExpression = hasQuestions && hasAnswers
+                string correctExpression = hasAttemptAnswers
                     ? @"(
                         SELECT COUNT(*)
-                        FROM answers ans
-                        JOIN exam_questions eq ON eq.id = ans.question_id
-                        WHERE ans.attempt_id = a.id
-                          AND UPPER(TRIM(COALESCE(ans.answer_content, ''))) = UPPER(TRIM(COALESCE(eq.correct_option, '')))
+                        FROM exam_attempt_answers aa
+                        WHERE aa.attempt_id = a.id
+                          AND aa.is_correct = TRUE
                     )"
-                    : "0";
+                    : "-1";
                 string hiddenJoin = hasHiddenResults
                     ? "LEFT JOIN student_hidden_results shr ON shr.attempt_id = a.id AND shr.student_id = a.student_id"
                     : string.Empty;
@@ -1115,7 +822,7 @@ namespace CourseGuard.Backend.Data
                         CourseId = reader.GetInt32(2),
                         ExamTitle = reader.GetString(3),
                         CourseName = reader.GetString(4),
-                        CorrectAnswersText = questionCount > 0 ? $"{correctCount}/{questionCount}" : "N/A",
+                        CorrectAnswersText = questionCount > 0 && correctCount >= 0 ? $"{correctCount}/{questionCount}" : questionCount > 0 ? $"N/A/{questionCount}" : "N/A",
                         Score = score,
                         StatusText = BuildResultStatus(score, reader.GetString(6)),
                         ExamStatus = reader.GetString(9)
@@ -1231,15 +938,25 @@ namespace CourseGuard.Backend.Data
             if (!TableExists(connection, "exam_questions"))
                 return review;
 
-            using var questionCommand = new NpgsqlCommand(@"
-                SELECT COALESCE(display_order, 1), COALESCE(question_text, ''),
-                       COALESCE(option_a, ''), COALESCE(option_b, ''),
-                       COALESCE(option_c, ''), COALESCE(option_d, ''),
-                       COALESCE(correct_option, ''), COALESCE(points, 0)
-                FROM exam_questions
-                WHERE exam_id = @exam_id
-                ORDER BY display_order, id", connection);
+            bool hasAttemptAnswers = TableExists(connection, "exam_attempt_answers");
+            string answerJoin = hasAttemptAnswers
+                ? "LEFT JOIN exam_attempt_answers aa ON aa.exam_question_id = eq.id AND aa.attempt_id = @attempt_id"
+                : string.Empty;
+            string selectedExpression = hasAttemptAnswers ? "COALESCE(aa.selected_option, '')" : "''";
+
+            using var questionCommand = new NpgsqlCommand($@"
+                SELECT COALESCE(eq.display_order, 1), COALESCE(eq.question_text, ''),
+                       COALESCE(eq.option_a, ''), COALESCE(eq.option_b, ''),
+                       COALESCE(eq.option_c, ''), COALESCE(eq.option_d, ''),
+                       COALESCE(eq.correct_option, ''), COALESCE(eq.points, 0),
+                       {selectedExpression}
+                FROM exam_questions eq
+                {answerJoin}
+                WHERE eq.exam_id = @exam_id
+                ORDER BY eq.display_order, eq.id", connection);
             questionCommand.Parameters.AddWithValue("@exam_id", review.ExamId);
+            if (hasAttemptAnswers)
+                questionCommand.Parameters.AddWithValue("@attempt_id", attemptId);
             using var qReader = questionCommand.ExecuteReader();
             while (qReader.Read())
             {
@@ -1252,7 +969,8 @@ namespace CourseGuard.Backend.Data
                     OptionC = qReader.GetString(4),
                     OptionD = qReader.GetString(5),
                     CorrectOption = qReader.GetString(6),
-                    Points = qReader.GetDecimal(7)
+                    Points = qReader.GetDecimal(7),
+                    SelectedOption = qReader.GetString(8)
                 });
             }
 
@@ -1318,12 +1036,20 @@ namespace CourseGuard.Backend.Data
             if (TableExists(connection, "exams") && TableExists(connection, "enrollments"))
             {
                 bool hasAttempts = TableExists(connection, "exam_attempts");
+                bool hasQuestions = TableExists(connection, "exam_questions");
                 string attemptsExpression = hasAttempts
                     ? @"(
                         SELECT COUNT(*)
                         FROM exam_attempts ea
                         WHERE ea.exam_id = ex.id
                           AND ea.student_id = @student_id
+                    )"
+                    : "0";
+                string questionExpression = hasQuestions
+                    ? @"(
+                        SELECT COUNT(*)
+                        FROM exam_questions eq
+                        WHERE eq.exam_id = ex.id
                     )"
                     : "0";
 
@@ -1337,7 +1063,9 @@ namespace CourseGuard.Backend.Data
                       AND UPPER(COALESCE(en.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
                       AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
                       AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'
-                      AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)
+                      AND (ex.open_time IS NULL OR ex.open_time <= @now)
+                      AND (ex.close_time IS NULL OR ex.close_time >= @now)
+                      AND {questionExpression} > 0
                       AND (COALESCE(ex.max_attempts, 1) <= 0 OR {attemptsExpression} < COALESCE(ex.max_attempts, 1))
                       AND (
                            COALESCE(ex.title, '') ILIKE @pattern
@@ -1350,6 +1078,7 @@ namespace CourseGuard.Backend.Data
                 command.Parameters.AddWithValue("@student_id", studentId);
                 command.Parameters.AddWithValue("@pattern", pattern);
                 command.Parameters.AddWithValue("@limit", safeLimit);
+                command.Parameters.AddWithValue("@now", DateTime.Now);
                 using var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
@@ -1445,6 +1174,7 @@ namespace CourseGuard.Backend.Data
                 return 0;
 
             bool hasAttempts = TableExists(connection, "exam_attempts");
+            bool hasQuestions = TableExists(connection, "exam_questions");
             string attemptsExpression = hasAttempts
                 ? @"(
                     SELECT COUNT(*)
@@ -1453,11 +1183,19 @@ namespace CourseGuard.Backend.Data
                       AND ea.student_id = @student_id
                 )"
                 : "0";
+            string questionExpression = hasQuestions
+                ? @"(
+                    SELECT COUNT(*)
+                    FROM exam_questions eq
+                    WHERE eq.exam_id = ex.id
+                )"
+                : "0";
 
             string timeFilter = openNowOnly
-                ? @"AND (ex.open_time IS NULL OR ex.open_time <= CURRENT_TIMESTAMP)
-                   AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)"
-                : @"AND (ex.close_time IS NULL OR ex.close_time >= CURRENT_TIMESTAMP)";
+                ? @"AND (ex.open_time IS NULL OR ex.open_time <= @now)
+                   AND (ex.close_time IS NULL OR ex.close_time >= @now)"
+                : @"AND (ex.open_time IS NULL OR ex.open_time <= @now)
+                   AND (ex.close_time IS NULL OR ex.close_time >= @now)";
 
             string query = $@"
                 SELECT COUNT(*)
@@ -1469,12 +1207,163 @@ namespace CourseGuard.Backend.Data
                   AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
                   AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'
                   {timeFilter}
+                  AND {questionExpression} > 0
                   AND (COALESCE(ex.max_attempts, 1) <= 0 OR {attemptsExpression} < COALESCE(ex.max_attempts, 1))";
 
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@student_id", studentId);
+            command.Parameters.AddWithValue("@now", DateTime.Now);
             object? result = command.ExecuteScalar();
             return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+        }
+
+        private static void EnsureStudentExamTakingSchema(NpgsqlConnection connection)
+        {
+            if (!TableExists(connection, "exam_attempts") || !TableExists(connection, "exam_questions"))
+                return;
+
+            using var command = new NpgsqlCommand(@"
+                CREATE TABLE IF NOT EXISTS exam_attempt_answers (
+                    attempt_id INT NOT NULL REFERENCES exam_attempts(id) ON DELETE CASCADE,
+                    exam_question_id INT NOT NULL REFERENCES exam_questions(id) ON DELETE CASCADE,
+                    selected_option CHAR(1) NOT NULL,
+                    is_correct BOOLEAN,
+                    score NUMERIC(6,2) NOT NULL DEFAULT 0,
+                    answered_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (attempt_id, exam_question_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_exam_attempt_answers_attempt ON exam_attempt_answers(attempt_id);
+                CREATE INDEX IF NOT EXISTS idx_exam_attempt_answers_question ON exam_attempt_answers(exam_question_id);", connection);
+            command.ExecuteNonQuery();
+        }
+
+        private static int GetExistingInProgressAttempt(NpgsqlConnection connection, NpgsqlTransaction transaction, int studentId, int examId)
+        {
+            using var command = new NpgsqlCommand(@"
+                SELECT id
+                FROM exam_attempts
+                WHERE student_id = @student_id
+                  AND exam_id = @exam_id
+                  AND UPPER(COALESCE(status, '')) = 'IN_PROGRESS'
+                ORDER BY start_time DESC, id DESC
+                LIMIT 1", connection, transaction);
+            command.Parameters.AddWithValue("@student_id", studentId);
+            command.Parameters.AddWithValue("@exam_id", examId);
+            object? result = command.ExecuteScalar();
+            return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+        }
+
+        private static bool CanStartStudentExam(NpgsqlConnection connection, NpgsqlTransaction transaction, int studentId, int examId)
+        {
+            using var command = new NpgsqlCommand(@"
+                SELECT ex.open_time,
+                       ex.close_time,
+                       COALESCE(ex.max_attempts, 1),
+                       (SELECT COUNT(*) FROM exam_attempts a WHERE a.exam_id = ex.id AND a.student_id = @student_id)::int,
+                       (SELECT COUNT(*) FROM exam_questions eq WHERE eq.exam_id = ex.id)::int
+                FROM exams ex
+                JOIN enrollments en ON en.course_id = ex.course_id
+                LEFT JOIN courses c ON c.id = ex.course_id
+                WHERE ex.id = @exam_id
+                  AND en.student_id = @student_id
+                  AND UPPER(COALESCE(en.status, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
+                  AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'", connection, transaction);
+            command.Parameters.AddWithValue("@student_id", studentId);
+            command.Parameters.AddWithValue("@exam_id", examId);
+            using var reader = command.ExecuteReader();
+            if (!reader.Read())
+                return false;
+
+            DateTime? openTime = reader.IsDBNull(0) ? null : reader.GetDateTime(0);
+            DateTime? closeTime = reader.IsDBNull(1) ? null : reader.GetDateTime(1);
+            int maxAttempts = reader.GetInt32(2);
+            int attemptCount = reader.GetInt32(3);
+            int questionCount = reader.GetInt32(4);
+            DateTime now = DateTime.Now;
+            return questionCount > 0
+                && (!openTime.HasValue || openTime.Value <= now)
+                && (!closeTime.HasValue || closeTime.Value >= now)
+                && (maxAttempts <= 0 || attemptCount < maxAttempts);
+        }
+
+        private static bool OwnsInProgressAttempt(NpgsqlConnection connection, NpgsqlTransaction transaction, int studentId, int attemptId)
+        {
+            using var command = new NpgsqlCommand(@"
+                SELECT COUNT(*)::int
+                FROM exam_attempts
+                WHERE id = @attempt_id
+                  AND student_id = @student_id
+                  AND UPPER(COALESCE(status, '')) = 'IN_PROGRESS'", connection, transaction);
+            command.Parameters.AddWithValue("@attempt_id", attemptId);
+            command.Parameters.AddWithValue("@student_id", studentId);
+            return Convert.ToInt32(command.ExecuteScalar() ?? 0) > 0;
+        }
+
+        private static StudentExamTakingModel? LoadStudentExamSession(NpgsqlConnection connection, NpgsqlTransaction transaction, int studentId, int attemptId)
+        {
+            using var headerCommand = new NpgsqlCommand(@"
+                SELECT a.id, ex.id, COALESCE(ex.title, ''), COALESCE(c.name, ''),
+                       COALESCE(ex.duration_minutes, 0), COALESCE(a.start_time, @now)
+                FROM exam_attempts a
+                JOIN exams ex ON ex.id = a.exam_id
+                LEFT JOIN courses c ON c.id = ex.course_id
+                WHERE a.id = @attempt_id
+                  AND a.student_id = @student_id
+                  AND UPPER(COALESCE(a.status, '')) = 'IN_PROGRESS'", connection, transaction);
+            headerCommand.Parameters.AddWithValue("@attempt_id", attemptId);
+            headerCommand.Parameters.AddWithValue("@student_id", studentId);
+            headerCommand.Parameters.AddWithValue("@now", DateTime.Now);
+            using var reader = headerCommand.ExecuteReader();
+            if (!reader.Read())
+                return null;
+
+            var session = new StudentExamTakingModel
+            {
+                AttemptId = reader.GetInt32(0),
+                ExamId = reader.GetInt32(1),
+                ExamTitle = reader.GetString(2),
+                CourseName = reader.GetString(3),
+                DurationMinutes = reader.GetInt32(4),
+                StartTime = reader.GetDateTime(5)
+            };
+            reader.Close();
+
+            using var questionCommand = new NpgsqlCommand(@"
+                SELECT eq.id, COALESCE(eq.display_order, 1), COALESCE(eq.question_text, ''),
+                       COALESCE(eq.option_a, ''), COALESCE(eq.option_b, ''),
+                       COALESCE(eq.option_c, ''), COALESCE(eq.option_d, ''),
+                       COALESCE(aa.selected_option, '')
+                FROM exam_questions eq
+                JOIN exam_attempts a ON a.exam_id = eq.exam_id
+                LEFT JOIN exam_attempt_answers aa ON aa.attempt_id = a.id AND aa.exam_question_id = eq.id
+                WHERE a.id = @attempt_id
+                ORDER BY COALESCE(eq.display_order, 1), eq.id", connection, transaction);
+            questionCommand.Parameters.AddWithValue("@attempt_id", attemptId);
+            using var qReader = questionCommand.ExecuteReader();
+            while (qReader.Read())
+            {
+                session.Questions.Add(new StudentExamTakingQuestionModel
+                {
+                    Id = qReader.GetInt32(0),
+                    DisplayOrder = qReader.GetInt32(1),
+                    QuestionText = qReader.GetString(2),
+                    OptionA = qReader.GetString(3),
+                    OptionB = qReader.GetString(4),
+                    OptionC = qReader.GetString(5),
+                    OptionD = qReader.GetString(6),
+                    SelectedOption = qReader.GetString(7)
+                });
+            }
+
+            return session;
+        }
+
+        private static string NormalizeOption(string? value)
+        {
+            string option = (value ?? string.Empty).Trim().ToUpperInvariant();
+            return option is "A" or "B" or "C" or "D" ? option : string.Empty;
         }
 
         private static string BuildResultStatus(double score, string rawStatus)
@@ -2276,20 +2165,21 @@ namespace CourseGuard.Backend.Data
             const string query = @"
                 WITH updated AS (
                     UPDATE DEVICES
-                    SET last_active = CURRENT_TIMESTAMP,
+                    SET last_active = @now,
                         ip_address = @ip_address,
                         status = 'ACTIVE'
                     WHERE user_id = @user_id AND device_name = @device_name
                     RETURNING id
                 )
                 INSERT INTO DEVICES (user_id, device_name, ip_address, status, last_active)
-                SELECT @user_id, @device_name, @ip_address, 'ACTIVE', CURRENT_TIMESTAMP
+                SELECT @user_id, @device_name, @ip_address, 'ACTIVE', @now
                 WHERE NOT EXISTS (SELECT 1 FROM updated)";
             
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@user_id", userId);
             command.Parameters.AddWithValue("@device_name", deviceName ?? "Unknown Device");
             command.Parameters.AddWithValue("@ip_address", ipAddress ?? "Unknown IP");
+            command.Parameters.AddWithValue("@now", DateTime.Now);
 
             command.ExecuteNonQuery();
         }
@@ -2679,7 +2569,7 @@ namespace CourseGuard.Backend.Data
 
             const string query = @"
                 INSERT INTO AUDIT_LOGS (USER_ID, ACTION, TARGET_TABLE, TARGET_ID, DETAILS, IP_ADDRESS, CREATED_AT)
-                VALUES (@user_id, @action, 'USERS', @target_id, @details, @ip_address, CURRENT_TIMESTAMP)";
+                VALUES (@user_id, @action, 'USERS', @target_id, @details, @ip_address, @now)";
 
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@user_id", userId.HasValue ? (object)userId.Value : DBNull.Value);
@@ -2687,6 +2577,7 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@target_id", userId.HasValue ? (object)userId.Value : DBNull.Value);
             command.Parameters.AddWithValue("@details", details ?? string.Empty);
             command.Parameters.AddWithValue("@ip_address", ipAddress ?? string.Empty);
+            command.Parameters.AddWithValue("@now", DateTime.Now);
             command.ExecuteNonQuery();
 
             if (string.Equals(action, "LOGIN", StringComparison.OrdinalIgnoreCase))
@@ -2704,7 +2595,7 @@ namespace CourseGuard.Backend.Data
 
             const string query = @"
                 INSERT INTO AUDIT_LOGS (USER_ID, ACTION, TARGET_TABLE, TARGET_ID, DETAILS, IP_ADDRESS, CREATED_AT)
-                VALUES (@user_id, @action, 'USERS', @target_id, @details, @ip_address, CURRENT_TIMESTAMP)";
+                VALUES (@user_id, @action, 'USERS', @target_id, @details, @ip_address, @now)";
 
             await using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@user_id", userId.HasValue ? (object)userId.Value : DBNull.Value);
@@ -2712,6 +2603,7 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@target_id", userId.HasValue ? (object)userId.Value : DBNull.Value);
             command.Parameters.AddWithValue("@details", details ?? string.Empty);
             command.Parameters.AddWithValue("@ip_address", ipAddress ?? string.Empty);
+            command.Parameters.AddWithValue("@now", DateTime.Now);
             await command.ExecuteNonQueryAsync(cancellationToken);
 
             if (string.Equals(action, "LOGIN", StringComparison.OrdinalIgnoreCase))
@@ -3040,20 +2932,21 @@ namespace CourseGuard.Backend.Data
             const string query = @"
                 WITH updated AS (
                     UPDATE DEVICES
-                    SET last_active = CURRENT_TIMESTAMP,
+                    SET last_active = @now,
                         ip_address = @ip_address,
                         status = 'ACTIVE'
                     WHERE user_id = @user_id AND device_name = @device_name
                     RETURNING id
                 )
                 INSERT INTO DEVICES (user_id, device_name, ip_address, status, last_active)
-                SELECT @user_id, @device_name, @ip_address, 'ACTIVE', CURRENT_TIMESTAMP
+                SELECT @user_id, @device_name, @ip_address, 'ACTIVE', @now
                 WHERE NOT EXISTS (SELECT 1 FROM updated)";
 
             await using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@user_id", userId);
             command.Parameters.AddWithValue("@device_name", deviceName ?? "Unknown Device");
             command.Parameters.AddWithValue("@ip_address", ipAddress ?? "Unknown IP");
+            command.Parameters.AddWithValue("@now", DateTime.Now);
 
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
@@ -3092,6 +2985,207 @@ namespace CourseGuard.Backend.Data
             }
 
             return users;
+        }
+
+        public async Task<List<TeacherLessonModel>> GetStudentLessonsAsync(int studentId, CancellationToken cancellationToken = default)
+        {
+            var result = new List<TeacherLessonModel>();
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            const string query = @"
+                SELECT l.id,
+                       c.id AS course_id,
+                       c.name AS course_name,
+                       l.title,
+                       COALESCE(l.content, '') AS content,
+                       l.publish_at,
+                       l.status,
+                       COALESCE(l.file_name, '') AS file_name,
+                       COALESCE(l.file_size, 0) AS file_size,
+                       (l.file_content IS NOT NULL) AS has_stored_content
+                FROM teacher_lessons l
+                JOIN courses c ON c.id = l.course_id
+                JOIN enrollments e ON e.course_id = c.id
+                WHERE e.student_id = @student_id
+                  AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'
+                  AND UPPER(COALESCE(l.status, '')) = 'PUBLISHED'
+                ORDER BY l.publish_at DESC, l.id DESC";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@student_id", studentId);
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                result.Add(new TeacherLessonModel
+                {
+                    Id = reader.GetInt32(0),
+                    CourseId = reader.GetInt32(1),
+                    CourseName = reader.GetString(2),
+                    Title = reader.GetString(3),
+                    Content = reader.GetString(4),
+                    PublishAt = reader.IsDBNull(5) ? null : reader.GetDateTime(5),
+                    Status = reader.GetString(6),
+                    FileName = reader.GetString(7),
+                    FileSize = reader.GetInt64(8),
+                    HasStoredContent = reader.GetBoolean(9)
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<byte[]?> GetStudentLessonFileContentAsync(int lessonId, int studentId, CancellationToken cancellationToken = default)
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            await using var command = new NpgsqlCommand(@"
+                SELECT l.file_content
+                FROM teacher_lessons l
+                JOIN courses c ON c.id = l.course_id
+                JOIN enrollments e ON e.course_id = c.id
+                WHERE l.id = @lesson_id
+                  AND e.student_id = @student_id
+                  AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'
+                  AND UPPER(COALESCE(l.status, '')) = 'PUBLISHED'", connection);
+            command.Parameters.AddWithValue("@lesson_id", lessonId);
+            command.Parameters.AddWithValue("@student_id", studentId);
+            
+            var result = await command.ExecuteScalarAsync(cancellationToken);
+            return result == null || result == DBNull.Value ? null : (byte[])result;
+        }
+
+        public async Task<List<StudentAssignmentRow>> GetStudentAssignmentsAsync(int studentId, CancellationToken cancellationToken = default)
+        {
+            var result = new List<StudentAssignmentRow>();
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            const string query = @"
+                SELECT a.id AS assignment_id,
+                       c.id AS course_id,
+                       c.name AS course_name,
+                       a.title,
+                       COALESCE(a.description, '') AS description,
+                       a.due_at AS due_date,
+                       a.status,
+                       COALESCE(a.file_name, '') AS teacher_file_name,
+                       COALESCE(a.file_size, 0) AS teacher_file_size,
+                       (a.file_content IS NOT NULL) AS has_teacher_file,
+                       s.id AS submission_id,
+                       COALESCE(s.file_name, '') AS student_file_name,
+                       s.submitted_at,
+                       s.score,
+                       COALESCE(s.feedback, '') AS feedback
+                FROM teacher_assignments a
+                JOIN courses c ON c.id = a.course_id
+                JOIN enrollments e ON e.course_id = c.id
+                LEFT JOIN assignment_submissions s ON s.assignment_id = a.id AND s.student_id = e.student_id
+                WHERE e.student_id = @student_id
+                  AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'
+                ORDER BY a.due_at DESC, a.id DESC";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@student_id", studentId);
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                result.Add(new StudentAssignmentRow
+                {
+                    AssignmentId = reader.GetInt32(0),
+                    CourseId = reader.GetInt32(1),
+                    CourseName = reader.GetString(2),
+                    Title = reader.GetString(3),
+                    Description = reader.GetString(4),
+                    DueDate = reader.GetDateTime(5),
+                    Status = reader.GetString(6),
+                    TeacherFileName = reader.GetString(7),
+                    TeacherFileSize = reader.GetInt64(8),
+                    HasTeacherFile = reader.GetBoolean(9),
+                    SubmissionId = reader.IsDBNull(10) ? null : reader.GetInt32(10),
+                    StudentFileName = reader.GetString(11),
+                    SubmittedAt = reader.IsDBNull(12) ? null : reader.GetDateTime(12),
+                    Score = reader.IsDBNull(13) ? null : reader.GetDecimal(13),
+                    Feedback = reader.GetString(14)
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<byte[]?> GetAssignmentContentAsync(int assignmentId, int studentId, CancellationToken cancellationToken = default)
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            
+            const string query = @"
+                SELECT a.file_content
+                FROM teacher_assignments a
+                JOIN courses c ON c.id = a.course_id
+                JOIN enrollments e ON e.course_id = c.id
+                WHERE a.id = @assignment_id
+                  AND e.student_id = @student_id
+                  AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@assignment_id", assignmentId);
+            command.Parameters.AddWithValue("@student_id", studentId);
+            
+            object? value = await command.ExecuteScalarAsync(cancellationToken);
+            return value == null || value == DBNull.Value ? null : (byte[])value;
+        }
+
+        public async Task<bool> SubmitAssignmentAsync(AssignmentSubmissionModel submission, CancellationToken cancellationToken = default)
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            const string checkQuery = "SELECT id FROM assignment_submissions WHERE assignment_id = @assignment_id AND student_id = @student_id LIMIT 1";
+            await using var checkCommand = new NpgsqlCommand(checkQuery, connection);
+            checkCommand.Parameters.AddWithValue("@assignment_id", submission.AssignmentId);
+            checkCommand.Parameters.AddWithValue("@student_id", submission.StudentId);
+            
+            object? existingId = await checkCommand.ExecuteScalarAsync(cancellationToken);
+
+            string query;
+            if (existingId != null)
+            {
+                query = @"
+                    UPDATE assignment_submissions SET
+                        file_name = @file_name,
+                        content_type = @content_type,
+                        file_size = @file_size,
+                        file_content = @file_content,
+                        submitted_at = @submitted_at
+                    WHERE id = @id";
+            }
+            else
+            {
+                query = @"
+                    INSERT INTO assignment_submissions (assignment_id, student_id, file_name, content_type, file_size, file_content, submitted_at)
+                    VALUES (@assignment_id, @student_id, @file_name, @content_type, @file_size, @file_content, @submitted_at)";
+            }
+
+            await using var command = new NpgsqlCommand(query, connection);
+            if (existingId != null)
+                command.Parameters.AddWithValue("@id", existingId);
+            
+            command.Parameters.AddWithValue("@assignment_id", submission.AssignmentId);
+            command.Parameters.AddWithValue("@student_id", submission.StudentId);
+            command.Parameters.AddWithValue("@file_name", submission.FileName ?? string.Empty);
+            command.Parameters.AddWithValue("@content_type", submission.ContentType ?? string.Empty);
+            command.Parameters.AddWithValue("@file_size", submission.FileSize);
+            command.Parameters.AddWithValue("@file_content", submission.FileContent ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@submitted_at", DateTime.Now);
+
+            int rows = await command.ExecuteNonQueryAsync(cancellationToken);
+            return rows > 0;
         }
 
         /// <summary>

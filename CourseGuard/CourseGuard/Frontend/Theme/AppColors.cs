@@ -61,6 +61,7 @@ namespace CourseGuard.Frontend.Theme
             // Borders
             public static readonly Color Border       = Color.FromArgb(20, 255, 255, 255);
             public static readonly Color BorderStrong = Color.FromArgb(40, 255, 255, 255);
+            public static readonly Color GridBorder   = Color.FromArgb(40, 40, 55);
 
             // Chart helpers
             public static readonly Color ChartFill    = Color.FromArgb(40, 59, 130, 246);
@@ -92,6 +93,7 @@ namespace CourseGuard.Frontend.Theme
             // Borders
             public static readonly Color Border       = ColorTranslator.FromHtml("#E2E8F0");
             public static readonly Color BorderStrong = ColorTranslator.FromHtml("#CBD5E1");
+            public static readonly Color GridBorder   = ColorTranslator.FromHtml("#E2E8F0");
 
             // Chart helpers
             public static readonly Color ChartFill    = Color.FromArgb(25, 59, 130, 246);
@@ -143,6 +145,7 @@ namespace CourseGuard.Frontend.Theme
         // ── Borders ─────────────────────────────────────────────────
         public static Color Border       => _isDarkMode ? Dark.Border       : Light.Border;
         public static Color BorderStrong => _isDarkMode ? Dark.BorderStrong : Light.BorderStrong;
+        public static Color GridBorder   => _isDarkMode ? Dark.GridBorder   : Light.GridBorder;
 
         // ── Chart / Data-viz ────────────────────────────────────────
         public static Color ChartLine    => AccentBlue;                                        // Always blue

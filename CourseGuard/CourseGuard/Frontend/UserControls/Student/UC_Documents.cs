@@ -28,6 +28,8 @@ namespace CourseGuard.Frontend.UserControls.Student
         private Button btnOpen = null!;
         private DataGridView dgvDocuments = null!;
         private Label lblHint = null!;
+        private RoundedPanel _documentsBody = null!;
+        private Label _emptyStateLabel = null!;
 
         public UC_Documents()
         {
@@ -154,7 +156,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         private void BuildCardLayout()
         {
             btnRefresh.Text = "Tải lại";
-            btnOpen.Text = "Mở/Tải";
+            btnOpen.Text = "Tải xuống";
 
             var root = StudentTabChrome.CreateRoot(this);
             root.Controls.Add(StudentTabChrome.CreateHeader(
@@ -171,7 +173,8 @@ namespace CourseGuard.Frontend.UserControls.Student
             };
             content.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
             content.RowStyles.Add(new RowStyle(SizeType.Absolute, 42f));
-            content.Controls.Add(StudentTabChrome.CreateDataCard("Danh sách tài liệu", dgvDocuments), 0, 0);
+            _documentsBody = StudentTabChrome.CreateTableBody(dgvDocuments, out _emptyStateLabel);
+            content.Controls.Add(StudentTabChrome.CreateDataCard("Danh sách tài liệu", _documentsBody), 0, 0);
             lblHint.Dock = DockStyle.Fill;
             lblHint.TextAlign = ContentAlignment.MiddleLeft;
             lblHint.Margin = new Padding(0, 12, 0, 0);
@@ -234,6 +237,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             using var connection = _dbContext.CreateConnection();
             connection.Open();
+            EnsureMaterialContentSchema(connection);
 
             const string query = @"
                 SELECT m.ID,
@@ -241,7 +245,10 @@ namespace CourseGuard.Frontend.UserControls.Student
                        COALESCE(m.FILE_NAME, '') AS FILE_NAME,
                        COALESCE(m.FILE_PATH, '') AS FILE_PATH,
                        COALESCE(u.FULL_NAME, u.USERNAME, 'Không rõ') AS UPLOADED_BY,
-                       m.UPLOADED_AT
+                       m.UPLOADED_AT,
+                       COALESCE(m.CONTENT_TYPE, '') AS CONTENT_TYPE,
+                       COALESCE(m.FILE_SIZE, 0) AS FILE_SIZE,
+                       m.FILE_CONTENT IS NOT NULL AS HAS_CONTENT
                 FROM MATERIALS m
                 JOIN COURSES c ON c.ID = m.COURSE_ID
                 JOIN ENROLLMENTS e ON e.COURSE_ID = c.ID
@@ -266,7 +273,10 @@ namespace CourseGuard.Frontend.UserControls.Student
                     FilePath = path,
                     FileType = GetFileType(path, reader.GetString(2)),
                     UploadedBy = reader.GetString(4),
-                    UploadedAt = reader.IsDBNull(5) ? DateTime.MinValue : reader.GetDateTime(5)
+                    UploadedAt = reader.IsDBNull(5) ? DateTime.MinValue : reader.GetDateTime(5),
+                    ContentType = reader.GetString(6),
+                    FileSize = reader.GetInt64(7),
+                    HasStoredContent = reader.GetBoolean(8)
                 });
             }
 
@@ -329,9 +339,11 @@ namespace CourseGuard.Frontend.UserControls.Student
             table.Columns.Add("Khóa học", typeof(string));
             table.Columns.Add("Tên tài liệu", typeof(string));
             table.Columns.Add("Loại", typeof(string));
+            table.Columns.Add("Kích thước", typeof(string));
             table.Columns.Add("Người đăng", typeof(string));
             table.Columns.Add("Ngày đăng", typeof(string));
             table.Columns.Add("Đường dẫn", typeof(string));
+            table.Columns.Add("HasContent", typeof(bool));
 
             foreach (var row in rows)
             {
@@ -340,14 +352,22 @@ namespace CourseGuard.Frontend.UserControls.Student
                     row.CourseName,
                     row.FileName,
                     row.FileType,
+                    FormatSize(row.FileSize),
                     row.UploadedBy,
                     row.UploadedAt == DateTime.MinValue ? "" : row.UploadedAt.ToString("dd/MM/yyyy HH:mm"),
-                    row.FilePath);
+                    row.FilePath,
+                    row.HasStoredContent);
             }
 
             _bindingSource.DataSource = table;
             dgvDocuments.DataSource = _bindingSource;
             dgvDocuments.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            bool hasRows = table.Rows.Count > 0;
+            string emptyMessage = string.IsNullOrWhiteSpace(txtSearch.Text)
+                ? "Chưa có tài liệu trong các khóa học đang học."
+                : "Không tìm thấy tài liệu phù hợp.";
+            StudentTabChrome.SetTableState(_documentsBody, dgvDocuments, _emptyStateLabel, hasRows, emptyMessage);
+            btnOpen.Enabled = hasRows;
             lblHint.Text = rows.Count == 0
                 ? "Không có tài liệu phù hợp. Tài liệu chỉ hiển thị khi bạn đã được duyệt tham gia khóa học."
                 : "Chỉ hiển thị tài liệu thuộc các khóa học bạn đã được duyệt tham gia.";
@@ -355,6 +375,10 @@ namespace CourseGuard.Frontend.UserControls.Student
             DataGridViewColumn? idColumn = dgvDocuments.Columns["ID"];
             if (idColumn != null)
                 idColumn.Visible = false;
+            if (dgvDocuments.Columns["Đường dẫn"] != null)
+                dgvDocuments.Columns["Đường dẫn"]!.Visible = false;
+            if (dgvDocuments.Columns["HasContent"] != null)
+                dgvDocuments.Columns["HasContent"]!.Visible = false;
 
             dgvDocuments.ClearSelection();
             dgvDocuments.CurrentCell = null;
@@ -368,7 +392,38 @@ namespace CourseGuard.Frontend.UserControls.Student
                 return;
             }
 
+            int materialId = Convert.ToInt32(dgvDocuments.CurrentRow.Cells["ID"].Value);
+            string fileName = dgvDocuments.CurrentRow.Cells["Tên tài liệu"].Value?.ToString() ?? "tailieu";
+            bool hasContent = Convert.ToBoolean(dgvDocuments.CurrentRow.Cells["HasContent"].Value);
             string path = dgvDocuments.CurrentRow.Cells["Đường dẫn"].Value?.ToString() ?? string.Empty;
+
+            if (hasContent)
+            {
+                byte[]? content = LoadDocumentContent(materialId);
+                if (content == null || content.Length == 0)
+                {
+                    MetaTheme.ShowModernDialog("Không tìm thấy nội dung file để tải.", "Thông báo");
+                    return;
+                }
+
+                using var save = new SaveFileDialog
+                {
+                    FileName = fileName,
+                    Filter = "Tất cả file (*.*)|*.*"
+                };
+                if (save.ShowDialog(FindForm()) != DialogResult.OK)
+                    return;
+
+                File.WriteAllBytes(save.FileName, content);
+                MetaTheme.ShowModernDialog("Đã tải tài liệu.", "Thông báo");
+                try
+                {
+                    Process.Start(new ProcessStartInfo(save.FileName) { UseShellExecute = true });
+                }
+                catch { /* Ignore if no default app */ }
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(path))
             {
                 MetaTheme.ShowModernDialog("Tài liệu này chưa có đường dẫn file.", "Thông báo");
@@ -386,6 +441,37 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
         }
 
+        private byte[]? LoadDocumentContent(int materialId)
+        {
+            int studentId = UserSessionContext.CurrentUserId ?? 0;
+            using var connection = _dbContext.CreateConnection();
+            connection.Open();
+            EnsureMaterialContentSchema(connection);
+            using var command = new NpgsqlCommand(@"
+                SELECT m.file_content
+                FROM materials m
+                JOIN courses c ON c.id = m.course_id
+                JOIN enrollments e ON e.course_id = c.id
+                WHERE m.id = @material_id
+                  AND e.student_id = @student_id
+                  AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'", connection);
+            command.Parameters.AddWithValue("@material_id", materialId);
+            command.Parameters.AddWithValue("@student_id", studentId);
+            object? value = command.ExecuteScalar();
+            return value == null || value == DBNull.Value ? null : (byte[])value;
+        }
+
+        private static void EnsureMaterialContentSchema(NpgsqlConnection connection)
+        {
+            using var command = new NpgsqlCommand(@"
+                ALTER TABLE materials
+                    ADD COLUMN IF NOT EXISTS content_type VARCHAR(120),
+                    ADD COLUMN IF NOT EXISTS file_size BIGINT NOT NULL DEFAULT 0,
+                    ADD COLUMN IF NOT EXISTS file_content BYTEA;", connection);
+            command.ExecuteNonQuery();
+        }
+
         private static string GetFileType(string path, string fileName)
         {
             string extension = Path.GetExtension(path);
@@ -397,6 +483,17 @@ namespace CourseGuard.Frontend.UserControls.Student
                 : extension.TrimStart('.').ToUpperInvariant();
         }
 
+        private static string FormatSize(long bytes)
+        {
+            if (bytes <= 0)
+                return "";
+            if (bytes < 1024)
+                return $"{bytes} B";
+            if (bytes < 1024 * 1024)
+                return $"{bytes / 1024d:0.#} KB";
+            return $"{bytes / 1024d / 1024d:0.#} MB";
+        }
+
         private sealed class StudentDocumentRow
         {
             public int Id { get; init; }
@@ -406,6 +503,9 @@ namespace CourseGuard.Frontend.UserControls.Student
             public string FileType { get; init; } = string.Empty;
             public string UploadedBy { get; init; } = string.Empty;
             public DateTime UploadedAt { get; init; }
+            public string ContentType { get; init; } = string.Empty;
+            public long FileSize { get; init; }
+            public bool HasStoredContent { get; init; }
         }
     }
 }

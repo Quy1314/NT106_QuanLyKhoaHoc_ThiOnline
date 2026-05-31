@@ -59,8 +59,8 @@ namespace CourseGuard.Frontend.Forms.Student
             // Sidebar docks Left on Form
             _sidebar = new SidebarPanel { Dock = DockStyle.Left };
             _sidebar.SetNavItems(
-                new[] { "Tổng quan", "Tìm khóa học", "Khóa học của tôi", "Bài kiểm tra", "Kết quả", "Tài liệu", "Lịch học", "Tin nhắn", "Thông báo", "Hồ sơ" },
-                new[] { "home", "search", "folder-check", "clipboard-check", "chart", "document", "calendar", "message", "bell", "user" }
+                new[] { "Tổng quan", "Tìm khóa học", "Khóa học của tôi", "Bài kiểm tra", "Bài tập", "Kết quả", "Tài liệu", "Lịch học", "Tin nhắn", "Thông báo", "Hồ sơ" },
+                new[] { "home", "search", "folder-check", "clipboard-check", "document-text", "chart", "document", "calendar", "message", "bell", "user" }
             );
             _sidebar.NavItemClicked += Sidebar_NavItemClicked;
 
@@ -199,8 +199,9 @@ namespace CourseGuard.Frontend.Forms.Student
                 { "Tìm khóa học", () => new UC_CourseList() },
                 { "Khóa học của tôi", () => new UC_MyCourses() },
                 { "Bài kiểm tra", () => new UC_TakeExam() },
+                { "Bài tập",      () => new UC_StudentAssignments() },
                 { "Kết quả",      () => new UC_Result() },
-                { "Tài liệu",     () => new UC_Documents() },
+                { "Tài liệu",     () => new UC_StudentLessons() },
                 { "Lịch học",     () => new UC_Schedule() },
                 { "Tin nhắn",     () => new UC_Chat() },
                 { "Thông báo",    () => new UC_Notification() },

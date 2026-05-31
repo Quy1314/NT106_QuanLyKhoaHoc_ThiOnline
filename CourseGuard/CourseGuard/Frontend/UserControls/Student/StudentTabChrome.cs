@@ -167,6 +167,54 @@ namespace CourseGuard.Frontend.UserControls.Student
             return body;
         }
 
+        public static RoundedPanel CreateTableBody(DataGridView grid, out Label emptyLabel)
+        {
+            var body = new RoundedPanel
+            {
+                Dock = DockStyle.Fill,
+                FillColor = AppColors.BgCard,
+                BorderColor = Color.Transparent,
+                CornerRadius = 10,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+
+            emptyLabel = new Label
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = false,
+                BackColor = Color.Transparent,
+                ForeColor = AppColors.TextMuted,
+                Font = AppFonts.Body,
+                TextAlign = ContentAlignment.MiddleCenter,
+                UseCompatibleTextRendering = false,
+                Visible = false
+            };
+
+            grid.Dock = DockStyle.Fill;
+            grid.Margin = Padding.Empty;
+            body.Controls.Add(grid);
+            body.Controls.Add(emptyLabel);
+            return body;
+        }
+
+        public static void SetTableState(RoundedPanel body, DataGridView grid, Label emptyLabel, bool showTable, string emptyMessage)
+        {
+            Color emptyFill = AppColors.IsDarkMode ? AppColors.BgCardHover : ColorTranslator.FromHtml("#F8FAFC");
+            body.Padding = showTable ? Padding.Empty : new Padding(18);
+            body.FillColor = showTable ? AppColors.BgCard : emptyFill;
+            body.BorderColor = showTable ? Color.Transparent : AppColors.Border;
+            body.BackColor = AppColors.BgCard;
+            grid.Visible = showTable;
+            emptyLabel.Text = emptyMessage;
+            emptyLabel.BackColor = emptyFill;
+            emptyLabel.ForeColor = AppColors.TextMuted;
+            emptyLabel.Visible = !showTable;
+            if (!showTable)
+                emptyLabel.BringToFront();
+            body.Invalidate();
+        }
+
         public static RoundedPanel CreateCard()
         {
             return new RoundedPanel
