@@ -1,5 +1,8 @@
+using System;
 using System.Data;
+using System.Globalization;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using CourseGuard.Backend.Models;
 using CourseGuard.Frontend.Forms.Teacher;
 using CourseGuard.Frontend.Theme;
@@ -37,9 +40,24 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         protected override async Task AddAsync()
         {
             using var dialog = new TeacherExamDialog(Controller.GetCourses(TeacherId));
-            if (dialog.ShowDialog(FindForm()) == System.Windows.Forms.DialogResult.OK)
+            if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                Controller.CreateExam(TeacherId, new TeacherExamModel { CourseId = dialog.CourseId, Title = dialog.ItemTitle, OpenTime = dialog.SelectedDate, CloseTime = dialog.SelectedDate.AddHours(1), DurationMinutes = 60, MaxAttempts = 1, Status = WorkflowConstants.ExamStatus.Draft });
+                if (string.Equals(dialog.Status, WorkflowConstants.ExamStatus.Active, StringComparison.OrdinalIgnoreCase))
+                {
+                    MetaTheme.ShowModernDialog("Bài kiểm tra cần được tạo ở trạng thái nháp, thêm câu hỏi, rồi mới kích hoạt.", "Chưa thể kích hoạt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                Controller.CreateExam(TeacherId, new TeacherExamModel
+                {
+                    CourseId = dialog.CourseId,
+                    Title = dialog.ItemTitle,
+                    OpenTime = dialog.OpenTime,
+                    CloseTime = dialog.CloseTime,
+                    DurationMinutes = dialog.DurationMinutes,
+                    MaxAttempts = dialog.MaxAttempts,
+                    Status = dialog.Status
+                });
                 await LoadDataAsync();
             }
         }
@@ -47,18 +65,39 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         protected override async Task EditAsync()
         {
             int id = CurrentInt("Id");
-            if (id <= 0) return;
-            int currentCourseId = CurrentInt("CourseId");
-            using var dialog = new TeacherSimpleItemDialog("Sửa bài kiểm tra", Controller.GetCourses(TeacherId), CurrentString("Tên kỳ thi"), string.Empty, CurrentString("Trạng thái"));
-            if (dialog.ShowDialog(FindForm()) == System.Windows.Forms.DialogResult.OK)
+            if (id <= 0)
+                return;
+
+            using var dialog = new TeacherExamDialog(Controller.GetCourses(TeacherId), new TeacherExamModel
             {
-                if (dialog.Status == WorkflowConstants.ExamStatus.Active && !Controller.CanActivateExam(TeacherId, id))
+                Id = id,
+                CourseId = CurrentInt("CourseId"),
+                Title = CurrentString("Tên kỳ thi"),
+                OpenTime = ParseGridDate(CurrentString("Mở")),
+                CloseTime = ParseGridDate(CurrentString("Đóng")),
+                DurationMinutes = CurrentInt("Thời lượng"),
+                MaxAttempts = CurrentInt("Lượt"),
+                Status = CurrentString("Trạng thái")
+            });
+            if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
+            {
+                if (string.Equals(dialog.Status, WorkflowConstants.ExamStatus.Active, StringComparison.OrdinalIgnoreCase) && !Controller.CanActivateExam(TeacherId, id))
                 {
-                    MetaTheme.ShowModernDialog("Bài kiểm tra cần có ít nhất 1 câu hỏi trước khi kích hoạt.", "Chưa thể kích hoạt", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning);
+                    MetaTheme.ShowModernDialog("Bài kiểm tra cần có ít nhất 1 câu hỏi trước khi kích hoạt.", "Chưa thể kích hoạt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
-                Controller.UpdateExam(TeacherId, new TeacherExamModel { Id = id, CourseId = currentCourseId, Title = dialog.ItemTitle, OpenTime = dialog.SelectedDate, CloseTime = dialog.SelectedDate.AddHours(1), DurationMinutes = 60, MaxAttempts = 1, Status = dialog.Status });
+                Controller.UpdateExam(TeacherId, new TeacherExamModel
+                {
+                    Id = id,
+                    CourseId = dialog.CourseId,
+                    Title = dialog.ItemTitle,
+                    OpenTime = dialog.OpenTime,
+                    CloseTime = dialog.CloseTime,
+                    DurationMinutes = dialog.DurationMinutes,
+                    MaxAttempts = dialog.MaxAttempts,
+                    Status = dialog.Status
+                });
                 await LoadDataAsync();
             }
         }
@@ -66,7 +105,18 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         protected override async Task DeleteAsync()
         {
             int id = CurrentInt("Id");
-            if (id > 0) { Controller.DeleteExam(TeacherId, id); await LoadDataAsync(); }
+            if (id > 0)
+            {
+                Controller.DeleteExam(TeacherId, id);
+                await LoadDataAsync();
+            }
+        }
+
+        private static DateTime? ParseGridDate(string value)
+        {
+            return DateTime.TryParseExact(value, "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsed)
+                ? parsed
+                : null;
         }
     }
 }

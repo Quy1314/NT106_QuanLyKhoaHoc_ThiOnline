@@ -1,7 +1,6 @@
 using System;
 using System.Data;
 using System.Drawing;
-using System.Globalization;
 using System.Linq;
 using System.Windows.Forms;
 using CourseGuard.Backend.Data;
@@ -115,7 +114,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 dt.Rows.Add(
                     notification.Id,
                     notification.IsRead,
-                    notification.CreatedAt.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture),
+                    SystemTimeFormatter.FormatVietnamTime(notification.CreatedAt),
                     notification.Title,
                     notification.Content,
                     notification.IsRead ? "Đã đọc" : "Chưa đọc");

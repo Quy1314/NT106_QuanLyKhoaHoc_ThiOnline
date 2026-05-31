@@ -171,7 +171,12 @@ namespace CourseGuard.Frontend.Forms.Student
             return notifications
                 .OrderByDescending(n => n.CreatedAt)
                 .Take(5)
-                .Select(n => string.IsNullOrWhiteSpace(n.Content) ? n.Title : $"{n.Title} - {n.Content}");
+                .Select(n =>
+                {
+                    string text = string.IsNullOrWhiteSpace(n.Content) ? n.Title : $"{n.Title} - {n.Content}";
+                    string time = SystemTimeFormatter.FormatVietnamTime(n.CreatedAt);
+                    return string.IsNullOrWhiteSpace(time) ? text : $"{time} - {text}";
+                });
         }
 
         private static List<T> SafeList<T>(Func<List<T>> getter)
@@ -305,6 +310,9 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private void LogoutCurrentUser()
         {
+            if (!LogoutConfirmation.Confirm())
+                return;
+
             var authService = new CourseGuard.Backend.Controllers.AuthController(
                 new CourseGuard.Backend.Data.CourseGuardDbContext(""));
             string ipAddress = GetLocalIpAddress();

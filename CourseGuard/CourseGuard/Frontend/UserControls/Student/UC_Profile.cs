@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
@@ -55,6 +56,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         private StatCard? _examMetricCard;
         private StatCard? _notificationMetricCard;
         private StatCard? _averageScoreMetricCard;
+        private TableLayoutPanel? _activityGrid;
 
         private readonly record struct AcademicMetrics(int CourseCount, int ExamCount, int NotificationCount, double? AverageScore, bool HasOpenOrUpcomingExams)
         {
@@ -99,6 +101,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             {
                 BindFallbackProfile();
                 ApplyMetrics(AcademicMetrics.Empty);
+                BindActivities(new List<RecentUserActivityModel>());
                 if (showSkeleton)
                     this.HideSkeleton();
                 return;
@@ -107,6 +110,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             int userId = UserSessionContext.CurrentUserId.Value;
             StudentProfileModel? profile = null;
             AcademicMetrics metrics = AcademicMetrics.Empty;
+            List<RecentUserActivityModel> activities = new();
 
             try
             {
@@ -117,6 +121,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 {
                     profile = _dbContext.GetStudentProfile(userId);
                     metrics = LoadAcademicMetrics(userId);
+                    activities = SafeList(() => _dbContext.GetRecentUserActivitiesByUser(userId, 6));
                 });
 
                 if (profile == null)
@@ -130,11 +135,13 @@ namespace CourseGuard.Frontend.UserControls.Student
                 }
 
                 ApplyMetrics(metrics);
+                BindActivities(activities);
             }
             catch (Exception ex)
             {
                 BindFallbackProfile();
                 ApplyMetrics(AcademicMetrics.Empty);
+                BindActivities(new List<RecentUserActivityModel>());
                 MetaTheme.ShowModernDialog($"Không thể tải thông tin hồ sơ: {ex.Message}", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             finally
@@ -828,6 +835,18 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
         }
 
+        private static List<T> SafeList<T>(Func<List<T>> getter)
+        {
+            try
+            {
+                return getter() ?? new List<T>();
+            }
+            catch
+            {
+                return new List<T>();
+            }
+        }
+
         private Control BuildActivityCard()
         {
             var card = StudentTabChrome.CreateCard();
@@ -847,14 +866,41 @@ namespace CourseGuard.Frontend.UserControls.Student
                 BackColor = Color.Transparent
             };
 
-            AddActivity(list, 0, "Đã đăng nhập vào hệ thống", "Vài phút trước");
-            AddActivity(list, 1, "Đã tham gia khóa học C# căn bản", "2 giờ trước");
-            AddActivity(list, 2, "Đã tải tài liệu luyện thi", "Hôm qua");
-            AddActivity(list, 3, "Đã hoàn thành bài kiểm tra", "Tuần trước");
+            _activityGrid = list;
+            AddActivity(list, 0, "Đang tải hoạt động gần đây", string.Empty);
 
             card.Controls.Add(list);
             title.SendToBack();
             return card;
+        }
+
+        private void BindActivities(List<RecentUserActivityModel> activities)
+        {
+            if (_activityGrid == null)
+                return;
+
+            _activityGrid.SuspendLayout();
+            _activityGrid.Controls.Clear();
+            _activityGrid.RowStyles.Clear();
+
+            if (activities.Count == 0)
+            {
+                AddActivity(_activityGrid, 0, "Chưa có hoạt động gần đây", string.Empty);
+            }
+            else
+            {
+                int row = 0;
+                foreach (RecentUserActivityModel activity in activities.Take(5))
+                {
+                    AddActivity(
+                        _activityGrid,
+                        row++,
+                        TranslateActivity(activity),
+                        SystemTimeFormatter.FormatVietnamTime(activity.CreatedAt));
+                }
+            }
+
+            _activityGrid.ResumeLayout(true);
         }
 
         private void AddActivity(TableLayoutPanel grid, int row, string desc, string time)
@@ -873,6 +919,37 @@ namespace CourseGuard.Frontend.UserControls.Student
             panel.Controls.Add(new Label { Text = desc, Font = AppFonts.Body, ForeColor = AppColors.TextPrimary, AutoSize = true, Location = new Point(20, 3), UseCompatibleTextRendering = false });
             panel.Controls.Add(new Label { Text = time, Font = AppFonts.Caption, ForeColor = AppColors.TextMuted, AutoSize = true, Location = new Point(20, 25), UseCompatibleTextRendering = false });
             grid.Controls.Add(panel, 0, row);
+        }
+
+        private static string TranslateActivity(RecentUserActivityModel activity)
+        {
+            string title = (activity.Action ?? string.Empty).ToUpperInvariant() switch
+            {
+                "LOGIN" => "Đăng nhập hệ thống",
+                "LOGOUT" => "Đăng xuất hệ thống",
+                "COURSE_ENROLL_REQUEST" => "Gửi yêu cầu tham gia khóa học",
+                "COURSE_ENROLL" => "Được duyệt vào khóa học",
+                "ONLINE_SESSION_JOIN" => "Tham gia lớp học trực tuyến",
+                "ONLINE_SESSION_EXIT" => "Rời lớp học trực tuyến",
+                "EXAM_JOIN" => "Bắt đầu làm bài kiểm tra",
+                "EXAM_SUBMIT" => "Nộp bài kiểm tra",
+                "EXAM_EXIT" => "Thoát màn hình làm bài kiểm tra",
+                "CHANGE_PASSWORD" => "Đổi mật khẩu",
+                "CHAT_USE" => "Trao đổi trong lớp học",
+                _ => "Cập nhật hoạt động"
+            };
+
+            string details = CleanDetails(activity.Details);
+            return string.IsNullOrWhiteSpace(details) ? title : $"{title} - {details}";
+        }
+
+        private static string CleanDetails(string? details)
+        {
+            if (string.IsNullOrWhiteSpace(details))
+                return string.Empty;
+
+            string value = details.Trim();
+            return value.Length > 72 ? value[..72] + "..." : value;
         }
 
         private Control BuildSecurityCard()

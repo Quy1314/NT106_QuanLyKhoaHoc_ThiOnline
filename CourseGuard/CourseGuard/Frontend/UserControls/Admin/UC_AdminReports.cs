@@ -126,7 +126,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi tải dữ liệu báo cáo: " + ex.Message);
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi tải dữ liệu báo cáo: " + ex.Message);
             }
             finally
             {
@@ -152,7 +152,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
         {
             if (dataGridView1.Rows.Count == 0)
             {
-                MessageBox.Show("Không có dữ liệu để xuất.");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Không có dữ liệu để xuất.");
                 return;
             }
 
@@ -196,11 +196,11 @@ namespace CourseGuard.Frontend.UserControls.Admin
                     }
 
                     File.WriteAllText(sfd.FileName, sb.ToString(), Encoding.UTF8);
-                    MessageBox.Show("Xuất file thành công!");
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Xuất file thành công!");
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("Lỗi xuất file: " + ex.Message);
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi xuất file: " + ex.Message);
                 }
             }
         }
@@ -210,7 +210,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
         {
             if (dataGridView1.Rows.Count == 0)
             {
-                MessageBox.Show("Không có dữ liệu để in.");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Không có dữ liệu để in.");
                 return;
             }
 
@@ -229,7 +229,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 }
                 catch(Exception ex)
                 {
-                    MessageBox.Show("Lỗi in: " + ex.Message);
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi in: " + ex.Message);
                 }
             }
         }

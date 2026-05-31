@@ -106,6 +106,9 @@ namespace CourseGuard.Frontend.Forms.Admin
         {
             if (pageName == "Logout")
             {
+                if (!LogoutConfirmation.Confirm())
+                    return;
+
                 var authService = new CourseGuard.Backend.Controllers.AuthController(
                     new CourseGuard.Backend.Data.CourseGuardDbContext(""));
                 authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty);

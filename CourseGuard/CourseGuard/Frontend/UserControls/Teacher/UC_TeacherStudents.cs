@@ -38,7 +38,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         protected override async Task EditAsync()
         {
             if (CurrentString("Trạng thái").ToUpperInvariant() == "PENDING"
-                && MessageBox.Show("Từ chối yêu cầu ghi danh?", "Xác nhận", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                && CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Từ chối yêu cầu ghi danh?", "Xác nhận", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
                 Controller.RejectEnrollment(TeacherId, CurrentInt("CourseId"), CurrentInt("StudentId"));
                 await LoadDataAsync();

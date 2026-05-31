@@ -197,7 +197,8 @@ namespace CourseGuard.Frontend.UserControls.Student
             _authController.LogUserActivity(userId, "EXAM_JOIN", $"User {username} joined exam: {examName}", string.Empty);
 
             using var form = new DoExamForm(examId);
-            form.ShowDialog();
+            if (form.ShowDialog() == DialogResult.OK)
+                _ = LoadDataAsync();
         }
     }
 }

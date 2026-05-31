@@ -289,7 +289,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             table.Columns.Add("Nhóm", typeof(string));
             table.Columns.Add("Trạng thái", typeof(string));
             foreach (TeacherTeachingTaskModel task in data.Tasks)
-                table.Rows.Add(task.DueAt.HasValue ? FormatDateTime(task.DueAt.Value) : string.Empty, task.Title, task.Category, task.StatusText);
+                table.Rows.Add(task.DueAt.HasValue ? FormatScheduleDateTime(task.DueAt.Value) : string.Empty, task.Title, task.Category, task.StatusText);
 
             _notificationGrid.DataSource = table;
             _notificationGrid.Visible = true;
@@ -508,7 +508,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             return new ActivityRow
             {
                 Title = TranslateActivity(activity),
-                TimeText = FormatDateTime(activity.CreatedAt),
+                TimeText = SystemTimeFormatter.FormatVietnamTime(activity.CreatedAt),
                 Accent = GetActivityAccent(activity.Action)
             };
         }
@@ -560,7 +560,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             return "Hệ thống";
         }
 
-        private static string FormatDateTime(DateTime value)
+        private static string FormatScheduleDateTime(DateTime value)
         {
             return value == DateTime.MinValue ? string.Empty : value.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
         }

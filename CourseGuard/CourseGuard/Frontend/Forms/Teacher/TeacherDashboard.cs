@@ -239,6 +239,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void LogoutCurrentUser()
         {
+            if (!LogoutConfirmation.Confirm())
+                return;
+
             var authService = new AuthController(new CourseGuardDbContext(""));
             authService.Logout(_teacherId, _currentUser?.Username ?? _teacherName, GetLocalIpAddress());
             DialogResult = DialogResult.OK;
@@ -250,7 +253,12 @@ namespace CourseGuard.Frontend.Forms.Teacher
             return SafeList(() => new NotificationRepository().LoadByUserId(_teacherId))
                 .OrderByDescending(n => n.CreatedAt)
                 .Take(5)
-                .Select(n => string.IsNullOrWhiteSpace(n.Content) ? n.Title : $"{n.Title} - {n.Content}");
+                .Select(n =>
+                {
+                    string text = string.IsNullOrWhiteSpace(n.Content) ? n.Title : $"{n.Title} - {n.Content}";
+                    string time = SystemTimeFormatter.FormatVietnamTime(n.CreatedAt);
+                    return string.IsNullOrWhiteSpace(time) ? text : $"{time} - {text}";
+                });
         }
 
         private static string BuildSearchDescription(string pageName)

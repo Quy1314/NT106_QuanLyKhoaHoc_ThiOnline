@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace CourseGuard.Frontend.Theme
@@ -213,39 +214,7 @@ namespace CourseGuard.Frontend.Theme
         /// </summary>
         public static void StyleGrid(DataGridView grid)
         {
-            grid.BackgroundColor = Colors.CardBg;
-            grid.BorderStyle = BorderStyle.None;
-            grid.GridColor = Colors.BorderSoft;
-            grid.EnableHeadersVisualStyles = false;
-            grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-            grid.RowHeadersVisible = false;
-            grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            grid.MultiSelect = false;
-            grid.AllowUserToAddRows = false;
-
-            // Header — deep dark with indigo tint
-            grid.ColumnHeadersHeight = 44;
-            grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(18, 18, 32);
-            grid.ColumnHeadersDefaultCellStyle.ForeColor = Colors.TextSecondary;
-            grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(18, 18, 32);
-            grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = Colors.TextSecondary;
-            grid.ColumnHeadersDefaultCellStyle.Font = Fonts.BodySmBold();
-            grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(Spacing.SM, 0, Spacing.SM, 0);
-
-            // Rows
-            grid.DefaultCellStyle.Font = Fonts.BodyMd();
-            grid.DefaultCellStyle.ForeColor = Colors.TextPrimary;
-            grid.DefaultCellStyle.BackColor = Colors.CardBg;
-            grid.DefaultCellStyle.SelectionBackColor = Colors.AccentMuted;
-            grid.DefaultCellStyle.SelectionForeColor = Colors.TextPrimary;
-            grid.DefaultCellStyle.Padding = new Padding(Spacing.SM, Spacing.XXS, Spacing.SM, Spacing.XXS);
-            grid.RowTemplate.Height = 40;
-
-            // Alternating
-            grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(16, 16, 28);
-
+            DashboardGridStyler.Apply(grid);
             grid.CellPainting -= Grid_CellPainting;
             grid.CellPainting += Grid_CellPainting;
         }
@@ -590,13 +559,24 @@ namespace CourseGuard.Frontend.Theme
             string content,
             string title,
             MessageBoxButtons buttons,
-            MessageBoxIcon icon = MessageBoxIcon.None)
+            MessageBoxIcon icon = MessageBoxIcon.None,
+            string? primaryButtonText = null,
+            string? secondaryButtonText = null,
+            string? cancelButtonText = null)
         {
-            using var dialog = new ThemedMessageDialog(content, title, buttons, icon);
+            using var dialog = new ThemedMessageDialog(content, title, buttons, icon, primaryButtonText, secondaryButtonText, cancelButtonText);
             Form? owner = Form.ActiveForm;
             return owner != null && !owner.IsDisposed
                 ? dialog.ShowDialog(owner)
                 : dialog.ShowDialog();
+        }
+
+        private enum DialogTone
+        {
+            Info,
+            Warning,
+            Error,
+            Confirm
         }
 
         private sealed class ThemedMessageDialog : Form
@@ -604,11 +584,26 @@ namespace CourseGuard.Frontend.Theme
             private const int CornerRadius = 18;
             private readonly MessageBoxButtons _buttons;
             private readonly MessageBoxIcon _icon;
+            private readonly string? _primaryButtonText;
+            private readonly string? _secondaryButtonText;
+            private readonly string? _cancelButtonText;
+            private readonly DialogTone _tone;
 
-            public ThemedMessageDialog(string content, string title, MessageBoxButtons buttons, MessageBoxIcon icon)
+            public ThemedMessageDialog(
+                string content,
+                string title,
+                MessageBoxButtons buttons,
+                MessageBoxIcon icon,
+                string? primaryButtonText = null,
+                string? secondaryButtonText = null,
+                string? cancelButtonText = null)
             {
                 _buttons = buttons;
                 _icon = icon;
+                _primaryButtonText = primaryButtonText;
+                _secondaryButtonText = secondaryButtonText;
+                _cancelButtonText = cancelButtonText;
+                _tone = ResolveTone(icon, buttons);
 
                 Text = title;
                 StartPosition = FormStartPosition.CenterParent;
@@ -624,9 +619,9 @@ namespace CourseGuard.Frontend.Theme
                 int measuredHeight = TextRenderer.MeasureText(
                     content,
                     AppFonts.Body,
-                    new Size(width - 140, 0),
+                    new Size(width - 150, 0),
                     TextFormatFlags.WordBreak).Height;
-                Size = new Size(width, Math.Clamp(measuredHeight + 154, 220, 360));
+                Size = new Size(width, Math.Clamp(measuredHeight + 166, 220, 380));
 
                 Controls.Add(BuildRoot(content, title));
                 Paint += (_, e) =>
@@ -660,50 +655,65 @@ namespace CourseGuard.Frontend.Theme
                     Dock = DockStyle.Fill,
                     BackColor = AppColors.BgCard,
                     ColumnCount = 1,
-                    RowCount = 3
+                    RowCount = 4
                 };
-                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56f));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 4f));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));
                 root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70f));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 66f));
 
-                root.Controls.Add(BuildHeader(title), 0, 0);
-                root.Controls.Add(BuildBody(content), 0, 1);
-                root.Controls.Add(BuildFooter(), 0, 2);
+                root.Controls.Add(new Panel { Dock = DockStyle.Fill, BackColor = ToneColor }, 0, 0);
+                root.Controls.Add(BuildHeader(title), 0, 1);
+                root.Controls.Add(BuildBody(content), 0, 2);
+                root.Controls.Add(BuildFooter(), 0, 3);
                 return root;
             }
 
             private Control BuildHeader(string title)
             {
-                var header = new Panel
+                var header = new TableLayoutPanel
                 {
                     Dock = DockStyle.Fill,
                     BackColor = AppColors.BgCard,
-                    Padding = new Padding(22, 0, 14, 0)
+                    ColumnCount = 3,
+                    RowCount = 1,
+                    Padding = new Padding(20, 10, 14, 8)
                 };
+                header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 40f));
+                header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+                header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 34f));
+                header.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
                 header.MouseDown += (_, e) =>
                 {
                     if (e.Button == MouseButtons.Left)
                         NativeMethods.ReleaseCaptureAndDrag(Handle);
                 };
 
+                var icon = new DialogIconView(_icon, _tone)
+                {
+                    Dock = DockStyle.Fill,
+                    Margin = new Padding(0, 0, 10, 0)
+                };
+
                 var closeButton = new Button
                 {
-                    Dock = DockStyle.Right,
-                    Width = 36,
+                    Dock = DockStyle.Fill,
                     Text = "×",
                     FlatStyle = FlatStyle.Flat,
-                    BackColor = AppColors.BgCard,
+                    BackColor = AppColors.IsDarkMode ? Color.FromArgb(78, 91, 111) : Color.FromArgb(229, 231, 235),
                     ForeColor = AppColors.TextSecondary,
-                    Font = AppFonts.Semibold(10f),
+                    Font = AppFonts.Semibold(13f),
                     Cursor = Cursors.Hand,
-                    TabStop = false
+                    TabStop = false,
+                    Margin = new Padding(2, 2, 0, 2)
                 };
                 closeButton.FlatAppearance.BorderSize = 0;
-                closeButton.FlatAppearance.MouseOverBackColor = AppColors.BgCardHover;
+                closeButton.FlatAppearance.MouseOverBackColor = AppColors.IsDarkMode ? Color.FromArgb(95, 108, 132) : Color.FromArgb(209, 213, 219);
                 closeButton.FlatAppearance.MouseDownBackColor = AppColors.BgElevated;
+                RoundedButtonHelper.Apply(closeButton, 14);
                 closeButton.Click += (_, _) =>
                 {
-                    DialogResult = DialogResult.Cancel;
+                    DialogResult = CancelDialogResult;
                     Close();
                 };
 
@@ -719,8 +729,9 @@ namespace CourseGuard.Frontend.Theme
                     UseCompatibleTextRendering = false
                 };
 
-                header.Controls.Add(lblTitle);
-                header.Controls.Add(closeButton);
+                header.Controls.Add(icon, 0, 0);
+                header.Controls.Add(lblTitle, 1, 0);
+                header.Controls.Add(closeButton, 2, 0);
                 return header;
             }
 
@@ -732,41 +743,212 @@ namespace CourseGuard.Frontend.Theme
                     BackColor = AppColors.BgCard,
                     ColumnCount = 2,
                     RowCount = 1,
-                    Padding = new Padding(22, 4, 24, 8)
+                    Padding = new Padding(24, 8, 18, 10)
                 };
-                body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 54f));
                 body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+                body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86f));
 
-                body.Controls.Add(new DialogIconView(_icon), 0, 0);
                 body.Controls.Add(new Label
                 {
                     Text = content,
                     Dock = DockStyle.Fill,
-                    TextAlign = ContentAlignment.MiddleLeft,
+                    TextAlign = ContentAlignment.TopLeft,
                     Font = AppFonts.Body,
                     ForeColor = AppColors.TextSecondary,
                     BackColor = AppColors.BgCard,
                     UseCompatibleTextRendering = false
-                }, 1, 0);
+                }, 0, 0);
+                body.Controls.Add(BuildToneBadge(), 1, 0);
 
                 return body;
             }
 
+            private Control BuildToneBadge()
+            {
+                var badge = new RoundedPanel
+                {
+                    Width = 78,
+                    Height = 22,
+                    FillColor = ToneSoftColor,
+                    BorderColor = Color.Transparent,
+                    CornerRadius = 10,
+                    Margin = new Padding(8, 2, 0, 0),
+                    Anchor = AnchorStyles.Top | AnchorStyles.Right
+                };
+
+                badge.Controls.Add(new Label
+                {
+                    Dock = DockStyle.Fill,
+                    Text = ToneLabel,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    Font = AppFonts.Semibold(7.5f),
+                    ForeColor = ToneColor,
+                    BackColor = Color.Transparent,
+                    UseCompatibleTextRendering = false
+                });
+                return badge;
+            }
+
             private Control BuildFooter()
             {
-                var footer = new FlowLayoutPanel
+                var footer = new TableLayoutPanel
                 {
                     Dock = DockStyle.Fill,
                     BackColor = AppColors.BgCard,
-                    FlowDirection = FlowDirection.RightToLeft,
-                    WrapContents = false,
-                    Padding = new Padding(20, 14, 22, 18)
+                    ColumnCount = 1,
+                    RowCount = 1,
+                    Padding = new Padding(16, 12, 16, 12)
+                };
+                footer.Paint += (_, e) =>
+                {
+                    using var pen = new Pen(AppColors.Border, 1f);
+                    e.Graphics.DrawLine(pen, 0, 0, footer.Width, 0);
                 };
 
-                foreach (Button button in CreateButtons())
-                    footer.Controls.Add(button);
+                List<DialogButtonSpec> specs = CreateButtonSpecs();
+                footer.ColumnCount = specs.Count;
+                footer.ColumnStyles.Clear();
+                for (int i = 0; i < specs.Count; i++)
+                    footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / specs.Count));
+
+                for (int i = 0; i < specs.Count; i++)
+                    footer.Controls.Add(CreateButton(specs[i]), i, 0);
 
                 return footer;
+            }
+
+            private List<DialogButtonSpec> CreateButtonSpecs()
+            {
+                List<DialogButtonSpec> specs = _buttons switch
+                {
+                    MessageBoxButtons.OK => new()
+                    {
+                        Primary(DialogResult.OK, LabelOk)
+                    },
+                    MessageBoxButtons.OKCancel => new()
+                    {
+                        Secondary(DialogResult.Cancel, LabelCancel, cancel: true),
+                        Primary(DialogResult.OK, LabelAgree)
+                    },
+                    MessageBoxButtons.YesNo => new()
+                    {
+                        Secondary(DialogResult.No, LabelNo, cancel: true),
+                        Primary(DialogResult.Yes, LabelAgree)
+                    },
+                    MessageBoxButtons.YesNoCancel => new()
+                    {
+                        Secondary(DialogResult.Cancel, LabelCancel, cancel: true),
+                        Secondary(DialogResult.No, LabelNo, cancel: true),
+                        Primary(DialogResult.Yes, LabelAgree)
+                    },
+                    MessageBoxButtons.RetryCancel => new()
+                    {
+                        Secondary(DialogResult.Cancel, LabelCancel, cancel: true),
+                        Primary(DialogResult.Retry, LabelRetry)
+                    },
+                    MessageBoxButtons.AbortRetryIgnore => new()
+                    {
+                        Secondary(DialogResult.Abort, LabelAbort),
+                        Secondary(DialogResult.Ignore, LabelIgnore),
+                        Primary(DialogResult.Retry, LabelRetry)
+                    },
+                    _ => new()
+                    {
+                        Primary(DialogResult.OK, LabelOk)
+                    }
+                };
+
+                ApplyCustomLabels(specs);
+                return specs;
+            }
+
+            private void ApplyCustomLabels(List<DialogButtonSpec> specs)
+            {
+                DialogButtonSpec? primary = null;
+                DialogButtonSpec? cancel = null;
+                DialogButtonSpec? secondary = null;
+
+                foreach (DialogButtonSpec spec in specs)
+                {
+                    if (spec.Primary)
+                        primary ??= spec;
+                    else if (spec.Cancel)
+                        cancel ??= spec;
+                    else
+                        secondary ??= spec;
+                }
+
+                if (!string.IsNullOrWhiteSpace(_primaryButtonText) && primary != null)
+                    primary.Text = _primaryButtonText;
+                if (!string.IsNullOrWhiteSpace(_secondaryButtonText))
+                {
+                    DialogButtonSpec? target = specs.FirstOrDefault(spec => !spec.Primary && spec.Result != DialogResult.Cancel)
+                        ?? secondary
+                        ?? cancel;
+                    if (target != null)
+                        target.Text = _secondaryButtonText;
+                }
+                if (!string.IsNullOrWhiteSpace(_cancelButtonText) && cancel != null)
+                    cancel.Text = _cancelButtonText;
+            }
+
+            private Button CreateButton(DialogButtonSpec spec)
+            {
+                var button = new Button
+                {
+                    Text = spec.Text,
+                    DialogResult = spec.Result,
+                    Dock = DockStyle.Fill,
+                    Height = 34,
+                    Margin = new Padding(4, 0, 4, 0),
+                    UseVisualStyleBackColor = false,
+                    FlatStyle = FlatStyle.Flat,
+                    Font = AppFonts.Semibold(9f),
+                    Cursor = Cursors.Hand,
+                    TabStop = true
+                };
+
+                if (spec.Primary)
+                    ApplyPrimaryButtonStyle(button);
+                else
+                    ApplySecondaryButtonStyle(button);
+
+                button.Click += (_, _) =>
+                {
+                    DialogResult = spec.Result;
+                    Close();
+                };
+                if (spec.Primary)
+                    AcceptButton = button;
+                if (spec.Cancel || CancelButton == null && spec.Result == DialogResult.No)
+                    CancelButton = button;
+
+                RoundedButtonHelper.Apply(button, 8);
+                return button;
+            }
+
+            private static void ApplyPrimaryButtonStyle(Button button)
+            {
+                button.BackColor = AppColors.AccentBlue;
+                button.ForeColor = Color.White;
+                button.FlatAppearance.BorderSize = 0;
+                button.FlatAppearance.MouseOverBackColor = AppColors.AccentHover;
+                button.FlatAppearance.MouseDownBackColor = AppColors.AccentPressed;
+            }
+
+            private static void ApplySecondaryButtonStyle(Button button)
+            {
+                button.BackColor = AppColors.IsDarkMode
+                    ? Color.FromArgb(45, 53, 78)
+                    : Color.FromArgb(238, 242, 255);
+                button.ForeColor = AppColors.AccentBlue;
+                button.FlatAppearance.BorderSize = 0;
+                button.FlatAppearance.MouseOverBackColor = AppColors.IsDarkMode
+                    ? Color.FromArgb(55, 64, 95)
+                    : Color.FromArgb(224, 231, 255);
+                button.FlatAppearance.MouseDownBackColor = AppColors.IsDarkMode
+                    ? Color.FromArgb(39, 47, 70)
+                    : Color.FromArgb(219, 234, 254);
             }
 
             private IEnumerable<Button> CreateButtons()
@@ -811,6 +993,76 @@ namespace CourseGuard.Frontend.Theme
                 return button;
             }
 
+            private Color ToneColor => _tone switch
+            {
+                DialogTone.Warning => AppColors.Warning,
+                DialogTone.Error => AppColors.Danger,
+                DialogTone.Confirm => AppColors.Danger,
+                _ => AppColors.AccentBlue
+            };
+
+            private Color ToneSoftColor => _tone switch
+            {
+                DialogTone.Warning => AppColors.WarningSoft,
+                DialogTone.Error => AppColors.DangerSoft,
+                DialogTone.Confirm => AppColors.DangerSoft,
+                _ => AppColors.AccentSoft
+            };
+
+            private string ToneLabel => _tone switch
+            {
+                DialogTone.Warning => "WARNING",
+                DialogTone.Error => "ERROR",
+                DialogTone.Confirm => "CONFIRM",
+                _ => "INFO"
+            };
+
+            private DialogResult CancelDialogResult
+            {
+                get
+                {
+                    return _buttons switch
+                    {
+                        MessageBoxButtons.OK => DialogResult.OK,
+                        MessageBoxButtons.YesNo => DialogResult.No,
+                        MessageBoxButtons.YesNoCancel => DialogResult.Cancel,
+                        MessageBoxButtons.OKCancel => DialogResult.Cancel,
+                        MessageBoxButtons.RetryCancel => DialogResult.Cancel,
+                        _ => DialogResult.Cancel
+                    };
+                }
+            }
+
+            private static DialogTone ResolveTone(MessageBoxIcon icon, MessageBoxButtons buttons)
+            {
+                return icon switch
+                {
+                    MessageBoxIcon.Warning => DialogTone.Warning,
+                    MessageBoxIcon.Error => DialogTone.Error,
+                    MessageBoxIcon.Question => DialogTone.Confirm,
+                    _ when buttons != MessageBoxButtons.OK => DialogTone.Confirm,
+                    _ => DialogTone.Info
+                };
+            }
+
+            private static DialogButtonSpec Primary(DialogResult result, string text)
+            {
+                return new DialogButtonSpec(result, text, primary: true, cancel: false);
+            }
+
+            private static DialogButtonSpec Secondary(DialogResult result, string text, bool cancel = false)
+            {
+                return new DialogButtonSpec(result, text, primary: false, cancel);
+            }
+
+            private const string LabelOk = "\u0110\u00e3 hi\u1ec3u";
+            private const string LabelAgree = "\u0110\u1ed3ng \u00fd";
+            private const string LabelNo = "Kh\u00f4ng";
+            private const string LabelCancel = "H\u1ee7y";
+            private const string LabelRetry = "Th\u1eed l\u1ea1i";
+            private const string LabelAbort = "D\u1eebng";
+            private const string LabelIgnore = "B\u1ecf qua";
+
             private void ApplyRoundedRegion()
             {
                 if (Width <= 0 || Height <= 0)
@@ -822,14 +1074,31 @@ namespace CourseGuard.Frontend.Theme
             }
         }
 
+        private sealed class DialogButtonSpec
+        {
+            public DialogButtonSpec(DialogResult result, string text, bool primary, bool cancel)
+            {
+                Result = result;
+                Text = text;
+                Primary = primary;
+                Cancel = cancel;
+            }
+
+            public DialogResult Result { get; }
+            public string Text { get; set; }
+            public bool Primary { get; }
+            public bool Cancel { get; }
+        }
+
         private sealed class DialogIconView : Control
         {
             private readonly MessageBoxIcon _icon;
+            private readonly DialogTone _tone;
 
-            public DialogIconView(MessageBoxIcon icon)
+            public DialogIconView(MessageBoxIcon icon, DialogTone tone)
             {
                 _icon = icon;
-                Dock = DockStyle.Fill;
+                _tone = tone;
                 BackColor = AppColors.BgCard;
                 DoubleBuffered = true;
             }
@@ -839,43 +1108,43 @@ namespace CourseGuard.Frontend.Theme
                 base.OnPaint(e);
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
-                Color color = _icon switch
+                Color color = _tone switch
                 {
-                    MessageBoxIcon.Warning => AppColors.Warning,
-                    MessageBoxIcon.Error => AppColors.Danger,
-                    MessageBoxIcon.Question => AppColors.AccentBlue,
-                    MessageBoxIcon.Information => AppColors.AccentBlue,
+                    DialogTone.Warning => AppColors.Warning,
+                    DialogTone.Error => AppColors.Danger,
+                    DialogTone.Confirm => AppColors.Danger,
                     _ => AppColors.AccentBlue
                 };
-                Color soft = _icon switch
+                Color soft = _tone switch
                 {
-                    MessageBoxIcon.Warning => AppColors.WarningSoft,
-                    MessageBoxIcon.Error => AppColors.DangerSoft,
+                    DialogTone.Warning => AppColors.WarningSoft,
+                    DialogTone.Error => AppColors.DangerSoft,
+                    DialogTone.Confirm => AppColors.DangerSoft,
                     _ => AppColors.AccentSoft
                 };
 
-                Rectangle circle = new Rectangle(5, Math.Max(8, (Height - 40) / 2), 40, 40);
+                Rectangle circle = new Rectangle(1, Math.Max(1, (Height - 30) / 2), 30, 30);
                 using SolidBrush bg = new SolidBrush(soft);
                 using SolidBrush fg = new SolidBrush(color);
-                using Pen pen = new Pen(color, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+                using Pen pen = new Pen(color, 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
                 e.Graphics.FillEllipse(bg, circle);
 
                 int cx = circle.Left + circle.Width / 2;
                 int cy = circle.Top + circle.Height / 2;
                 if (_icon == MessageBoxIcon.Error)
                 {
-                    e.Graphics.DrawLine(pen, cx - 8, cy - 8, cx + 8, cy + 8);
-                    e.Graphics.DrawLine(pen, cx + 8, cy - 8, cx - 8, cy + 8);
+                    e.Graphics.DrawLine(pen, cx - 6, cy - 6, cx + 6, cy + 6);
+                    e.Graphics.DrawLine(pen, cx + 6, cy - 6, cx - 6, cy + 6);
                 }
                 else if (_icon == MessageBoxIcon.Question)
                 {
-                    using Font font = AppFonts.Semibold(16f);
+                    using Font font = AppFonts.Semibold(12f);
                     e.Graphics.DrawString("?", font, fg, circle, new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center });
                 }
                 else
                 {
-                    e.Graphics.DrawLine(pen, cx, cy - 10, cx, cy + 3);
-                    e.Graphics.FillEllipse(fg, cx - 2, cy + 9, 4, 4);
+                    e.Graphics.DrawLine(pen, cx, cy - 7, cx, cy + 2);
+                    e.Graphics.FillEllipse(fg, cx - 2, cy + 7, 4, 4);
                 }
             }
         }

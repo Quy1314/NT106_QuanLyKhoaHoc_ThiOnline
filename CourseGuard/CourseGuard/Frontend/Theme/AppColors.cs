@@ -431,45 +431,7 @@ namespace CourseGuard.Frontend.Theme
 
         private static void ApplyGridTheme(DataGridView dgv)
         {
-            Color headerBg = IsDarkMode
-                ? ColorTranslator.FromHtml("#181827")
-                : ColorTranslator.FromHtml("#EEF2F7");
-            Color altRow = IsDarkMode
-                ? ColorTranslator.FromHtml("#191928")
-                : ColorTranslator.FromHtml("#F8FAFC");
-
-            dgv.EnableHeadersVisualStyles = false;
-            dgv.BackgroundColor = BgCard;
-            dgv.BorderStyle = BorderStyle.None;
-            dgv.GridColor = IsDarkMode
-                ? Color.FromArgb(40, 40, 55)
-                : Color.FromArgb(226, 232, 240);
-
-            dgv.DefaultCellStyle.BackColor = BgCard;
-            dgv.DefaultCellStyle.ForeColor = TextPrimary;
-            dgv.DefaultCellStyle.SelectionBackColor = AccentBlue;
-            dgv.DefaultCellStyle.SelectionForeColor = Color.White;
-
-            dgv.AlternatingRowsDefaultCellStyle.BackColor = altRow;
-            dgv.AlternatingRowsDefaultCellStyle.ForeColor = TextPrimary;
-            dgv.AlternatingRowsDefaultCellStyle.SelectionBackColor = AccentBlue;
-            dgv.AlternatingRowsDefaultCellStyle.SelectionForeColor = Color.White;
-
-            dgv.RowsDefaultCellStyle.BackColor = BgCard;
-            dgv.RowsDefaultCellStyle.ForeColor = TextPrimary;
-            dgv.RowsDefaultCellStyle.SelectionBackColor = AccentBlue;
-            dgv.RowsDefaultCellStyle.SelectionForeColor = Color.White;
-
-            dgv.ColumnHeadersDefaultCellStyle.BackColor = headerBg;
-            dgv.ColumnHeadersDefaultCellStyle.ForeColor = TextPrimary;
-            dgv.ColumnHeadersDefaultCellStyle.SelectionBackColor = headerBg;
-            dgv.ColumnHeadersDefaultCellStyle.SelectionForeColor = TextPrimary;
-            dgv.ColumnHeadersDefaultCellStyle.Font = AppFonts.Semibold(dgv.ColumnHeadersDefaultCellStyle.Font?.SizeInPoints ?? 9f);
-            dgv.RowHeadersDefaultCellStyle.BackColor = headerBg;
-            dgv.RowHeadersDefaultCellStyle.ForeColor = TextSecondary;
-            dgv.RowHeadersDefaultCellStyle.SelectionBackColor = headerBg;
-            dgv.RowHeadersDefaultCellStyle.SelectionForeColor = TextPrimary;
-            dgv.Invalidate();
+            DashboardGridStyler.Apply(dgv);
         }
     }
 }

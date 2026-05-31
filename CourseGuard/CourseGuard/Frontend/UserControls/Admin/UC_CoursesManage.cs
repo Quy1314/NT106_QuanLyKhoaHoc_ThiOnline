@@ -153,7 +153,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi tải dữ liệu: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi tải dữ liệu: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -250,21 +250,21 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 string result = await Task.Run(() => _courseService.AddCourse(course));
                 if (result == "Success")
                 {
-                    MessageBox.Show("Thêm khóa học thành công!");
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Thêm khóa học thành công!");
                     await RefreshDataAsync();
                 }
                 else if (result == "Forbidden")
                 {
-                    MessageBox.Show("Bạn không có quyền thực hiện thao tác này.");
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Bạn không có quyền thực hiện thao tác này.");
                 }
                 else
                 {
-                    MessageBox.Show("Lỗi thêm khóa học: " + result);
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi thêm khóa học: " + result);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi thêm khóa học: " + ex.Message);
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi thêm khóa học: " + ex.Message);
             }
         }
 
@@ -272,7 +272,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
         {
             if (_selectedCourseId == -1)
             {
-                MessageBox.Show("Vui lòng chọn khóa học để cập nhật.");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn khóa học để cập nhật.");
                 return;
             }
             if (!ValidateInputs()) return;
@@ -293,17 +293,17 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 bool success = await Task.Run(() => _courseService.UpdateCourse(course));
                 if (success)
                 {
-                    MessageBox.Show("Cập nhật khóa học thành công!");
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Cập nhật khóa học thành công!");
                     await RefreshDataAsync();
                 }
                 else
                 {
-                    MessageBox.Show("Cập nhật thất bại hoặc bạn không có quyền.");
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Cập nhật thất bại hoặc bạn không có quyền.");
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi cập nhật khóa học: " + ex.Message);
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi cập nhật khóa học: " + ex.Message);
             }
         }
 
@@ -311,11 +311,11 @@ namespace CourseGuard.Frontend.UserControls.Admin
         {
             if (_selectedCourseId == -1)
             {
-                MessageBox.Show("Vui lòng chọn khóa học để xóa.");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn khóa học để xóa.");
                 return;
             }
 
-            var confirmResult = MessageBox.Show("Bạn có chắc chắn muốn xóa khóa học này không?",
+            var confirmResult = CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Bạn có chắc chắn muốn xóa khóa học này không?",
                                      "Xác nhận xóa",
                                      MessageBoxButtons.YesNo);
             if (confirmResult == DialogResult.Yes)
@@ -325,17 +325,17 @@ namespace CourseGuard.Frontend.UserControls.Admin
                     bool success = await Task.Run(() => _courseService.DeleteCourse(_selectedCourseId));
                     if (success)
                     {
-                        MessageBox.Show("Xóa khóa học thành công!");
+                        CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Xóa khóa học thành công!");
                         await RefreshDataAsync();
                     }
                     else
                     {
-                        MessageBox.Show("Xóa thất bại hoặc bạn không có quyền.");
+                        CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Xóa thất bại hoặc bạn không có quyền.");
                     }
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("Lỗi xóa khóa học: " + ex.Message);
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi xóa khóa học: " + ex.Message);
                 }
             }
         }
@@ -344,12 +344,12 @@ namespace CourseGuard.Frontend.UserControls.Admin
         {
             if (_selectedCourseId <= 0)
             {
-                MessageBox.Show("Vui lòng chọn khóa học cần duyệt.");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn khóa học cần duyệt.");
                 return;
             }
 
             bool ok = await Task.Run(() => _courseService.ApproveCourse(_selectedCourseId));
-            MessageBox.Show(ok ? "Đã duyệt khóa học." : "Chỉ khóa học đang chờ duyệt mới có thể được duyệt.");
+            CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(ok ? "Đã duyệt khóa học." : "Chỉ khóa học đang chờ duyệt mới có thể được duyệt.");
             await RefreshDataAsync();
         }
 
@@ -357,13 +357,13 @@ namespace CourseGuard.Frontend.UserControls.Admin
         {
             if (_selectedCourseId <= 0)
             {
-                MessageBox.Show("Vui lòng chọn khóa học cần từ chối.");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn khóa học cần từ chối.");
                 return;
             }
 
             string reason = PromptRejectReason();
             bool ok = await Task.Run(() => _courseService.RejectCourse(_selectedCourseId, reason));
-            MessageBox.Show(ok ? "Đã từ chối khóa học." : "Chỉ khóa học đang chờ duyệt mới có thể bị từ chối.");
+            CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(ok ? "Đã từ chối khóa học." : "Chỉ khóa học đang chờ duyệt mới có thể bị từ chối.");
             await RefreshDataAsync();
         }
 
@@ -416,7 +416,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 {
                     if (studentId <= 0)
                     {
-                        MessageBox.Show("Không có học viên hợp lệ để thao tác.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Không có học viên hợp lệ để thao tác.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
 
@@ -427,14 +427,14 @@ namespace CourseGuard.Frontend.UserControls.Admin
                         bool ok = await Task.Run(() => _courseService.ApproveEnrollment(courseId, studentId));
                         if (ok)
                         {
-                            MessageBox.Show("Đã duyệt yêu cầu tham gia khóa học của học viên!");
+                            CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Đã duyệt yêu cầu tham gia khóa học của học viên!");
                             await RefreshStudentDropdown(courseId);
                         }
-                        else MessageBox.Show("Lỗi duyệt học viên.");
+                        else CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi duyệt học viên.");
                     }
                     else if (status == "ACTIVE" || status == "APPROVED")
                     {
-                        MessageBox.Show("Học viên này đã tham gia khóa học rồi.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Học viên này đã tham gia khóa học rồi.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                     else
                     {
@@ -442,13 +442,13 @@ namespace CourseGuard.Frontend.UserControls.Admin
                         bool ok = await Task.Run(() => _courseService.EnrollStudent(courseId, studentId));
                         if (ok)
                         {
-                            MessageBox.Show("Thêm học viên vào khóa học thành công!");
+                            CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Thêm học viên vào khóa học thành công!");
                             await RefreshStudentDropdown(courseId);
                         }
-                        else MessageBox.Show("Lỗi thêm học viên vào khóa học.");
+                        else CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi thêm học viên vào khóa học.");
                     }
                 }
-                else MessageBox.Show("Vui lòng chọn khóa học và học viên.");
+                else CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn khóa học và học viên.");
             };
 
             btnRemoveStudent.Click += async (s, e) =>
@@ -457,19 +457,19 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 {
                     if (studentId <= 0)
                     {
-                        MessageBox.Show("Không có học viên hợp lệ để thao tác.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Không có học viên hợp lệ để thao tác.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
 
                     bool ok = await Task.Run(() => _courseService.RejectEnrollment(courseId, studentId));
                     if (ok)
                     {
-                        MessageBox.Show("Đã xóa học viên khỏi khóa học / từ chối yêu cầu tham gia!");
+                        CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Đã xóa học viên khỏi khóa học / từ chối yêu cầu tham gia!");
                         await RefreshStudentDropdown(courseId);
                     }
-                    else MessageBox.Show("Lỗi xóa/từ chối học viên.");
+                    else CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi xóa/từ chối học viên.");
                 }
-                else MessageBox.Show("Vui lòng chọn khóa học và học viên.");
+                else CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn khóa học và học viên.");
             };
         }
 
@@ -566,17 +566,17 @@ namespace CourseGuard.Frontend.UserControls.Admin
         {
             if (string.IsNullOrWhiteSpace(txtCourseName.Text))
             {
-                MessageBox.Show("Tên khóa học không được để trống.");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Tên khóa học không được để trống.");
                 return false;
             }
             if (cboTeacher.SelectedValue == null)
             {
-                MessageBox.Show("Vui lòng chọn giáo viên.");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn giáo viên.");
                 return false;
             }
             if (dtpStartDate.Value > dtpEndDate.Value)
             {
-                MessageBox.Show("Ngày bắt đầu phải trước ngày kết thúc.");
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Ngày bắt đầu phải trước ngày kết thúc.");
                 return false;
             }
             return true;
