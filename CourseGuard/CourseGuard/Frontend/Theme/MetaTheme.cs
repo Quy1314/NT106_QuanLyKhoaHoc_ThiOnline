@@ -594,9 +594,43 @@ namespace CourseGuard.Frontend.Theme
         {
             using var dialog = new ThemedMessageDialog(content, title, buttons, icon);
             Form? owner = Form.ActiveForm;
-            return owner != null && !owner.IsDisposed
-                ? dialog.ShowDialog(owner)
-                : dialog.ShowDialog();
+            if (owner != null && !owner.IsDisposed)
+            {
+                if (owner.TopMost) dialog.TopMost = true;
+                return dialog.ShowDialog(owner);
+            }
+            return dialog.ShowDialog();
+        }
+
+        public static void ShowModernDialog(IWin32Window? owner, string content, string title = "Thông báo")
+        {
+            ShowModernDialog(owner, content, title, MessageBoxButtons.OK, MessageBoxIcon.None);
+        }
+
+        public static DialogResult ShowModernDialog(
+            IWin32Window? owner,
+            string content,
+            string title,
+            MessageBoxButtons buttons,
+            MessageBoxIcon icon = MessageBoxIcon.None)
+        {
+            using var dialog = new ThemedMessageDialog(content, title, buttons, icon);
+            if (owner != null)
+            {
+                if (owner is Form formOwner && formOwner.TopMost)
+                {
+                    dialog.TopMost = true;
+                }
+                return dialog.ShowDialog(owner);
+            }
+
+            Form? active = Form.ActiveForm;
+            if (active != null && !active.IsDisposed)
+            {
+                if (active.TopMost) dialog.TopMost = true;
+                return dialog.ShowDialog(active);
+            }
+            return dialog.ShowDialog();
         }
 
         private sealed class ThemedMessageDialog : Form

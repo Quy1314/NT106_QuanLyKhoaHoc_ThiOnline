@@ -7,10 +7,12 @@ namespace CourseGuard.Backend.Controllers
     public class TeacherController
     {
         private readonly TeacherRepository _repository;
+        private readonly CourseGuardDbContext _dbContext;
 
         public TeacherController(CourseGuardDbContext dbContext)
         {
             _repository = new TeacherRepository(dbContext);
+            _dbContext = dbContext;
         }
 
         public TeacherDashboardSummaryModel GetDashboardSummary(int teacherId) =>
@@ -156,5 +158,54 @@ namespace CourseGuard.Backend.Controllers
 
         public System.Threading.Tasks.Task<byte[]?> GetLessonFileContentAsync(int teacherId, int lessonId) =>
             teacherId <= 0 || lessonId <= 0 ? System.Threading.Tasks.Task.FromResult<byte[]?>(null) : _repository.GetLessonFileContentAsync(lessonId);
+
+        public async System.Threading.Tasks.Task<List<TeacherExamQuestionModel>> ParseAndValidateExcelAsync(string filePath)
+        {
+            var results = new List<TeacherExamQuestionModel>();
+            try 
+            {
+                var rows = await MiniExcelLibs.MiniExcel.QueryAsync<ExcelQuestionRowModel>(filePath);
+                foreach(var row in rows)
+                {
+                    results.Add(new TeacherExamQuestionModel
+                    {
+                        QuestionText = row.QuestionText,
+                        OptionA = row.OptionA,
+                        OptionB = row.OptionB,
+                        OptionC = row.OptionC,
+                        OptionD = row.OptionD,
+                        CorrectOption = row.CorrectOption,
+                        Points = row.Points
+                    });
+                }
+            }
+            catch 
+            {
+                // Let frontend catch FormatException or IO exceptions
+                throw;
+            }
+            return results;
+        }
+
+        public async System.Threading.Tasks.Task ImportQuestionsToExamAsync(int teacherId, int examId, int courseId, List<TeacherExamQuestionModel> questions)
+        {
+            if (teacherId > 0 && examId > 0 && courseId > 0)
+            {
+                await _dbContext.BulkInsertQuestionsAndMapToExamAsync(examId, courseId, questions);
+            }
+        }
+
+        public async System.Threading.Tasks.Task AddQuestionsFromBankAsync(int teacherId, int examId, List<int> questionIds)
+        {
+            if (teacherId > 0 && examId > 0)
+            {
+                await _dbContext.AddQuestionsFromBankAsync(examId, questionIds);
+            }
+        }
+
+        public List<TeacherExamQuestionModel> GetCourseQuestionBank(int teacherId, int courseId)
+        {
+            return teacherId > 0 && courseId > 0 ? _dbContext.GetQuestionsByCourseId(courseId) : new List<TeacherExamQuestionModel>();
+        }
     }
 }

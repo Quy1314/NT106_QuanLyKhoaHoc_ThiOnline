@@ -187,7 +187,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         {
             if (!dgvExams.Visible || dgvExams.CurrentRow == null || dgvExams.CurrentRow.IsNewRow)
             {
-                MetaTheme.ShowModernDialog("Vui lòng chọn một bài kiểm tra.", "Thông báo");
+                MetaTheme.ShowModernDialog(this.FindForm(), "Vui lòng chọn một bài kiểm tra.", "Thông báo");
                 return;
             }
 
@@ -199,7 +199,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 string message = exam == null
                     ? "Bài kiểm tra này chưa thể làm ở thời điểm hiện tại."
                     : StudentExamAvailabilityService.GetStartBlockedMessage(exam);
-                MetaTheme.ShowModernDialog(message, "Thông báo");
+                MetaTheme.ShowModernDialog(this.FindForm(), message, "Thông báo");
                 return;
             }
 
@@ -209,7 +209,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             _authController.LogUserActivity(userId, "EXAM_JOIN", $"User {username} joined exam: {examName}", string.Empty);
 
             using var form = new DoExamForm(examId);
-            form.ShowDialog();
+            form.ShowDialog(this.FindForm());
             _ = LoadDataAsync();
         }
     }
