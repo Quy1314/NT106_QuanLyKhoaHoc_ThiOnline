@@ -69,7 +69,10 @@ namespace CourseGuard.Frontend.Theme
                 return;
 
             Region?.Dispose();
-            using var path = GraphicsHelpers.RoundedRect(new Rectangle(0, 0, Width, Height), _cornerRadius);
+            // Expand by 1px on each side so the Region never clips the
+            // anti-aliased border corners drawn at the inset float rect.
+            using var path = GraphicsHelpers.RoundedRect(
+                new Rectangle(-1, -1, Width + 2, Height + 2), _cornerRadius + 1);
             Region = new Region(path);
         }
 
@@ -86,6 +89,7 @@ namespace CourseGuard.Frontend.Theme
             // the corner artifact visible in dark mode.
 
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
             e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
             // Step 1: Fill the ENTIRE control rect with the parent's actual background.
@@ -94,12 +98,20 @@ namespace CourseGuard.Frontend.Theme
             using (var parentBrush = new SolidBrush(parentBg))
                 e.Graphics.FillRectangle(parentBrush, this.ClientRectangle);
 
-            // Step 2: Draw the rounded filled rectangle on top.
-            Rectangle bounds = new Rectangle(0, 0, this.Width - 1, this.Height - 1);
-            GraphicsHelpers.FillRoundedRect(e.Graphics, bounds, _cornerRadius, _fillColor);
+            // Step 2 & 3: Use a float-based inset rect so that the 1px border pen
+            // sits entirely inside the Region boundary (which clips at full Width/Height).
+            // The 0.5f inset ensures the pen's center-line is at 0.5 from each edge,
+            // keeping the entire stroke within [0, Width] / [0, Height].
+            RectangleF borderRect = new RectangleF(0.5f, 0.5f, this.Width - 1f, this.Height - 1f);
+            float clampedRadius = Math.Min(_cornerRadius, Math.Min(borderRect.Width, borderRect.Height) / 2f);
 
-            // Step 3: Draw the border.
-            GraphicsHelpers.DrawRoundedBorder(e.Graphics, bounds, _cornerRadius, _borderColor, 1f);
+            using (var fillPath = GraphicsHelpers.RoundedRectF(borderRect, clampedRadius))
+            using (var fillBrush = new SolidBrush(_fillColor))
+                e.Graphics.FillPath(fillBrush, fillPath);
+
+            using (var borderPath = GraphicsHelpers.RoundedRectF(borderRect, clampedRadius))
+            using (var borderPen = new Pen(_borderColor, 1f))
+                e.Graphics.DrawPath(borderPen, borderPath);
 
             // Step 4: Raise the Paint event so child controls can still subscribe.
             // Use the protected OnPaint pattern without calling base.

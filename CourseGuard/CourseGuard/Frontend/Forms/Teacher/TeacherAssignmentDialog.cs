@@ -10,7 +10,7 @@ using CourseGuard.Frontend.UserControls.Teacher;
 
 namespace CourseGuard.Frontend.Forms.Teacher
 {
-    public partial class TeacherAssignmentDialog : Form
+    public partial class TeacherAssignmentDialog : ThemedDialogBase
     {
         private readonly ComboBox _course = new();
         private readonly TextBox _title = new();
@@ -43,10 +43,6 @@ namespace CourseGuard.Frontend.Forms.Teacher
             Text = existing == null ? "Tạo Bài Tập" : "Sửa Bài Tập";
             Width = 800;
             Height = 600;
-            StartPosition = FormStartPosition.CenterParent;
-            FormBorderStyle = FormBorderStyle.FixedDialog;
-            MaximizeBox = false;
-            MinimizeBox = false;
 
             _course.DropDownStyle = ComboBoxStyle.DropDownList;
             _course.DisplayMember = nameof(TeacherCourseModel.Name);
@@ -149,14 +145,10 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _status.Dock = DockStyle.Fill;
             grid.Controls.Add(_status, 1, 5);
 
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 52, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(12), BackColor = AppColors.BgBase };
-            buttons.Controls.Add(cancel);
-            buttons.Controls.Add(save);
-            Controls.Add(grid);
-            Controls.Add(buttons);
+            ContentPanel.Controls.Add(grid);
+            AddFooterButtons(cancel, save);
             AcceptButton = save;
             CancelButton = cancel;
-            AppColors.ApplyTheme(this);
         }
         
         public void SetSelectedCourse(int courseId)

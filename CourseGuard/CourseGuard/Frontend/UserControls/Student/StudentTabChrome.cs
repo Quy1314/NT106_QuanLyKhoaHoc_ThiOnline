@@ -6,7 +6,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 {
     internal static class StudentTabChrome
     {
-        private const int HeaderHeight = 112;
+        private const int HeaderHeight = 124;
         private const int ButtonHeight = 36;
         private const int ButtonRadius = 10;
 
@@ -27,13 +27,21 @@ namespace CourseGuard.Frontend.UserControls.Student
                 Padding = new Padding(24)
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, HeaderHeight));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+
+            root.VisibleChanged += (s, e) => {
+                if (root.Visible && !root.ContainsFocus)
+                    root.Focus();
+            };
+
             page.Controls.Add(root);
             EnableNaturalFocusClear(page);
             page.ResumeLayout(true);
             return root;
         }
+
+
 
         public static RoundedPanel CreateHeader(string title, string subtitle, params Control[] actions)
         {
@@ -50,60 +58,56 @@ namespace CourseGuard.Frontend.UserControls.Student
             };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
-            var textStack = new TableLayoutPanel
+            var textStack = new FlowLayoutPanel
             {
-                Dock = DockStyle.Fill,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 BackColor = Color.Transparent,
-                ColumnCount = 1,
-                RowCount = 2
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Margin = Padding.Empty,
+                Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Bottom
             };
-            textStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 42f));
-            textStack.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-
             textStack.Controls.Add(new Label
             {
-                Dock = DockStyle.Fill,
-                AutoSize = false,
+                AutoSize = true,
                 BackColor = Color.Transparent,
                 Font = AppFonts.Semibold(16f),
                 ForeColor = AppColors.TextPrimary,
-                Padding = new Padding(0, 0, 0, 3),
                 Text = title,
                 TextAlign = ContentAlignment.MiddleLeft,
-                UseCompatibleTextRendering = false
-            }, 0, 0);
-
+                UseCompatibleTextRendering = true,
+                Margin = new Padding(0, 0, 0, 4)
+            });
             textStack.Controls.Add(new Label
             {
-                Dock = DockStyle.Fill,
-                AutoSize = false,
+                AutoSize = true,
                 BackColor = Color.Transparent,
                 Font = AppFonts.Body,
                 ForeColor = AppColors.TextSecondary,
                 Text = subtitle,
                 TextAlign = ContentAlignment.MiddleLeft,
-                UseCompatibleTextRendering = false
-            }, 0, 1);
+                UseCompatibleTextRendering = true,
+                Margin = Padding.Empty
+            });
 
             var actionPanel = new FlowLayoutPanel
             {
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 BackColor = Color.Transparent,
-                Dock = DockStyle.Fill,
+                Anchor = AnchorStyles.Right,
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
                 Margin = Padding.Empty,
-                Padding = new Padding(0, 9, 0, 0)
+                Padding = Padding.Empty
             };
-
             foreach (Control action in actions)
             {
-                if (action is Label)
-                    action.Margin = new Padding(8, 7, 0, 0);
-                else
-                    action.Margin = new Padding(8, 0, 0, 0);
+                action.Anchor = AnchorStyles.None;
+                action.Margin = new Padding(8, 0, 0, 0);
                 actionPanel.Controls.Add(action);
             }
 
@@ -138,7 +142,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 Padding = new Padding(0, 0, 0, 3),
                 Text = title,
                 TextAlign = ContentAlignment.MiddleLeft,
-                UseCompatibleTextRendering = false
+                UseCompatibleTextRendering = true
             }, 0, 0);
 
             Control body = content is DataGridView ? CreateRoundedContentBody(content) : content;
@@ -323,10 +327,13 @@ namespace CourseGuard.Frontend.UserControls.Student
                 button.Width = desiredWidth;
         }
 
-        public static void EnableNaturalFocusClear(UserControl page, params DataGridView[] gridsToClear)
+        public static void EnableNaturalFocusClear(UserControl page, params DataGridView[] extraGrids)
         {
+            var gridsToClear = new System.Collections.Generic.List<DataGridView>(extraGrids);
+
             void Clear()
             {
+                page.Focus();
                 page.ActiveControl = null;
                 SearchFocusManager.BlurFocusedSearchInput(page.FindForm());
 
@@ -342,7 +349,17 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             void Attach(Control control)
             {
-                if (control is TextBox || control is ComboBox || control is Button || control is DataGridView || control is ListBox)
+                if (control is DataGridView grid)
+                {
+                    if (!gridsToClear.Contains(grid)) gridsToClear.Add(grid);
+                    grid.MouseDown += (s, e) => {
+                        if (grid.HitTest(e.X, e.Y).Type == DataGridViewHitTestType.None)
+                            Clear();
+                    };
+                    return;
+                }
+
+                if (control is TextBox || control is ComboBox || control is Button || control is ListBox)
                     return;
 
                 control.MouseDown += (_, _) => Clear();
@@ -351,7 +368,8 @@ namespace CourseGuard.Frontend.UserControls.Student
                     Attach(child);
             }
 
-            Attach(page);
+            page.Load += (s, e) => Attach(page);
+            if (page.IsHandleCreated) Attach(page);
         }
     }
 }

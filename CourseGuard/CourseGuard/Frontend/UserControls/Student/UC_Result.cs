@@ -46,14 +46,30 @@ namespace CourseGuard.Frontend.UserControls.Student
             btnReview.Text = "Xem lại bài";
             _hideResult.Text = "Ẩn khỏi Kết quả";
             _courseFilter.Width = 220;
+            _courseFilter.Height = 36;
             _searchBox.Width = 240;
             _searchBox.PlaceholderText = "Tìm theo tên bài thi";
 
-            var actions = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
+            btnReview.Width = 150;
+            _hideResult.Width = 160;
+
+            var searchShell = StudentTabChrome.CreateSearchBox(_searchBox, 260);
+            var actions = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.Transparent,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
             actions.Controls.Add(_courseFilter);
-            actions.Controls.Add(StudentTabChrome.CreateSearchBox(_searchBox, 260));
+            actions.Controls.Add(searchShell);
             actions.Controls.Add(btnReview);
             actions.Controls.Add(_hideResult);
+            foreach (Control action in actions.Controls)
+                action.Margin = new Padding(8, 0, 0, 0);
 
             _resultBody = new RoundedPanel
             {

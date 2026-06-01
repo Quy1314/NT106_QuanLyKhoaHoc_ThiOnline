@@ -141,6 +141,18 @@ Run("table grid border token is opaque in both themes", () =>
     AppColors.IsDarkMode = true;
 });
 
+Run("vietnam time formatter does not offset database local timestamps", () =>
+{
+    var databaseLocalTime = new DateTime(2026, 5, 25, 3, 4, 0, DateTimeKind.Unspecified);
+    AssertEqual("25/05/2026 03:04", FormatVietnamTime(databaseLocalTime));
+});
+
+Run("vietnam time formatter converts explicit utc timestamps", () =>
+{
+    var utcTime = new DateTime(2026, 5, 25, 3, 4, 0, DateTimeKind.Utc);
+    AssertEqual("25/05/2026 10:04", FormatVietnamTime(utcTime));
+});
+
 Run("student and teacher data cards wrap grids in rounded bodies", RunDashboardCardTests);
 Run("modern message dialog exposes requested buttons", RunMessageDialogButtonTests);
 
@@ -202,6 +214,16 @@ static void RunMessageDialogButtonTests()
         okCancel,
         new[] { DialogResult.OK, DialogResult.Cancel },
         "ok/cancel dialog should expose both actions");
+}
+
+static string FormatVietnamTime(DateTime value)
+{
+    Type formatterType = typeof(AppColors).Assembly.GetType("CourseGuard.Frontend.Theme.SystemTimeFormatter")
+        ?? throw new InvalidOperationException("Cannot find SystemTimeFormatter");
+    MethodInfo method = formatterType.GetMethod("FormatVietnamTime", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+        ?? throw new InvalidOperationException("Cannot find FormatVietnamTime");
+    return (string)(method.Invoke(null, new object[] { value })
+        ?? throw new InvalidOperationException("FormatVietnamTime returned null"));
 }
 
 static Form CreateThemedDialog(string content, string title, MessageBoxButtons buttons, MessageBoxIcon icon)

@@ -11,7 +11,7 @@ using CourseGuard.Frontend.UserControls.Teacher;
 
 namespace CourseGuard.Frontend.Forms.Teacher
 {
-    public class QuestionBankDialog : Form
+    public class QuestionBankDialog : ThemedDialogBase
     {
         private readonly int _teacherId;
         private readonly int _examId;
@@ -31,18 +31,15 @@ namespace CourseGuard.Frontend.Forms.Teacher
             Text = "Ngân hàng câu hỏi khóa học";
             Width = 900;
             Height = 600;
-            StartPosition = FormStartPosition.CenterParent;
             BuildLayout();
             WireEvents();
             LoadData();
-            AppColors.ApplyTheme(this);
         }
 
         private void BuildLayout()
         {
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Padding = new Padding(16), BackColor = AppColors.BgBase };
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 1, Padding = new Padding(0) };
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
 
             TeacherTabChrome.StyleGrid(_grid);
             _grid.Dock = DockStyle.Fill;
@@ -50,12 +47,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _grid.ReadOnly = false; // Allow checking boxes
             root.Controls.Add(_grid, 0, 0);
 
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-            buttons.Controls.Add(_close);
-            buttons.Controls.Add(_add);
-            root.Controls.Add(buttons, 0, 1);
-
-            Controls.Add(root);
+            ContentPanel.Controls.Add(root);
+            AddFooterButtons(_close, _add);
+            CancelButton = _close;
         }
 
         private void WireEvents()

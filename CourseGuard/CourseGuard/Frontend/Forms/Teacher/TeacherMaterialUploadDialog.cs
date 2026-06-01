@@ -5,7 +5,7 @@ using CourseGuard.Frontend.UserControls.Teacher;
 
 namespace CourseGuard.Frontend.Forms.Teacher
 {
-    public class TeacherMaterialUploadDialog : Form
+    public class TeacherMaterialUploadDialog : ThemedDialogBase
     {
         private readonly ComboBox _course = new();
         private readonly TextBox _file = new();
@@ -19,10 +19,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _courses = courses.ToList();
             Text = "Tải tài liệu";
             Width = 640;
-            Height = 230;
-            StartPosition = FormStartPosition.CenterParent;
+            Height = 250;
             BuildLayout(selectedCourseId);
-            AppColors.ApplyTheme(this);
         }
 
         public int CourseId => _course.SelectedItem is TeacherCourseModel course ? course.Id : 0;
@@ -33,11 +31,10 @@ namespace CourseGuard.Frontend.Forms.Teacher
             var root = TeacherCourseDialog.CreateGrid();
             root.Dock = DockStyle.Fill;
             root.Padding = new Padding(18);
-            root.RowCount = 3;
+            root.RowCount = 2;
             root.RowStyles.Clear();
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
 
             _course.DropDownStyle = ComboBoxStyle.DropDownList;
             _course.DisplayMember = nameof(TeacherCourseModel.Name);
@@ -60,12 +57,10 @@ namespace CourseGuard.Frontend.Forms.Teacher
             AddRow(root, 0, "Khóa học", _course);
             AddRow(root, 1, "File", filePanel);
 
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-            buttons.Controls.Add(_cancel);
-            buttons.Controls.Add(_save);
-            root.Controls.Add(buttons, 0, 2);
-            root.SetColumnSpan(buttons, 2);
-            Controls.Add(root);
+            ContentPanel.Controls.Add(root);
+            AddFooterButtons(_cancel, _save);
+            AcceptButton = _save;
+            CancelButton = _cancel;
         }
 
         private static void AddRow(TableLayoutPanel grid, int row, string label, Control control)

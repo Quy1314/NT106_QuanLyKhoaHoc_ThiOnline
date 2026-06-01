@@ -36,6 +36,31 @@ namespace CourseGuard.Frontend.Theme
             return path;
         }
 
+        public static GraphicsPath RoundedRectF(RectangleF bounds, float radius)
+        {
+            var path = new GraphicsPath();
+
+            // Safety clamp
+            float maxRadius = Math.Min(bounds.Width, bounds.Height) / 2f;
+            radius = Math.Min(radius, maxRadius);
+
+            if (radius <= 0f)
+            {
+                if (bounds.Width > 0f && bounds.Height > 0f)
+                    path.AddRectangle(bounds);
+                return path;
+            }
+
+            float d = radius * 2f;
+            path.AddArc(bounds.X, bounds.Y, d, d, 180, 90);
+            path.AddArc(bounds.Right - d, bounds.Y, d, d, 270, 90);
+            path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
+            path.AddArc(bounds.X, bounds.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+
+            return path;
+        }
+
         public static GraphicsPath RightRoundedRect(Rectangle bounds, int radius)
         {
             var path = new GraphicsPath();

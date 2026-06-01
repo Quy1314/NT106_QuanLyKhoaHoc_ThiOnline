@@ -7,6 +7,7 @@ namespace CourseGuard.Frontend.Theme
     public sealed class SearchBoxPanel : RoundedPanel
     {
         private readonly TextBox _input;
+        private bool _isHovered;
 
         public SearchBoxPanel(TextBox input, int width = 330)
         {
@@ -31,12 +32,18 @@ namespace CourseGuard.Frontend.Theme
             LayoutInput();
 
             MouseDown += (_, _) => _input.Focus();
+            MouseEnter += (_, _) => SetHover(true);
+            MouseLeave += (_, _) => SetHover(false);
+            _input.MouseEnter += (_, _) => SetHover(true);
+            _input.MouseLeave += (_, _) => SetHover(ClientRectangle.Contains(PointToClient(Cursor.Position)));
+            _input.GotFocus += (_, _) => ApplyTheme();
+            _input.LostFocus += (_, _) => ApplyTheme();
         }
 
         public void ApplyTheme()
         {
             FillColor = AppColors.IsDarkMode ? AppColors.BgInput : ColorTranslator.FromHtml("#F8FAFC");
-            BorderColor = AppColors.Border;
+            BorderColor = CurrentBorderColor();
             _input.BackColor = FillColor;
             _input.ForeColor = AppColors.TextPrimary;
             Invalidate();
@@ -79,6 +86,32 @@ namespace CourseGuard.Frontend.Theme
 
             g.DrawEllipse(pen, bounds.Left + 1, bounds.Top + 1, 9, 9);
             g.DrawLine(pen, bounds.Left + 10, bounds.Top + 10, bounds.Right - 1, bounds.Bottom - 1);
+        }
+
+        private void SetHover(bool hovered)
+        {
+            if (_isHovered == hovered)
+                return;
+
+            _isHovered = hovered;
+            ApplyTheme();
+        }
+
+        private Color CurrentBorderColor()
+        {
+            if (_input.Focused)
+                return MetaTheme.Colors.BorderFocus;
+
+            if (_isHovered)
+            {
+                return AppColors.IsDarkMode
+                    ? Color.FromArgb(160, 148, 163, 184)
+                    : ColorTranslator.FromHtml("#94A3B8");
+            }
+
+            return AppColors.IsDarkMode
+                ? Color.FromArgb(115, 148, 163, 184)
+                : ColorTranslator.FromHtml("#CBD5E1");
         }
     }
 }

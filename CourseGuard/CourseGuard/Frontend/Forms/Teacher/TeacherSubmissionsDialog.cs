@@ -13,7 +13,7 @@ using CourseGuard.Frontend.UserControls.Teacher;
 
 namespace CourseGuard.Frontend.Forms.Teacher
 {
-    public class TeacherSubmissionsDialog : Form
+    public class TeacherSubmissionsDialog : ThemedDialogBase
     {
         private readonly int _teacherId;
         private readonly TeacherController _controller;
@@ -38,6 +38,10 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _teacherId = teacherId;
             _controller = controller;
             _courses = courses;
+            
+            this.Text = "Danh sách sinh viên nộp bài";
+            this.Width = 1000;
+            this.Height = 650;
 
             InitializeComponent();
             ApplyTheme();
@@ -45,22 +49,17 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void InitializeComponent()
         {
-            this.Text = "Danh sách sinh viên nộp bài";
-            this.Size = new Size(1000, 650);
-            this.StartPosition = FormStartPosition.CenterParent;
-            this.BackColor = AppColors.BgBase;
-
             var mainLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 RowCount = 3,
                 ColumnCount = 1,
-                Padding = new Padding(20)
+                Padding = new Padding(0)
             };
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 180)); // Grading panel
-            this.Controls.Add(mainLayout);
+            ContentPanel.Controls.Add(mainLayout);
 
             // Filter
             var filterPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
@@ -112,6 +111,11 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             _gradingPanel.Enabled = false; // Disable until a row is selected
             mainLayout.Controls.Add(_gradingPanel, 0, 2);
+            
+            var closeBtn = TeacherTabChrome.SecondaryButton("Đóng");
+            closeBtn.Click += (s, e) => Close();
+            AddFooterButtons(closeBtn);
+            CancelButton = closeBtn;
         }
 
         private void ApplyTheme()

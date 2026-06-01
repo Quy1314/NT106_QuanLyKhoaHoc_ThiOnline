@@ -8,11 +8,8 @@ using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.Forms.Teacher
 {
-    public partial class TeacherExamDialog : Form
+    public partial class TeacherExamDialog : ThemedDialogBase
     {
-        [DllImport("dwmapi.dll")]
-        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
-
         private readonly ComboBox _course = new();
         private readonly TextBox _title = new();
         private readonly ComboBox _status = new();
@@ -33,15 +30,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         {
             Text = existing == null ? "Thêm bài kiểm tra" : "Sửa bài kiểm tra";
             Width = 700;
-            Height = 350;
-            StartPosition = FormStartPosition.CenterParent;
-            FormBorderStyle = FormBorderStyle.FixedDialog;
-            MaximizeBox = false;
-            MinimizeBox = false;
-            AutoScaleMode = AutoScaleMode.Dpi;
-            Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            BackColor = AppColors.BgBase;
-            ForeColor = AppColors.TextPrimary;
+            Height = 420;
 
             _course.DropDownStyle = ComboBoxStyle.DropDownList;
             _course.DisplayMember = nameof(TeacherCourseModel.Name);
@@ -82,8 +71,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 _status.SelectedIndex = 0;
             }
 
-            var save = new Button { Text = "Lưu", DialogResult = DialogResult.OK, Width = 100, Height = 36, Cursor = Cursors.Hand };
-            var cancel = new Button { Text = "Hủy", DialogResult = DialogResult.Cancel, Width = 100, Height = 36, Cursor = Cursors.Hand };
+            var save = new Button { Text = "Lưu", DialogResult = DialogResult.OK, Width = 100, Cursor = Cursors.Hand };
+            var cancel = new Button { Text = "Hủy", DialogResult = DialogResult.Cancel, Width = 100, Cursor = Cursors.Hand };
             
             save.Tag = "primary";
             cancel.Tag = "secondary";
@@ -104,7 +93,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 }
             };
 
-            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, Padding = new Padding(20, 20, 20, 10) };
+            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, Padding = new Padding(0) };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 16));
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22));
@@ -130,27 +119,13 @@ namespace CourseGuard.Frontend.Forms.Teacher
             grid.Controls.Add(CreateLabel("Số lần làm bài"), 2, 3);
             grid.Controls.Add(_maxAttempts, 3, 3);
 
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 60, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(20, 10, 20, 10) };
-            buttons.Controls.Add(save);
-            buttons.Controls.Add(cancel);
+            ContentPanel.Controls.Add(grid);
+            AddFooterButtons(cancel, save);
             
-            Controls.Add(grid);
-            Controls.Add(buttons);
             AcceptButton = save;
             CancelButton = cancel;
 
-            AppColors.ApplyTheme(this);
             RoundedButtonHelper.Apply(8, save, cancel);
-        }
-
-        protected override void OnHandleCreated(EventArgs e)
-        {
-            base.OnHandleCreated(e);
-            if (Environment.OSVersion.Version.Major >= 10 && AppColors.IsDarkMode)
-            {
-                int useImmersiveDarkMode = 1;
-                DwmSetWindowAttribute(Handle, 20, ref useImmersiveDarkMode, sizeof(int));
-            }
         }
 
         private Label CreateLabel(string text)

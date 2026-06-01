@@ -689,14 +689,15 @@ namespace CourseGuard.Frontend.Theme
                     Dock = DockStyle.Fill,
                     BackColor = AppColors.BgCard,
                     ColumnCount = 1,
-                    RowCount = 4
+                    RowCount = 4,
+                    Margin = new Padding(0)
                 };
                 root.RowStyles.Add(new RowStyle(SizeType.Absolute, 4f));
                 root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));
                 root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
                 root.RowStyles.Add(new RowStyle(SizeType.Absolute, 66f));
 
-                root.Controls.Add(new Panel { Dock = DockStyle.Fill, BackColor = ToneColor }, 0, 0);
+                root.Controls.Add(new Panel { Dock = DockStyle.Fill, BackColor = ToneColor, Margin = new Padding(0) }, 0, 0);
                 root.Controls.Add(BuildHeader(title), 0, 1);
                 root.Controls.Add(BuildBody(content), 0, 2);
                 root.Controls.Add(BuildFooter(), 0, 3);
@@ -709,13 +710,13 @@ namespace CourseGuard.Frontend.Theme
                 {
                     Dock = DockStyle.Fill,
                     BackColor = AppColors.BgCard,
-                    ColumnCount = 3,
+                    ColumnCount = 2,
                     RowCount = 1,
-                    Padding = new Padding(20, 10, 14, 8)
+                    Padding = new Padding(20, 10, 20, 8),
+                    Margin = new Padding(0)
                 };
                 header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 40f));
                 header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-                header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 34f));
                 header.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
                 header.MouseDown += (_, e) =>
                 {
@@ -727,28 +728,6 @@ namespace CourseGuard.Frontend.Theme
                 {
                     Dock = DockStyle.Fill,
                     Margin = new Padding(0, 0, 10, 0)
-                };
-
-                var closeButton = new Button
-                {
-                    Dock = DockStyle.Fill,
-                    Text = "×",
-                    FlatStyle = FlatStyle.Flat,
-                    BackColor = AppColors.IsDarkMode ? Color.FromArgb(78, 91, 111) : Color.FromArgb(229, 231, 235),
-                    ForeColor = AppColors.TextSecondary,
-                    Font = AppFonts.Semibold(13f),
-                    Cursor = Cursors.Hand,
-                    TabStop = false,
-                    Margin = new Padding(2, 2, 0, 2)
-                };
-                closeButton.FlatAppearance.BorderSize = 0;
-                closeButton.FlatAppearance.MouseOverBackColor = AppColors.IsDarkMode ? Color.FromArgb(95, 108, 132) : Color.FromArgb(209, 213, 219);
-                closeButton.FlatAppearance.MouseDownBackColor = AppColors.BgElevated;
-                RoundedButtonHelper.Apply(closeButton, 14);
-                closeButton.Click += (_, _) =>
-                {
-                    DialogResult = CancelDialogResult;
-                    Close();
                 };
 
                 var lblTitle = new Label
@@ -765,7 +744,6 @@ namespace CourseGuard.Frontend.Theme
 
                 header.Controls.Add(icon, 0, 0);
                 header.Controls.Add(lblTitle, 1, 0);
-                header.Controls.Add(closeButton, 2, 0);
                 return header;
             }
 
@@ -777,7 +755,8 @@ namespace CourseGuard.Frontend.Theme
                     BackColor = AppColors.BgCard,
                     ColumnCount = 2,
                     RowCount = 1,
-                    Padding = new Padding(24, 8, 18, 10)
+                    Padding = new Padding(24, 8, 24, 10),
+                    Margin = new Padding(0)
                 };
                 body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
                 body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86f));
@@ -831,7 +810,8 @@ namespace CourseGuard.Frontend.Theme
                     BackColor = AppColors.BgCard,
                     ColumnCount = 1,
                     RowCount = 1,
-                    Padding = new Padding(16, 12, 16, 12)
+                    Padding = new Padding(16, 12, 16, 12),
+                    Margin = new Padding(0)
                 };
                 footer.Paint += (_, e) =>
                 {
@@ -1031,7 +1011,7 @@ namespace CourseGuard.Frontend.Theme
             {
                 DialogTone.Warning => AppColors.Warning,
                 DialogTone.Error => AppColors.Danger,
-                DialogTone.Confirm => AppColors.Danger,
+                DialogTone.Confirm => AppColors.AccentBlue,
                 _ => AppColors.AccentBlue
             };
 
@@ -1039,7 +1019,7 @@ namespace CourseGuard.Frontend.Theme
             {
                 DialogTone.Warning => AppColors.WarningSoft,
                 DialogTone.Error => AppColors.DangerSoft,
-                DialogTone.Confirm => AppColors.DangerSoft,
+                DialogTone.Confirm => AppColors.AccentSoft,
                 _ => AppColors.AccentSoft
             };
 
@@ -1103,7 +1083,7 @@ namespace CourseGuard.Frontend.Theme
                     return;
 
                 Region?.Dispose();
-                using var path = GraphicsHelpers.RoundedRect(new Rectangle(0, 0, Width, Height), CornerRadius);
+                using var path = GraphicsHelpers.RoundedRect(new Rectangle(-1, -1, Width + 2, Height + 2), CornerRadius);
                 Region = new Region(path);
             }
         }

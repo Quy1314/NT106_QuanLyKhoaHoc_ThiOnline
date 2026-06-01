@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
 using System.Linq;
@@ -18,6 +19,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         private string _globalSearchKeyword = string.Empty;
         private RoundedPanel _notificationBody = null!;
         private Label _emptyStateLabel = null!;
+        private readonly HashSet<int> _markingReadIds = new();
 
         public UC_Notification()
         {
@@ -25,6 +27,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             BuildCardLayout();
             ApplyAcademicStyle();
             btnMarkAsRead.Click += async (_, _) => await MarkSelectedNotificationAsRead();
+            dgvNotifications.CellClick += async (_, e) => await MarkClickedNotificationAsRead(e.RowIndex);
             _ = LoadDataAsync();
 
             RoundedButtonHelper.Apply(btnMarkAsRead, 10);
@@ -215,6 +218,56 @@ namespace CourseGuard.Frontend.UserControls.Student
             dt.Columns.Add("Nội dung", typeof(string));
             dt.Columns.Add("Trạng thái", typeof(string));
             return dt;
+        }
+
+        private async System.Threading.Tasks.Task MarkClickedNotificationAsRead(int rowIndex)
+        {
+            if (!dgvNotifications.Visible || rowIndex < 0 || rowIndex >= dgvNotifications.Rows.Count)
+                return;
+
+            DataGridViewRow row = dgvNotifications.Rows[rowIndex];
+            if (row.IsNewRow)
+                return;
+
+            int notificationId = Convert.ToInt32(row.Cells["Id"].Value);
+            bool isRead = row.Cells["IsRead"].Value is bool value && value;
+            if (notificationId <= 0 || isRead || !_markingReadIds.Add(notificationId))
+                return;
+
+            try
+            {
+                bool updated = await System.Threading.Tasks.Task.Run(() => _repository.MarkAsRead(notificationId));
+                if (!updated)
+                    return;
+
+                row.Cells["IsRead"].Value = true;
+                row.Cells["Tráº¡ng thÃ¡i"].Value = "ÄÃ£ Ä‘á»c";
+                row.DataGridView?.InvalidateRow(row.Index);
+                UpdateCachedNotificationRow(notificationId);
+
+                if (FindForm() is StudentDashboard dashboard)
+                    dashboard.RefreshNotificationSummary();
+            }
+            finally
+            {
+                _markingReadIds.Remove(notificationId);
+            }
+        }
+
+        private void UpdateCachedNotificationRow(int notificationId)
+        {
+            if (_notificationTable == null)
+                return;
+
+            foreach (DataRow dataRow in _notificationTable.Rows)
+            {
+                if (Convert.ToInt32(dataRow["Id"]) != notificationId)
+                    continue;
+
+                dataRow["IsRead"] = true;
+                dataRow["Tráº¡ng thÃ¡i"] = "ÄÃ£ Ä‘á»c";
+                break;
+            }
         }
 
         private async System.Threading.Tasks.Task MarkSelectedNotificationAsRead()

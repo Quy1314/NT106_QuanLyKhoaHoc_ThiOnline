@@ -12,7 +12,7 @@ using CourseGuard.Frontend.UserControls.Teacher;
 
 namespace CourseGuard.Frontend.Forms.Teacher
 {
-    public class TeacherExamQuestionsDialog : Form
+    public class TeacherExamQuestionsDialog : ThemedDialogBase
     {
         private readonly int _teacherId;
         private readonly int _examId;
@@ -43,16 +43,14 @@ namespace CourseGuard.Frontend.Forms.Teacher
             Text = $"Soạn câu hỏi - {examTitle}";
             Width = 980;
             Height = 620;
-            StartPosition = FormStartPosition.CenterParent;
             BuildLayout();
             WireEvents();
             LoadQuestions();
-            AppColors.ApplyTheme(this);
         }
 
         private void BuildLayout()
         {
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(16), BackColor = AppColors.BgBase };
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0) };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
 
@@ -93,14 +91,16 @@ namespace CourseGuard.Frontend.Forms.Teacher
             AddRow(editor, 6, "Điểm/câu", _points);
 
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };
-            buttons.Controls.Add(_close);
             buttons.Controls.Add(_delete);
             buttons.Controls.Add(_save);
             buttons.Controls.Add(_add);
             editor.Controls.Add(buttons, 0, 7);
             editor.SetColumnSpan(buttons, 2);
             root.Controls.Add(editor, 1, 0);
-            Controls.Add(root);
+            
+            ContentPanel.Controls.Add(root);
+            AddFooterButtons(_close);
+            CancelButton = _close;
         }
 
         private static void AddRow(TableLayoutPanel grid, int row, string label, Control control)

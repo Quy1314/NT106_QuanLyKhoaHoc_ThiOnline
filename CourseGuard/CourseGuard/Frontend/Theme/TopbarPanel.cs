@@ -418,7 +418,7 @@ namespace CourseGuard.Frontend.Theme
             {
                 HideFloatingLabel();
                 BuildMenus();
-                _notificationMenu.Show(this, _notificationRect.Left, _notificationRect.Bottom + 4);
+                _notificationMenu.Show(this, new Point(_notificationRect.Right, _notificationRect.Bottom + 4), ToolStripDropDownDirection.BelowLeft);
             }
             else if (_useStudentTopbar && _searchRect.Contains(e.Location))
             {
@@ -435,7 +435,7 @@ namespace CourseGuard.Frontend.Theme
             {
                 HideFloatingLabel();
                 BuildMenus();
-                _accountMenu.Show(this, _accountRect.Left, _accountRect.Bottom + 4);
+                _accountMenu.Show(this, new Point(_accountRect.Right, _accountRect.Bottom + 4), ToolStripDropDownDirection.BelowLeft);
             }
         }
 
@@ -851,6 +851,7 @@ namespace CourseGuard.Frontend.Theme
             }
             _notificationMenu.Items.Add(new ToolStripSeparator());
             var viewAllNotifications = new ToolStripMenuItem("Xem tất cả thông báo");
+            viewAllNotifications.Padding = new Padding(15, 5, 15, 5);
             viewAllNotifications.Click += (_, _) => NavigationRequested?.Invoke(this, new TopbarNavigationRequestedEventArgs("Thông báo"));
             _notificationMenu.Items.Add(viewAllNotifications);
 

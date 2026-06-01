@@ -7,7 +7,7 @@ using CourseGuard.Frontend.UserControls.Teacher;
 
 namespace CourseGuard.Frontend.Forms.Teacher
 {
-    public class TeacherSimpleItemDialog : Form
+    public class TeacherSimpleItemDialog : ThemedDialogBase
     {
         protected readonly ComboBox CourseCombo = new();
         protected readonly TextBox TitleTextBox = new();
@@ -26,11 +26,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         {
             Text = title;
             Width = 520;
-            Height = 330;
-            StartPosition = FormStartPosition.CenterParent;
-            FormBorderStyle = FormBorderStyle.FixedDialog;
-            MaximizeBox = false;
-            MinimizeBox = false;
+            Height = 350;
 
             CourseCombo.DropDownStyle = ComboBoxStyle.DropDownList;
             CourseCombo.DisplayMember = nameof(TeacherCourseModel.Name);
@@ -81,14 +77,10 @@ namespace CourseGuard.Frontend.Forms.Teacher
             grid.Controls.Add(new Label { Text = "Trạng thái", Dock = DockStyle.Fill }, 0, 4);
             grid.Controls.Add(StatusCombo, 1, 4);
 
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 52, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(12), BackColor = AppColors.BgBase };
-            buttons.Controls.Add(cancel);
-            buttons.Controls.Add(save);
-            Controls.Add(grid);
-            Controls.Add(buttons);
+            ContentPanel.Controls.Add(grid);
+            AddFooterButtons(cancel, save);
             AcceptButton = save;
             CancelButton = cancel;
-            AppColors.ApplyTheme(this);
         }
 
         protected virtual bool ValidateBeforeSave()

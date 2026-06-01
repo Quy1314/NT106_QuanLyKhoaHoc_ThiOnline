@@ -8,7 +8,7 @@ using CourseGuard.Frontend.UserControls.Teacher;
 
 namespace CourseGuard.Frontend.Forms.Teacher
 {
-    public partial class TeacherCourseDialog : Form
+    public partial class TeacherCourseDialog : ThemedDialogBase
     {
         private readonly TextBox _name = new();
         private readonly TextBox _description = new();
@@ -28,11 +28,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             Course = course ?? new TeacherCourseModel();
             Text = course == null ? "Tạo khóa học" : "Sửa khóa học";
             Width = 620;
-            Height = 520;
-            StartPosition = FormStartPosition.CenterParent;
-            FormBorderStyle = FormBorderStyle.FixedDialog;
-            MaximizeBox = false;
-            MinimizeBox = false;
+            Height = 550;
 
             _name.Text = Course.Name;
             _description.Text = Course.Description;
@@ -83,14 +79,11 @@ namespace CourseGuard.Frontend.Forms.Teacher
             AddRow(grid, 8, "Giờ kết thúc", _sessionEnd);
             AddRow(grid, 9, "Link học", _meetingLink);
 
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 52, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(12), BackColor = AppColors.BgBase };
-            buttons.Controls.Add(cancel);
-            buttons.Controls.Add(save);
-            Controls.Add(grid);
-            Controls.Add(buttons);
+            ContentPanel.Controls.Add(grid);
+            AddFooterButtons(cancel, save);
+            
             AcceptButton = save;
             CancelButton = cancel;
-            AppColors.ApplyTheme(this);
         }
 
         internal static TableLayoutPanel CreateGrid()

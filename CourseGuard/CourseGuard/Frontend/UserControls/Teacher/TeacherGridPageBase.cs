@@ -30,8 +30,20 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             InitializeComponent(title, subtitle, cardTitle, showCrud);
             RefreshButton.Click += async (_, _) => await LoadDataAsync();
             AddButton.Click += async (_, _) => await AddAsync();
-            EditButton.Click += async (_, _) => await EditAsync();
-            DeleteButton.Click += async (_, _) => await DeleteAsync();
+            EditButton.Click += async (_, _) => {
+                if (CurrentInt("Id") <= 0) {
+                    MetaTheme.ShowModernDialog("Vui lòng chọn một dòng dữ liệu để Sửa.", "Chưa chọn dữ liệu");
+                    return;
+                }
+                await EditAsync();
+            };
+            DeleteButton.Click += async (_, _) => {
+                if (CurrentInt("Id") <= 0) {
+                    MetaTheme.ShowModernDialog("Vui lòng chọn một dòng dữ liệu để Xóa.", "Chưa chọn dữ liệu");
+                    return;
+                }
+                await DeleteAsync();
+            };
             _ = LoadDataAsync();
         }
 

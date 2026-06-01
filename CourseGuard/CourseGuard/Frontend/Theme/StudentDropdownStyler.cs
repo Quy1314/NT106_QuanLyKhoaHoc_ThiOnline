@@ -192,7 +192,9 @@ namespace CourseGuard.Frontend.Theme
         private static void ApplyRoundedRegion(ContextMenuStrip menu)
         {
             menu.Region?.Dispose();
-            using var path = GraphicsHelpers.RoundedRect(new Rectangle(0, 0, menu.Width, menu.Height), MenuRadius);
+            // Use an expanded rect so the Region doesn't clip the anti-aliased border corners
+            using var path = GraphicsHelpers.RoundedRect(
+                new Rectangle(-1, -1, menu.Width + 2, menu.Height + 2), MenuRadius + 1);
             menu.Region = new Region(path);
         }
 
@@ -253,7 +255,10 @@ namespace CourseGuard.Frontend.Theme
                 return;
 
             combo.Region?.Dispose();
-            using var path = GraphicsHelpers.RoundedRect(new Rectangle(0, 0, combo.Width, combo.Height), ComboRadius);
+            // Use a 1px-expanded rect so the Region never clips the anti-aliased
+            // border corners drawn at the inset float rect (0.5, 0.5, W-1, H-1).
+            using var path = GraphicsHelpers.RoundedRect(
+                new Rectangle(-1, -1, combo.Width + 2, combo.Height + 2), ComboRadius + 1);
             combo.Region = new Region(path);
         }
 

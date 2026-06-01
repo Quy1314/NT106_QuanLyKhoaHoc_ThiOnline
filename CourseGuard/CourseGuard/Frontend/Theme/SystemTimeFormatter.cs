@@ -13,12 +13,12 @@ namespace CourseGuard.Frontend.Theme
             if (value == DateTime.MinValue)
                 return string.Empty;
 
-            DateTime utc = value.Kind switch
-            {
-                DateTimeKind.Utc => value,
-                DateTimeKind.Local => value.ToUniversalTime(),
-                _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
-            };
+            if (value.Kind == DateTimeKind.Unspecified)
+                return value.ToString(DisplayFormat, CultureInfo.InvariantCulture);
+
+            DateTime utc = value.Kind == DateTimeKind.Utc
+                ? value
+                : value.ToUniversalTime();
 
             DateTime vietnamTime = TimeZoneInfo.ConvertTimeFromUtc(utc, VietnamTimeZone);
             return vietnamTime.ToString(DisplayFormat, CultureInfo.InvariantCulture);
