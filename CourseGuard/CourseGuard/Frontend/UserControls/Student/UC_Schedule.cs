@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Diagnostics;
 using System.Linq;
 using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
@@ -9,6 +8,7 @@ using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Backend.Services.Realtime;
 
 namespace CourseGuard.Frontend.UserControls.Student
 {
@@ -19,6 +19,8 @@ namespace CourseGuard.Frontend.UserControls.Student
         private List<StudentScheduleItemModel> _sessions = new();
         private RoundedPanel _scheduleBody = null!;
         private Label _emptyStateLabel = null!;
+        private readonly TcpClassroomClient _tcpClient = new();
+        private Button _btnQuickNote = null!;
 
         public UC_Schedule()
         {
@@ -33,6 +35,27 @@ namespace CourseGuard.Frontend.UserControls.Student
             btnJoinOnline.Click += (_, _) => JoinSelectedSession();
             MetaTheme.StyleGrid(dgvSchedule);
             _ = LoadSchedule();
+            
+            _tcpClient.ClassStatusChanged += TcpClient_ClassStatusChanged;
+            _ = _tcpClient.StartAsync();
+            
+            this.Disposed += (s, e) => _tcpClient.Dispose();
+        }
+
+        private void TcpClient_ClassStatusChanged(object? sender, ClassStatusEventArgs e)
+        {
+            if (this.IsHandleCreated)
+            {
+                this.Invoke((MethodInvoker)delegate
+                {
+                    var session = _sessions.FirstOrDefault(s => s.SessionId == e.SessionId);
+                    if (session != null)
+                    {
+                        // Refresh if the opened status changed
+                        _ = LoadSchedule();
+                    }
+                });
+            }
         }
 
         private async System.Threading.Tasks.Task LoadSchedule()
@@ -74,10 +97,16 @@ namespace CourseGuard.Frontend.UserControls.Student
         {
             btnJoinOnline.Text = "Tham gia online";
             var root = StudentTabChrome.CreateRoot(this);
+
+            _btnQuickNote = new Button { Text = "Ghi chú nhanh", Width = 140 };
+            StudentTabChrome.StyleSecondaryButton(_btnQuickNote);
+            RoundedButtonHelper.Apply(_btnQuickNote, 10);
+            _btnQuickNote.Click += (_, _) => OpenQuickNote();
+
             root.Controls.Add(StudentTabChrome.CreateHeader(
                 "Lịch học",
                 "Xem lịch học theo tuần, tháng và tham gia buổi học online.",
-                cboTimeFilter, btnJoinOnline), 0, 0);
+                cboTimeFilter, _btnQuickNote, btnJoinOnline), 0, 0);
             _scheduleBody = StudentTabChrome.CreateTableBody(dgvSchedule, out _emptyStateLabel);
             root.Controls.Add(StudentTabChrome.CreateDataCard("Lịch khóa học", _scheduleBody), 0, 1);
             StudentTabChrome.EnableNaturalFocusClear(this, dgvSchedule);
@@ -143,6 +172,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             bool hasRows = dt.Rows.Count > 0;
             StudentTabChrome.SetTableState(_scheduleBody, dgvSchedule, _emptyStateLabel, hasRows, emptyMessage);
             btnJoinOnline.Enabled = hasRows;
+            _btnQuickNote.Enabled = hasRows;
             dgvSchedule.ClearSelection();
             dgvSchedule.CurrentCell = null;
         }
@@ -161,14 +191,32 @@ namespace CourseGuard.Frontend.UserControls.Student
             string username = UserSessionContext.CurrentUsername ?? "không xác định";
             _authController.LogUserActivity(userId, "ONLINE_SESSION_JOIN", $"Người dùng {username} tham gia lớp học online: {sessionName}", string.Empty);
 
-            if (!string.IsNullOrWhiteSpace(link))
+            int sessionId = 0;
+            if (dgvSchedule.CurrentRow.Cells["SessionId"].Value is int sid) sessionId = sid;
+
+            if (sessionId <= 0)
             {
-                Process.Start(new ProcessStartInfo(link) { UseShellExecute = true });
+                MetaTheme.ShowModernDialog("Không xác định được buổi học cần tham gia.", "Thông báo");
                 return;
             }
 
-            CourseGuard.Frontend.Forms.Student.OnlineClassForm frm = new();
-            frm.Show();
+            using var meetingForm = new CourseGuard.Frontend.Forms.Student.StudentNativeClassroomForm(sessionId, sessionName);
+            meetingForm.ShowDialog(FindForm());
+            _ = LoadSchedule();
+        }
+
+        private void OpenQuickNote()
+        {
+            if (!dgvSchedule.Visible || dgvSchedule.CurrentRow == null || dgvSchedule.CurrentRow.IsNewRow)
+            {
+                MetaTheme.ShowModernDialog("Vui lòng chọn một buổi học để ghi chú.", "Thông báo");
+                return;
+            }
+            if (dgvSchedule.CurrentRow.Cells["SessionId"].Value is int sessionId)
+            {
+                var dialog = new CourseGuard.Frontend.Forms.Student.QuickNoteDialog(UserSessionContext.CurrentUserId ?? 0, sessionId);
+                dialog.ShowDialog(this.FindForm());
+            }
         }
 
         private static string BuildStatus(StudentScheduleItemModel session)

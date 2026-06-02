@@ -12,7 +12,10 @@ namespace CourseGuard.Frontend.Forms.Student
     public partial class OnlineClassForm : Form
     {
         private readonly AuthController _authController = new(new CourseGuardDbContext(""));
+        private readonly CourseGuardDbContext _db = new("");
         private bool _leaveActivityLogged;
+        private int _sessionId;
+        private int _attendanceLogId = 0;
 
         // ===== Trạng thái =====
         private bool isMicOn = true;
@@ -40,8 +43,9 @@ namespace CourseGuard.Frontend.Forms.Student
         // Popup forms (để track và close)
         private Form? _activePopup = null;
 
-        public OnlineClassForm()
+        public OnlineClassForm(int sessionId = 0)
         {
+            _sessionId = sessionId;
             InitializeComponent();
             SetupTooltips();
             SetupEventHandlers();
@@ -57,7 +61,23 @@ namespace CourseGuard.Frontend.Forms.Student
             AddStrikethroughPaint(btnMic, () => !isMicOn);
             AddStrikethroughPaint(btnSpeaker, () => !isSpeakerOn);
             AddStrikethroughPaint(btnCam, () => !isCamOn);
+            this.Load += OnlineClassForm_Load;
             this.FormClosing += OnlineClassForm_FormClosing;
+        }
+
+        private async void OnlineClassForm_Load(object? sender, EventArgs e)
+        {
+            if (_sessionId > 0 && UserSessionContext.CurrentUserId.HasValue)
+            {
+                try
+                {
+                    _attendanceLogId = await _db.LogAttendanceInAsync(UserSessionContext.CurrentUserId.Value, _sessionId);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error logging attendance in: {ex.Message}");
+                }
+            }
         }
 
         // ===== TOOLTIPS =====
@@ -361,8 +381,19 @@ namespace CourseGuard.Frontend.Forms.Student
             };
         }
 
-        private void OnlineClassForm_FormClosing(object? sender, FormClosingEventArgs e)
+        private async void OnlineClassForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
+            if (_attendanceLogId > 0)
+            {
+                try
+                {
+                    await _db.LogAttendanceOutAsync(_attendanceLogId);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error logging attendance out: {ex.Message}");
+                }
+            }
             LogOnlineSessionExit("Người dùng đóng cửa sổ lớp học online.");
         }
 

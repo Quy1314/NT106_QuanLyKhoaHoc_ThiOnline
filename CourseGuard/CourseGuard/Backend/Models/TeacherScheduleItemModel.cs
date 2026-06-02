@@ -11,5 +11,6 @@ namespace CourseGuard.Backend.Models
         public DateTime? StartTime { get; set; }
         public DateTime? EndTime { get; set; }
         public string MeetingLink { get; set; } = string.Empty;
+        public bool IsOpened { get; set; }
     }
 }
