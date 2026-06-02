@@ -16,6 +16,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             DeleteButton.Visible = false;
         }
 
+        protected override bool RequiresSelectionForEdit => false;
+
         protected override Task<DataTable> CreateTableAsync() => Task.Run(() => TeacherTabChrome.ToTable(
             new[] { "AttemptId", "ExamId", "CourseId", "StudentId", "Khóa học", "Kỳ thi", "Sinh viên", "Bắt đầu", "Trạng thái" },
             Controller.GetActiveExamSessions(TeacherId),
