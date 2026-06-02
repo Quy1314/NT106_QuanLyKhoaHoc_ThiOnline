@@ -31,7 +31,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             RefreshButton.Click += async (_, _) => await LoadDataAsync();
             AddButton.Click += async (_, _) => await AddAsync();
             EditButton.Click += async (_, _) => {
-                if (CurrentInt("Id") <= 0) {
+                if (RequiresSelectionForEdit && CurrentInt(EditSelectionColumnName) <= 0) {
                     MetaTheme.ShowModernDialog("Vui lòng chọn một dòng dữ liệu để Sửa.", "Chưa chọn dữ liệu");
                     return;
                 }
@@ -50,6 +50,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         protected virtual Task AddAsync() => Task.CompletedTask;
         protected virtual Task EditAsync() => Task.CompletedTask;
         protected virtual Task DeleteAsync() => Task.CompletedTask;
+        protected virtual bool RequiresSelectionForEdit => true;
+        protected virtual string EditSelectionColumnName => "Id";
         protected abstract Task<DataTable> CreateTableAsync();
 
         protected void AddHeaderAction(Control action)
@@ -64,7 +66,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         protected int CurrentInt(string columnName)
         {
-            if (!Grid.Visible || Grid.CurrentRow == null || Grid.CurrentRow.IsNewRow)
+            if (!Grid.Visible || Grid.CurrentRow == null || Grid.CurrentRow.IsNewRow || !Grid.Columns.Contains(columnName))
                 return 0;
             object? value = Grid.CurrentRow.Cells[columnName].Value;
             return value == null || value == DBNull.Value ? 0 : Convert.ToInt32(value);
@@ -72,7 +74,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         protected string CurrentString(string columnName)
         {
-            if (!Grid.Visible || Grid.CurrentRow == null || Grid.CurrentRow.IsNewRow)
+            if (!Grid.Visible || Grid.CurrentRow == null || Grid.CurrentRow.IsNewRow || !Grid.Columns.Contains(columnName))
                 return string.Empty;
             return Grid.CurrentRow.Cells[columnName].Value?.ToString() ?? string.Empty;
         }
