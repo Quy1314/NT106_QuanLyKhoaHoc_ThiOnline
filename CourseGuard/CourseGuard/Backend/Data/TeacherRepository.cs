@@ -1100,7 +1100,8 @@ namespace CourseGuard.Backend.Data
             connection.Open();
             using var command = new NpgsqlCommand(@"
                 SELECT os.id, os.course_id, COALESCE(c.name, ''), COALESCE(os.title, ''),
-                       os.start_time, os.end_time, COALESCE(os.meeting_link, '')
+                       os.start_time, os.end_time, COALESCE(os.meeting_link, ''),
+                       COALESCE(os.is_opened, FALSE)
                 FROM online_sessions os
                 JOIN courses c ON c.id = os.course_id
                 WHERE c.teacher_id = @teacher_id
@@ -1117,7 +1118,8 @@ namespace CourseGuard.Backend.Data
                     Title = reader.GetString(3),
                     StartTime = reader.IsDBNull(4) ? null : reader.GetDateTime(4),
                     EndTime = reader.IsDBNull(5) ? null : reader.GetDateTime(5),
-                    MeetingLink = reader.GetString(6)
+                    MeetingLink = reader.GetString(6),
+                    IsOpened = reader.GetBoolean(7)
                 });
             }
             return rows;
@@ -1137,6 +1139,19 @@ namespace CourseGuard.Backend.Data
                     ADD COLUMN IF NOT EXISTS source_type VARCHAR(64),
                     ADD COLUMN IF NOT EXISTS source_id INT;", connection))
                 command.ExecuteNonQuery();
+
+            using (var command = new NpgsqlCommand(@"
+                ALTER TABLE online_sessions
+                    ADD COLUMN IF NOT EXISTS recurring_rule TEXT,
+                    ADD COLUMN IF NOT EXISTS is_opened BOOLEAN DEFAULT FALSE,
+                    ADD COLUMN IF NOT EXISTS meeting_link TEXT;
+
+                CREATE INDEX IF NOT EXISTS idx_online_sessions_course_start
+                    ON online_sessions(course_id, start_time);
+                CREATE INDEX IF NOT EXISTS idx_online_sessions_opened
+                    ON online_sessions(is_opened);", connection))
+                command.ExecuteNonQuery();
+
             using (var command = new NpgsqlCommand(@"
                 CREATE TABLE IF NOT EXISTS teacher_profiles (
                     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

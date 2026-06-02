@@ -1987,7 +1987,7 @@ namespace CourseGuard.Backend.Data
                 SELECT os.id, os.course_id, COALESCE(c.name, ''),
                        COALESCE(u.full_name, u.username, ''),
                        COALESCE(os.title, ''), os.start_time, os.end_time,
-                       COALESCE(os.meeting_link, '')
+                       COALESCE(os.meeting_link, ''), COALESCE(os.is_opened, FALSE)
                 FROM online_sessions os
                 JOIN courses c ON c.id = os.course_id
                 JOIN enrollments e ON e.course_id = c.id
@@ -2011,7 +2011,8 @@ namespace CourseGuard.Backend.Data
                     Title = reader.GetString(4),
                     StartTime = reader.IsDBNull(5) ? null : reader.GetDateTime(5),
                     EndTime = reader.IsDBNull(6) ? null : reader.GetDateTime(6),
-                    MeetingLink = reader.GetString(7)
+                    MeetingLink = reader.GetString(7),
+                    IsOpened = reader.GetBoolean(8)
                 });
             }
 
@@ -3417,6 +3418,200 @@ namespace CourseGuard.Backend.Data
             {
                 // Silently ignore seed errors to avoid blocking app startup
             }
+        }
+
+        // --- Bổ sung hạ tầng DB Async cho Lịch học, Ghi chú & Điểm danh ---
+
+        public async Task<QuickNoteModel?> GetQuickNoteAsync(int userId, int sessionId, CancellationToken cancellationToken = default)
+        {
+            using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            const string query = @"
+                SELECT id, user_id, session_id, content, created_at, updated_at
+                FROM quick_notes
+                WHERE user_id = @user_id AND session_id = @session_id";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            command.Parameters.AddWithValue("@session_id", sessionId);
+
+            using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                return new QuickNoteModel
+                {
+                    Id = reader.GetInt32(0),
+                    UserId = reader.GetInt32(1),
+                    SessionId = reader.GetInt32(2),
+                    Content = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                    CreatedAt = reader.GetDateTime(4),
+                    UpdatedAt = reader.GetDateTime(5)
+                };
+            }
+            return null;
+        }
+
+        public async Task<bool> SaveQuickNoteAsync(QuickNoteModel note, CancellationToken cancellationToken = default)
+        {
+            using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            const string checkQuery = "SELECT id FROM quick_notes WHERE user_id = @user_id AND session_id = @session_id";
+            using var checkCommand = new NpgsqlCommand(checkQuery, connection);
+            checkCommand.Parameters.AddWithValue("@user_id", note.UserId);
+            checkCommand.Parameters.AddWithValue("@session_id", note.SessionId);
+            
+            var existingId = await checkCommand.ExecuteScalarAsync(cancellationToken);
+            
+            if (existingId != null)
+            {
+                const string updateQuery = @"
+                    UPDATE quick_notes 
+                    SET content = @content, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = @id";
+                using var updateCommand = new NpgsqlCommand(updateQuery, connection);
+                updateCommand.Parameters.AddWithValue("@id", Convert.ToInt32(existingId));
+                updateCommand.Parameters.AddWithValue("@content", string.IsNullOrWhiteSpace(note.Content) ? DBNull.Value : note.Content);
+                return await updateCommand.ExecuteNonQueryAsync(cancellationToken) > 0;
+            }
+            else
+            {
+                const string insertQuery = @"
+                    INSERT INTO quick_notes (user_id, session_id, content, created_at, updated_at)
+                    VALUES (@user_id, @session_id, @content, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)";
+                using var insertCommand = new NpgsqlCommand(insertQuery, connection);
+                insertCommand.Parameters.AddWithValue("@user_id", note.UserId);
+                insertCommand.Parameters.AddWithValue("@session_id", note.SessionId);
+                insertCommand.Parameters.AddWithValue("@content", string.IsNullOrWhiteSpace(note.Content) ? DBNull.Value : note.Content);
+                return await insertCommand.ExecuteNonQueryAsync(cancellationToken) > 0;
+            }
+        }
+
+        private async Task EnsureScheduleAttendanceSchemaAsync(NpgsqlConnection connection, CancellationToken cancellationToken = default)
+        {
+            const string query = @"
+                ALTER TABLE online_sessions
+                    ADD COLUMN IF NOT EXISTS recurring_rule TEXT,
+                    ADD COLUMN IF NOT EXISTS is_opened BOOLEAN DEFAULT FALSE,
+                    ADD COLUMN IF NOT EXISTS meeting_link TEXT;
+
+                CREATE TABLE IF NOT EXISTS quick_notes (
+                    id SERIAL PRIMARY KEY,
+                    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    session_id INT NOT NULL REFERENCES online_sessions(id) ON DELETE CASCADE,
+                    content TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS attendance_logs (
+                    id SERIAL PRIMARY KEY,
+                    student_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    session_id INT NOT NULL REFERENCES online_sessions(id) ON DELETE CASCADE,
+                    joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    left_at TIMESTAMP,
+                    duration_minutes INT DEFAULT 0,
+                    is_valid BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_quick_notes_user_session
+                    ON quick_notes(user_id, session_id);
+                CREATE INDEX IF NOT EXISTS idx_attendance_logs_session_student
+                    ON attendance_logs(session_id, student_id);
+                CREATE INDEX IF NOT EXISTS idx_attendance_logs_open_session_student
+                    ON attendance_logs(session_id, student_id)
+                    WHERE left_at IS NULL;
+                CREATE INDEX IF NOT EXISTS idx_online_sessions_opened
+                    ON online_sessions(is_opened);";
+
+            using var command = new NpgsqlCommand(query, connection);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        public async Task<int> LogAttendanceInAsync(int studentId, int sessionId, CancellationToken cancellationToken = default)
+        {
+            using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            await EnsureScheduleAttendanceSchemaAsync(connection, cancellationToken);
+
+            const string query = @"
+                WITH authorized_session AS (
+                    SELECT os.id
+                    FROM online_sessions os
+                    JOIN courses c ON c.id = os.course_id
+                    JOIN enrollments e ON e.course_id = c.id
+                    WHERE os.id = @session_id
+                      AND e.student_id = @student_id
+                      AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                      AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'
+                      AND COALESCE(os.is_opened, FALSE) = TRUE
+                ), open_log AS (
+                    SELECT al.id
+                    FROM attendance_logs al
+                    JOIN authorized_session aus ON aus.id = al.session_id
+                    WHERE al.student_id = @student_id
+                      AND al.left_at IS NULL
+                    ORDER BY al.joined_at DESC
+                    LIMIT 1
+                ), inserted AS (
+                    INSERT INTO attendance_logs (student_id, session_id, joined_at)
+                    SELECT @student_id, @session_id, CURRENT_TIMESTAMP
+                    WHERE EXISTS (SELECT 1 FROM authorized_session)
+                      AND NOT EXISTS (SELECT 1 FROM open_log)
+                    RETURNING id
+                )
+                SELECT id FROM inserted
+                UNION ALL
+                SELECT id FROM open_log
+                LIMIT 1";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@student_id", studentId);
+            command.Parameters.AddWithValue("@session_id", sessionId);
+
+            var result = await command.ExecuteScalarAsync(cancellationToken);
+            return result != null ? Convert.ToInt32(result) : 0;
+        }
+
+        public async Task<bool> LogAttendanceOutAsync(int logId, CancellationToken cancellationToken = default)
+        {
+            using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            await EnsureScheduleAttendanceSchemaAsync(connection, cancellationToken);
+
+            const string query = @"
+                UPDATE attendance_logs
+                SET left_at = CURRENT_TIMESTAMP,
+                    duration_minutes = GREATEST(CAST(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - joined_at)) / 60 AS INTEGER), 0),
+                    is_valid = (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - joined_at)) / 60) >= 30
+                WHERE id = @log_id AND left_at IS NULL";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@log_id", logId);
+
+            return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+        }
+
+        public async Task<bool> UpdateSessionStatusAsync(int sessionId, bool isOpened, string? meetingLink = null, CancellationToken cancellationToken = default)
+        {
+            using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            await EnsureScheduleAttendanceSchemaAsync(connection, cancellationToken);
+
+            const string query = @"
+                UPDATE online_sessions
+                SET is_opened = @is_opened,
+                    meeting_link = COALESCE(@meeting_link, meeting_link)
+                WHERE id = @session_id";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@session_id", sessionId);
+            command.Parameters.AddWithValue("@is_opened", isOpened);
+            command.Parameters.AddWithValue("@meeting_link", string.IsNullOrWhiteSpace(meetingLink) ? (object)DBNull.Value : meetingLink);
+
+            return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
         }
     }
 }
