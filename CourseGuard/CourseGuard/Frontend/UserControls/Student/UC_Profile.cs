@@ -49,7 +49,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         private TableLayoutPanel _personalEditGrid = new();
         private Panel? _avatarPanel;
         private Label? _lblHeaderName;
-        private Image? _avatarImage;
+        private AvatarManager? _avatarManager;
         private string _avatarPath = string.Empty;
         private string _studentCode = "HS12345";
 
@@ -85,7 +85,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             txtOldPassword.KeyDown += enterHandler;
             txtNewPassword.KeyDown += enterHandler;
             txtConfirmPassword.KeyDown += enterHandler;
-            Disposed += (_, _) => _avatarImage?.Dispose();
+            Disposed += (_, _) => _avatarManager?.Dispose();
         }
 
         public void FocusSecuritySection()
@@ -393,7 +393,13 @@ namespace CourseGuard.Frontend.UserControls.Student
                 BackColor = Color.Transparent
             };
             _avatarPanel = avatar;
-            avatar.Paint += (s, e) => DrawAvatar(e.Graphics, avatar.ClientRectangle);
+            _avatarManager = new AvatarManager(
+                this,
+                avatar,
+                () => !string.IsNullOrWhiteSpace(txtFullName.Text) ? txtFullName.Text : UserSessionContext.CurrentFullName,
+                () => UserSessionContext.CurrentUsername,
+                path => _avatarPath = path);
+            avatar.Paint += (s, e) => _avatarManager?.Draw(e.Graphics, avatar.ClientRectangle);
             avatar.Click += (s, e) => ChangeAvatar();
 
             var lblHeaderName = new Label
@@ -606,115 +612,23 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private void ChangeAvatar()
         {
-            using var dialog = new OpenFileDialog
-            {
-                Title = "Chọn ảnh đại diện",
-                Filter = "Image files (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|All files (*.*)|*.*"
-            };
-
-            if (dialog.ShowDialog(this) != DialogResult.OK)
+            if (_avatarManager == null)
                 return;
 
-            try
+            if (!_avatarManager.TrySelectAvatar(out _, out string? errorMessage))
             {
-                SetAvatarImage(dialog.FileName);
-                _avatarPath = dialog.FileName;
-                if (UserSessionContext.CurrentUserId.HasValue && UserSessionContext.CurrentUserId.Value > 0)
-                    SaveProfile();
+                if (!string.IsNullOrWhiteSpace(errorMessage))
+                    MetaTheme.ShowModernDialog($"Không thể tải ảnh đại diện: {errorMessage}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
-            catch (Exception ex)
-            {
-                MetaTheme.ShowModernDialog($"Không thể tải ảnh đại diện: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+
+            if (UserSessionContext.CurrentUserId.HasValue && UserSessionContext.CurrentUserId.Value > 0)
+                SaveProfile();
         }
 
         private void LoadAvatarFromPath(string avatarPath)
         {
-            if (string.IsNullOrWhiteSpace(avatarPath) || !System.IO.File.Exists(avatarPath))
-            {
-                Image? oldAvatar = _avatarImage;
-                _avatarImage = null;
-                oldAvatar?.Dispose();
-                _avatarPanel?.Invalidate();
-                return;
-            }
-
-            try
-            {
-                SetAvatarImage(avatarPath);
-            }
-            catch
-            {
-                _avatarPath = string.Empty;
-            }
-        }
-
-        private void SetAvatarImage(string filePath)
-        {
-            using Image selected = Image.FromFile(filePath);
-            Image newAvatar = new Bitmap(selected);
-            Image? oldAvatar = _avatarImage;
-            _avatarImage = newAvatar;
-            oldAvatar?.Dispose();
-            _avatarPanel?.Invalidate();
-        }
-
-        private void DrawAvatar(Graphics graphics, Rectangle bounds)
-        {
-            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-
-            Rectangle ellipse = new Rectangle(bounds.Left, bounds.Top, Math.Max(1, bounds.Width - 1), Math.Max(1, bounds.Height - 1));
-            using var fillBrush = new SolidBrush(MetaTheme.Colors.Accent);
-            graphics.FillEllipse(fillBrush, ellipse);
-
-            if (_avatarImage != null)
-            {
-                using var path = new System.Drawing.Drawing2D.GraphicsPath();
-                path.AddEllipse(ellipse);
-                graphics.SetClip(path);
-                graphics.DrawImage(_avatarImage, GetCoverRectangle(_avatarImage.Size, ellipse));
-                graphics.ResetClip();
-            }
-            else
-            {
-                using var textBrush = new SolidBrush(Color.White);
-                using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                graphics.DrawString(GetUserInitials(), AppFonts.Semibold(22f), textBrush, ellipse, sf);
-            }
-
-            GraphicsHelpers.DrawRoundedBorder(graphics, ellipse, ellipse.Width / 2, MetaTheme.Colors.BorderSoft, 1f);
-        }
-
-        private static Rectangle GetCoverRectangle(Size sourceSize, Rectangle target)
-        {
-            if (sourceSize.Width <= 0 || sourceSize.Height <= 0)
-                return target;
-
-            float scale = Math.Max((float)target.Width / sourceSize.Width, (float)target.Height / sourceSize.Height);
-            int width = (int)Math.Ceiling(sourceSize.Width * scale);
-            int height = (int)Math.Ceiling(sourceSize.Height * scale);
-            return new Rectangle(target.Left + (target.Width - width) / 2, target.Top + (target.Height - height) / 2, width, height);
-        }
-
-        private string GetUserInitials()
-        {
-            string source = !string.IsNullOrWhiteSpace(txtFullName.Text)
-                ? txtFullName.Text
-                : (!string.IsNullOrWhiteSpace(UserSessionContext.CurrentFullName)
-                    ? UserSessionContext.CurrentFullName
-                    : UserSessionContext.CurrentUsername);
-
-            if (string.IsNullOrWhiteSpace(source))
-                return "U";
-
-            string[] parts = source.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 2)
-                return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
-
-            return parts[0].Length >= 2
-                ? parts[0].Substring(0, 2).ToUpperInvariant()
-                : parts[0].Substring(0, 1).ToUpperInvariant();
+            _avatarManager?.LoadFromPath(avatarPath);
         }
 
         private void AddStaticInfoRow(TableLayoutPanel grid, int row, string label, Label valueLbl, bool isSuccess = false, int rowHeight = 36)

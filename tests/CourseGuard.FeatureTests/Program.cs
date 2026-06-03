@@ -3,6 +3,7 @@ using CourseGuard.Backend.Services;
 using CourseGuard.Frontend.Forms.Student;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
+using System.Drawing;
 using System.Reflection;
 using System.Windows.Forms;
 
@@ -58,6 +59,23 @@ Run("material file policy accepts common documents and rejects unsafe files", ()
     AssertTrue(valid.IsValid, valid.ErrorMessage);
     AssertFalse(badExtension.IsValid, "exe must be rejected");
     AssertFalse(tooLarge.IsValid, "files above 20MB must be rejected");
+});
+
+Run("avatar manager cover rectangle preserves aspect ratio and fills target", () =>
+{
+    Rectangle wideCover = AvatarManager.GetCoverRectangle(new Size(200, 100), new Rectangle(10, 20, 80, 80));
+    Rectangle tallCover = AvatarManager.GetCoverRectangle(new Size(100, 200), new Rectangle(0, 0, 80, 40));
+
+    AssertEqual(new Rectangle(-30, 20, 160, 80), wideCover);
+    AssertEqual(new Rectangle(0, -60, 80, 160), tallCover);
+});
+
+Run("avatar manager initials handles blank users and multi word names", () =>
+{
+    AssertEqual("U", AvatarManager.GetInitials(null, "   "));
+    AssertEqual("NN", AvatarManager.GetInitials("Nhat Quoc Nguyen", "ignored"));
+    AssertEqual("AB", AvatarManager.GetInitials("   ", "admin beta"));
+    AssertEqual("A", AvatarManager.GetInitials("a", null));
 });
 
 Run("student exam availability separates visibility from start eligibility", () =>
