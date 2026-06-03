@@ -9,6 +9,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Student
@@ -62,20 +63,20 @@ namespace CourseGuard.Frontend.UserControls.Student
             if (userId <= 0)
                 return DashboardData.Error("Không xác định được tài khoản học sinh.");
 
-            int courseCount = SafeCount(() => _dbContext.CountActiveEnrollments(userId));
-            int openOrUpcomingExamCount = SafeCount(() => _dbContext.CountAvailableExamsForStudent(userId));
-            int completedExamCount = SafeCount(() => _dbContext.CountCompletedExamsForStudent(userId));
-            double? averageScore = SafeNullableDouble(() => _dbContext.GetStudentExamAverageScore(userId));
+            int courseCount = ActivityDisplayHelper.SafeMetricCount(() => _dbContext.CountActiveEnrollments(userId));
+            int openOrUpcomingExamCount = ActivityDisplayHelper.SafeMetricCount(() => _dbContext.CountAvailableExamsForStudent(userId));
+            int completedExamCount = ActivityDisplayHelper.SafeMetricCount(() => _dbContext.CountCompletedExamsForStudent(userId));
+            double? averageScore = ActivityDisplayHelper.SafeAverageScore(() => _dbContext.GetStudentExamAverageScore(userId));
 
-            List<NotificationModel> notifications = SafeList(() => _notificationRepository
+            List<NotificationModel> notifications = ActivityDisplayHelper.SafeList(() => _notificationRepository
                 .LoadByUserId(userId)
                 .OrderByDescending(n => n.CreatedAt)
                 .Take(6)
                 .ToList());
             int unreadNotificationCount = notifications.Count(n => !n.IsRead);
 
-            List<RecentUserActivityModel> logs = SafeList(() => _dbContext.GetRecentUserActivitiesByUser(userId, 8));
-            List<EnrollmentModel> enrollments = SafeList(() => _dbContext.GetEnrollmentsByStudent(userId));
+            List<RecentUserActivityModel> logs = ActivityDisplayHelper.SafeList(() => _dbContext.GetRecentUserActivitiesByUser(userId, 8));
+            List<EnrollmentModel> enrollments = ActivityDisplayHelper.SafeList(() => _dbContext.GetEnrollmentsByStudent(userId));
 
             List<ActivityRow> activities = logs
                 .Select(ToActivityRow)
@@ -586,8 +587,8 @@ namespace CourseGuard.Frontend.UserControls.Student
             return new ActivityRow
             {
                 CreatedAt = activity.CreatedAt,
-                Title = TranslateActivity(activity),
-                Accent = GetActivityAccent(activity.Action)
+                Title = ActivityDisplayHelper.TranslateActivity(activity),
+                Accent = ActivityDisplayHelper.GetActivityAccent(activity.Action)
             };
         }
 
@@ -608,48 +609,6 @@ namespace CourseGuard.Frontend.UserControls.Student
                 || string.Equals(status, "APPROVED", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string TranslateActivity(RecentUserActivityModel activity)
-        {
-            string title = (activity.Action ?? string.Empty).ToUpperInvariant() switch
-            {
-                "LOGIN" => "Đăng nhập hệ thống",
-                "LOGOUT" => "Đăng xuất hệ thống",
-                "COURSE_ENROLL_REQUEST" => "Gửi yêu cầu tham gia khóa học",
-                "COURSE_ENROLL" => "Được duyệt vào khóa học",
-                "ONLINE_SESSION_JOIN" => "Tham gia lớp học trực tuyến",
-                "ONLINE_SESSION_EXIT" => "Rời lớp học trực tuyến",
-                "EXAM_JOIN" => "Bắt đầu làm bài kiểm tra",
-                "EXAM_SUBMIT" => "Nộp bài kiểm tra",
-                "EXAM_EXIT" => "Thoát màn hình làm bài kiểm tra",
-                "CHANGE_PASSWORD" => "Đổi mật khẩu",
-                "CHAT_USE" => "Trao đổi trong lớp học",
-                _ => "Cập nhật hoạt động"
-            };
-
-            string details = CleanDetails(activity.Details);
-            return string.IsNullOrWhiteSpace(details) ? title : $"{title} - {details}";
-        }
-
-        private static string CleanDetails(string? details)
-        {
-            if (string.IsNullOrWhiteSpace(details))
-                return string.Empty;
-
-            string value = details.Trim();
-            return value.Length > 72 ? value[..72] + "..." : value;
-        }
-
-        private static Color GetActivityAccent(string? action)
-        {
-            return (action ?? string.Empty).ToUpperInvariant() switch
-            {
-                "LOGIN" or "COURSE_ENROLL" or "EXAM_SUBMIT" => AppColors.Success,
-                "COURSE_ENROLL_REQUEST" or "EXAM_JOIN" or "ONLINE_SESSION_JOIN" => AppColors.Warning,
-                "LOGOUT" or "EXAM_EXIT" or "ONLINE_SESSION_EXIT" => AppColors.TextMuted,
-                _ => AppColors.AccentBlue
-            };
-        }
-
         private static string InferNotificationSource(NotificationModel notification)
         {
             string text = $"{notification.Title} {notification.Content}".ToLowerInvariant();
@@ -665,42 +624,6 @@ namespace CourseGuard.Frontend.UserControls.Student
         private static string FormatDateTime(DateTime value)
         {
             return SystemTimeFormatter.FormatVietnamTime(value);
-        }
-
-        private static int SafeCount(Func<int> getter)
-        {
-            try
-            {
-                return Math.Max(0, getter());
-            }
-            catch
-            {
-                return 0;
-            }
-        }
-
-        private static double? SafeNullableDouble(Func<double?> getter)
-        {
-            try
-            {
-                return getter();
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static List<T> SafeList<T>(Func<List<T>> getter)
-        {
-            try
-            {
-                return getter() ?? new List<T>();
-            }
-            catch
-            {
-                return new List<T>();
-            }
         }
 
         private sealed class DashboardData

@@ -10,6 +10,7 @@ using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
@@ -102,8 +103,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             UserModel? user = _dbContext.GetUserById(_teacherId);
             TeacherProfileModel? profile = _teacherController.GetTeacherProfile(_teacherId);
             TeacherDashboardSummaryModel summary = _teacherController.GetDashboardSummary(_teacherId);
-            int unreadNotifications = SafeCount(() => _notificationRepository.LoadByUserId(_teacherId).Count(n => !n.IsRead));
-            List<RecentUserActivityModel> activities = SafeList(() => _dbContext.GetRecentUserActivitiesByUser(_teacherId, 6));
+            int unreadNotifications = ActivityDisplayHelper.SafeMetricCount(() => _notificationRepository.LoadByUserId(_teacherId).Count(n => !n.IsRead));
+            List<RecentUserActivityModel> activities = ActivityDisplayHelper.SafeList(() => _dbContext.GetRecentUserActivitiesByUser(_teacherId, 6));
 
             return new TeacherProfileData
             {
@@ -629,7 +630,10 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             else
             {
                 foreach (RecentUserActivityModel activity in activities.Take(5))
-                    AddActivity(TranslateActivity(activity), FormatDateTime(activity.CreatedAt), GetActivityAccent(activity.Action));
+                    AddActivity(
+                        ActivityDisplayHelper.TranslateActivity(activity, ActivityDisplayContext.Teacher),
+                        FormatDateTime(activity.CreatedAt),
+                        ActivityDisplayHelper.GetActivityAccent(activity.Action));
             }
             _activityList.ResumeLayout(true);
         }
@@ -987,39 +991,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             return parts.Length == 0 ? "GV" : (parts[0].Length >= 2 ? parts[0][..2].ToUpperInvariant() : parts[0][..1].ToUpperInvariant());
         }
 
-        private static string TranslateActivity(RecentUserActivityModel activity)
-        {
-            string title = (activity.Action ?? string.Empty).ToUpperInvariant() switch
-            {
-                "LOGIN" => "Đã đăng nhập vào hệ thống",
-                "LOGOUT" => "Đã đăng xuất khỏi hệ thống",
-                "CHANGE_PASSWORD" => "Đã đổi mật khẩu",
-                "CHAT_USE" => "Đã trao đổi với học viên",
-                _ => "Đã cập nhật hoạt động giảng dạy"
-            };
-            string details = CleanDetails(activity.Details);
-            return string.IsNullOrWhiteSpace(details) ? title : $"{title} - {details}";
-        }
-
-        private static string CleanDetails(string? details)
-        {
-            if (string.IsNullOrWhiteSpace(details))
-                return string.Empty;
-            string value = details.Trim();
-            return value.Length > 72 ? value[..72] + "..." : value;
-        }
-
-        private static Color GetActivityAccent(string? action)
-        {
-            return (action ?? string.Empty).ToUpperInvariant() switch
-            {
-                "LOGIN" or "CHANGE_PASSWORD" => AppColors.Success,
-                "CHAT_USE" => AppColors.Warning,
-                "LOGOUT" => AppColors.TextMuted,
-                _ => AppColors.AccentBlue
-            };
-        }
-
         private static string FormatDateTime(DateTime value)
         {
             return SystemTimeFormatter.FormatVietnamTime(value);
@@ -1030,18 +1001,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private static string FlattenMultiline(string value)
         {
             return string.Join("; ", value.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries).Select(v => v.Trim()));
-        }
-
-        private static int SafeCount(Func<int> getter)
-        {
-            try { return Math.Max(0, getter()); }
-            catch { return 0; }
-        }
-
-        private static List<T> SafeList<T>(Func<List<T>> getter)
-        {
-            try { return getter() ?? new List<T>(); }
-            catch { return new List<T>(); }
         }
 
         private sealed class TeacherProfileData

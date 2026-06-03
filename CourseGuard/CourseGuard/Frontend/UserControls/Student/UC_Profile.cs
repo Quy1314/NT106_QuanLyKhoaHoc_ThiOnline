@@ -9,6 +9,7 @@ using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Student
@@ -121,7 +122,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 {
                     profile = _dbContext.GetStudentProfile(userId);
                     metrics = LoadAcademicMetrics(userId);
-                    activities = SafeList(() => _dbContext.GetRecentUserActivitiesByUser(userId, 6));
+                    activities = ActivityDisplayHelper.SafeList(() => _dbContext.GetRecentUserActivitiesByUser(userId, 6));
                 });
 
                 if (profile == null)
@@ -796,12 +797,12 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private AcademicMetrics LoadAcademicMetrics(int userId)
         {
-            int courseCount = SafeMetricCount(() => _dbContext.CountActiveEnrollments(userId));
-            int openOrUpcomingExamCount = SafeMetricCount(() => _dbContext.CountAvailableExamsForStudent(userId));
-            int completedExamCount = SafeMetricCount(() => _dbContext.CountCompletedExamsForStudent(userId));
+            int courseCount = ActivityDisplayHelper.SafeMetricCount(() => _dbContext.CountActiveEnrollments(userId));
+            int openOrUpcomingExamCount = ActivityDisplayHelper.SafeMetricCount(() => _dbContext.CountAvailableExamsForStudent(userId));
+            int completedExamCount = ActivityDisplayHelper.SafeMetricCount(() => _dbContext.CountCompletedExamsForStudent(userId));
             int examCount = openOrUpcomingExamCount > 0 ? openOrUpcomingExamCount : completedExamCount;
-            int notificationCount = SafeMetricCount(() => _notificationRepository.LoadByUserId(userId).Count(n => !n.IsRead));
-            double? averageScore = SafeAverageScore(() => _dbContext.GetStudentExamAverageScore(userId));
+            int notificationCount = ActivityDisplayHelper.SafeMetricCount(() => _notificationRepository.LoadByUserId(userId).Count(n => !n.IsRead));
+            double? averageScore = ActivityDisplayHelper.SafeAverageScore(() => _dbContext.GetStudentExamAverageScore(userId));
 
             return new AcademicMetrics(
                 courseCount,
@@ -809,42 +810,6 @@ namespace CourseGuard.Frontend.UserControls.Student
                 notificationCount,
                 averageScore,
                 openOrUpcomingExamCount > 0);
-        }
-
-        private static int SafeMetricCount(Func<int> getter)
-        {
-            try
-            {
-                return Math.Max(0, getter());
-            }
-            catch
-            {
-                return 0;
-            }
-        }
-
-        private static double? SafeAverageScore(Func<double?> getter)
-        {
-            try
-            {
-                return getter();
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static List<T> SafeList<T>(Func<List<T>> getter)
-        {
-            try
-            {
-                return getter() ?? new List<T>();
-            }
-            catch
-            {
-                return new List<T>();
-            }
         }
 
         private Control BuildActivityCard()
@@ -895,7 +860,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                     AddActivity(
                         _activityGrid,
                         row++,
-                        TranslateActivity(activity),
+                        ActivityDisplayHelper.TranslateActivity(activity),
                         SystemTimeFormatter.FormatVietnamTime(activity.CreatedAt));
                 }
             }
@@ -919,37 +884,6 @@ namespace CourseGuard.Frontend.UserControls.Student
             panel.Controls.Add(new Label { Text = desc, Font = AppFonts.Body, ForeColor = AppColors.TextPrimary, AutoSize = true, Location = new Point(20, 3), UseCompatibleTextRendering = false });
             panel.Controls.Add(new Label { Text = time, Font = AppFonts.Caption, ForeColor = AppColors.TextMuted, AutoSize = true, Location = new Point(20, 25), UseCompatibleTextRendering = false });
             grid.Controls.Add(panel, 0, row);
-        }
-
-        private static string TranslateActivity(RecentUserActivityModel activity)
-        {
-            string title = (activity.Action ?? string.Empty).ToUpperInvariant() switch
-            {
-                "LOGIN" => "Đăng nhập hệ thống",
-                "LOGOUT" => "Đăng xuất hệ thống",
-                "COURSE_ENROLL_REQUEST" => "Gửi yêu cầu tham gia khóa học",
-                "COURSE_ENROLL" => "Được duyệt vào khóa học",
-                "ONLINE_SESSION_JOIN" => "Tham gia lớp học trực tuyến",
-                "ONLINE_SESSION_EXIT" => "Rời lớp học trực tuyến",
-                "EXAM_JOIN" => "Bắt đầu làm bài kiểm tra",
-                "EXAM_SUBMIT" => "Nộp bài kiểm tra",
-                "EXAM_EXIT" => "Thoát màn hình làm bài kiểm tra",
-                "CHANGE_PASSWORD" => "Đổi mật khẩu",
-                "CHAT_USE" => "Trao đổi trong lớp học",
-                _ => "Cập nhật hoạt động"
-            };
-
-            string details = CleanDetails(activity.Details);
-            return string.IsNullOrWhiteSpace(details) ? title : $"{title} - {details}";
-        }
-
-        private static string CleanDetails(string? details)
-        {
-            if (string.IsNullOrWhiteSpace(details))
-                return string.Empty;
-
-            string value = details.Trim();
-            return value.Length > 72 ? value[..72] + "..." : value;
         }
 
         private Control BuildSecurityCard()

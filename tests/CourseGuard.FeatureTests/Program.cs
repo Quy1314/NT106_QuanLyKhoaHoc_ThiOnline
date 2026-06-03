@@ -1,6 +1,7 @@
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services;
 using CourseGuard.Frontend.Forms.Student;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 using System.Reflection;
 using System.Windows.Forms;
@@ -104,6 +105,103 @@ Run("student exam availability separates visibility from start eligibility", () 
     AssertEqual(StudentExamAvailabilityService.StatusInProgress, StudentExamAvailabilityService.GetStatusText(resumable));
     AssertFalse(StudentExamAvailabilityService.CanStart(missingAttemptStorage), "exam must not be startable without attempt storage");
     AssertEqual(StudentExamAvailabilityService.StatusStorageUnavailable, StudentExamAvailabilityService.GetStatusText(missingAttemptStorage));
+});
+
+Run("activity display helper translates known actions and appends cleaned details", () =>
+{
+    var activity = new RecentUserActivityModel
+    {
+        Action = "chat_use",
+        Details = "  Lop NT106 - nhom 1  "
+    };
+
+    AssertEqual(
+        "Trao \u0111\u1ed5i trong l\u1edbp h\u1ecdc - Lop NT106 - nhom 1",
+        ActivityDisplayHelper.TranslateActivity(activity));
+});
+
+Run("activity display helper preserves student default wording", () =>
+{
+    AssertEqual(
+        "\u0110\u0103ng nh\u1eadp h\u1ec7 th\u1ed1ng",
+        ActivityDisplayHelper.TranslateActivity(new RecentUserActivityModel { Action = "LOGIN" }));
+    AssertEqual(
+        "\u0110\u0103ng xu\u1ea5t h\u1ec7 th\u1ed1ng",
+        ActivityDisplayHelper.TranslateActivity(new RecentUserActivityModel { Action = "LOGOUT" }));
+    AssertEqual(
+        "\u0110\u1ed5i m\u1eadt kh\u1ea9u",
+        ActivityDisplayHelper.TranslateActivity(new RecentUserActivityModel { Action = "CHANGE_PASSWORD" }));
+    AssertEqual(
+        "G\u1eedi y\u00eau c\u1ea7u tham gia kh\u00f3a h\u1ecdc",
+        ActivityDisplayHelper.TranslateActivity(new RecentUserActivityModel { Action = "COURSE_ENROLL_REQUEST" }));
+    AssertEqual(
+        "B\u1eaft \u0111\u1ea7u l\u00e0m b\u00e0i ki\u1ec3m tra",
+        ActivityDisplayHelper.TranslateActivity(new RecentUserActivityModel { Action = "EXAM_JOIN" }));
+    AssertEqual(
+        "C\u1eadp nh\u1eadt ho\u1ea1t \u0111\u1ed9ng",
+        ActivityDisplayHelper.TranslateActivity(new RecentUserActivityModel { Action = "UNKNOWN_TEACHER_EVENT" }));
+});
+
+Run("activity display helper preserves teacher context wording", () =>
+{
+    AssertEqual(
+        "\u0110\u00e3 \u0111\u0103ng nh\u1eadp v\u00e0o h\u1ec7 th\u1ed1ng",
+        ActivityDisplayHelper.TranslateActivity(
+            new RecentUserActivityModel { Action = "LOGIN" },
+            ActivityDisplayContext.Teacher));
+    AssertEqual(
+        "\u0110\u00e3 \u0111\u0103ng xu\u1ea5t kh\u1ecfi h\u1ec7 th\u1ed1ng",
+        ActivityDisplayHelper.TranslateActivity(
+            new RecentUserActivityModel { Action = "LOGOUT" },
+            ActivityDisplayContext.Teacher));
+    AssertEqual(
+        "\u0110\u00e3 \u0111\u1ed5i m\u1eadt kh\u1ea9u",
+        ActivityDisplayHelper.TranslateActivity(
+            new RecentUserActivityModel { Action = "CHANGE_PASSWORD" },
+            ActivityDisplayContext.Teacher));
+    AssertEqual(
+        "\u0110\u00e3 trao \u0111\u1ed5i v\u1edbi h\u1ecdc vi\u00ean",
+        ActivityDisplayHelper.TranslateActivity(
+            new RecentUserActivityModel { Action = "CHAT_USE" },
+            ActivityDisplayContext.Teacher));
+    AssertEqual(
+        "\u0110\u00e3 c\u1eadp nh\u1eadt ho\u1ea1t \u0111\u1ed9ng gi\u1ea3ng d\u1ea1y",
+        ActivityDisplayHelper.TranslateActivity(
+            new RecentUserActivityModel { Action = "UNKNOWN_TEACHER_EVENT" },
+            ActivityDisplayContext.Teacher));
+});
+
+Run("activity display helper cleans blank and long details", () =>
+{
+    string longDetails = new string('a', 80);
+
+    AssertEqual(string.Empty, ActivityDisplayHelper.CleanDetails("   "));
+    AssertEqual(new string('a', 72) + "...", ActivityDisplayHelper.CleanDetails(longDetails));
+});
+
+Run("activity display helper safely reads metric counts", () =>
+{
+    AssertEqual(7, ActivityDisplayHelper.SafeMetricCount(() => 7));
+    AssertEqual(0, ActivityDisplayHelper.SafeMetricCount(() => -3));
+    AssertEqual(0, ActivityDisplayHelper.SafeMetricCount(() => throw new InvalidOperationException("boom")));
+});
+
+Run("activity display helper safely reads nullable averages", () =>
+{
+    AssertEqual(8.5, ActivityDisplayHelper.SafeAverageScore(() => 8.5));
+    AssertEqual<double?>(null, ActivityDisplayHelper.SafeAverageScore(() => null));
+    AssertEqual<double?>(null, ActivityDisplayHelper.SafeAverageScore(() => throw new InvalidOperationException("boom")));
+});
+
+Run("activity display helper safely reads lists", () =>
+{
+    List<int> values = ActivityDisplayHelper.SafeList(() => new List<int> { 1, 2 });
+    List<int> nullValues = ActivityDisplayHelper.SafeList<int>(() => null!);
+    List<int> failedValues = ActivityDisplayHelper.SafeList<int>(() => throw new InvalidOperationException("boom"));
+
+    AssertEqual(2, values.Count);
+    AssertEqual(0, nullValues.Count);
+    AssertEqual(0, failedValues.Count);
 });
 
 Run("student exam form constructor does not invoke before handle exists", () =>

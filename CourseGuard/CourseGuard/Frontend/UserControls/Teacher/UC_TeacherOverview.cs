@@ -10,6 +10,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
@@ -63,8 +64,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private OverviewData LoadOverviewData()
         {
             TeacherDashboardSummaryModel summary = _controller.GetDashboardSummary(_teacherId);
-            List<TeacherTeachingTaskModel> tasks = SafeList(() => _controller.GetTeachingTasks(_teacherId));
-            List<RecentUserActivityModel> auditLogs = SafeList(() => _dbContext.GetRecentUserActivitiesByUser(_teacherId, 8));
+            List<TeacherTeachingTaskModel> tasks = ActivityDisplayHelper.SafeList(() => _controller.GetTeachingTasks(_teacherId));
+            List<RecentUserActivityModel> auditLogs = ActivityDisplayHelper.SafeList(() => _dbContext.GetRecentUserActivitiesByUser(_teacherId, 8));
 
             List<ActivityRow> activities = auditLogs
                 .Select(ToActivityRow)
@@ -507,42 +508,9 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         {
             return new ActivityRow
             {
-                Title = TranslateActivity(activity),
+                Title = ActivityDisplayHelper.TranslateActivity(activity, ActivityDisplayContext.Teacher),
                 TimeText = SystemTimeFormatter.FormatVietnamTime(activity.CreatedAt),
-                Accent = GetActivityAccent(activity.Action)
-            };
-        }
-
-        private static string TranslateActivity(RecentUserActivityModel activity)
-        {
-            string title = (activity.Action ?? string.Empty).ToUpperInvariant() switch
-            {
-                "LOGIN" => "Đăng nhập hệ thống",
-                "LOGOUT" => "Đăng xuất hệ thống",
-                "CHANGE_PASSWORD" => "Đổi mật khẩu",
-                "CHAT_USE" => "Trao đổi với học viên",
-                _ => "Cập nhật hoạt động giảng dạy"
-            };
-            string details = CleanDetails(activity.Details);
-            return string.IsNullOrWhiteSpace(details) ? title : $"{title} - {details}";
-        }
-
-        private static string CleanDetails(string? details)
-        {
-            if (string.IsNullOrWhiteSpace(details))
-                return string.Empty;
-            string value = details.Trim();
-            return value.Length > 72 ? value[..72] + "..." : value;
-        }
-
-        private static Color GetActivityAccent(string? action)
-        {
-            return (action ?? string.Empty).ToUpperInvariant() switch
-            {
-                "LOGIN" or "CHANGE_PASSWORD" => AppColors.Success,
-                "CHAT_USE" => AppColors.Warning,
-                "LOGOUT" => AppColors.TextMuted,
-                _ => AppColors.AccentBlue
+                Accent = ActivityDisplayHelper.GetActivityAccent(activity.Action)
             };
         }
 
@@ -563,18 +531,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private static string FormatScheduleDateTime(DateTime value)
         {
             return value == DateTime.MinValue ? string.Empty : value.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-        }
-
-        private static List<T> SafeList<T>(Func<List<T>> getter)
-        {
-            try
-            {
-                return getter() ?? new List<T>();
-            }
-            catch
-            {
-                return new List<T>();
-            }
         }
 
         private sealed class OverviewData
