@@ -8,6 +8,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Student
@@ -35,7 +36,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             BuildCardLayout();
             ApplyStyle();
             WireEvents();
-            _ = LoadLessonsAsync();
+            LoadLessonsAsync().FireAndForgetSafe(this);
         }
 
         private void InitializeComponent()

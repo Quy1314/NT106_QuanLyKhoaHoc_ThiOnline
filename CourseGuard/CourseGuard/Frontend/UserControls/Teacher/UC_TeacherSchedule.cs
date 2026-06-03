@@ -10,6 +10,7 @@ using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services.Realtime;
 using CourseGuard.Frontend.Forms.Teacher;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
@@ -46,7 +47,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             // Khởi tạo TCP Server để broadcast tín hiệu mở lớp
             TcpClassroomService.Instance.StartListening();
             
-            _ = LoadDataAsync();
+            LoadDataAsync().FireAndForgetSafe(this);
         }
 
         private void BuildUI()

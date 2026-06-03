@@ -7,6 +7,7 @@ using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 using CourseGuard.Backend.Services.Realtime;
 
@@ -34,10 +35,10 @@ namespace CourseGuard.Frontend.UserControls.Student
             cboTimeFilter.SelectedIndexChanged += (_, _) => ApplyTimeFilter();
             btnJoinOnline.Click += (_, _) => JoinSelectedSession();
             MetaTheme.StyleGrid(dgvSchedule);
-            _ = LoadSchedule();
+            LoadSchedule().FireAndForgetSafe(this);
             
             _tcpClient.ClassStatusChanged += TcpClient_ClassStatusChanged;
-            _ = _tcpClient.StartAsync();
+            _tcpClient.StartAsync().FireAndForgetSafe(this);
             
             this.Disposed += (s, e) => _tcpClient.Dispose();
         }
@@ -52,7 +53,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                     if (session != null)
                     {
                         // Refresh if the opened status changed
-                        _ = LoadSchedule();
+                        LoadSchedule().FireAndForgetSafe(this);
                     }
                 });
             }

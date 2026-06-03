@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 using Npgsql;
 
@@ -37,7 +38,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             BuildCardLayout();
             ApplyStyle();
             WireEvents();
-            _ = LoadDocumentsAsync();
+            LoadDocumentsAsync().FireAndForgetSafe(this);
         }
 
         private void InitializeComponent()

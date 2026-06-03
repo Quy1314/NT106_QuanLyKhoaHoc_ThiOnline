@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
@@ -26,7 +27,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _teacherId = teacherId;
             BuildLayout();
             WireEvents();
-            _ = LoadDataAsync();
+            LoadDataAsync().FireAndForgetSafe(this);
         }
 
         private void BuildLayout()

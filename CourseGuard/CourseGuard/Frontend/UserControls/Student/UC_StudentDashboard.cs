@@ -36,7 +36,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         {
             InitializeComponent();
             BuildOverviewLayout();
-            _ = LoadDataAsync();
+            LoadDataAsync().FireAndForgetSafe(this);
         }
 
         private async System.Threading.Tasks.Task LoadDataAsync()

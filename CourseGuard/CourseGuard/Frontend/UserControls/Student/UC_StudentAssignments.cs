@@ -8,6 +8,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Student
@@ -34,7 +35,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             BuildCardLayout();
             ApplyStyle();
             WireEvents();
-            _ = LoadAssignmentsAsync();
+            LoadAssignmentsAsync().FireAndForgetSafe(this);
         }
 
         private void InitializeComponent()
@@ -327,7 +328,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                _ = LoadAssignmentsAsync(); // Reload after submit
+                LoadAssignmentsAsync().FireAndForgetSafe(this); // Reload after submit
                 
                 if (FindForm() is CourseGuard.Frontend.Forms.Student.StudentDashboard dashboard)
                 {

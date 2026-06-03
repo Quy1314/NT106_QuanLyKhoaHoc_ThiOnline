@@ -9,6 +9,7 @@ using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services.Monitoring;
 using CourseGuard.Backend.Services.Storage;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.Forms.Teacher
@@ -57,7 +58,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         {
             base.OnLoad(e);
             TcpScreenMonitorService.Instance.StartListening();
-            _ = LoadViolationsAsync();
+            LoadViolationsAsync().FireAndForgetSafe(this);
         }
 
         private void SetupLayout()

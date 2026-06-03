@@ -11,6 +11,7 @@ using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Services;
 using CourseGuard.Frontend.Forms.Student;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Student
@@ -30,7 +31,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             InitializeComponent();
             BuildCardLayout();
             ApplyAcademicStyle();
-            _ = LoadDataAsync();
+            LoadDataAsync().FireAndForgetSafe(this);
 
             RoundedButtonHelper.Apply(btnStartExam, 10);
         }
@@ -210,7 +211,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             using var form = new DoExamForm(examId);
             form.ShowDialog(this.FindForm());
-            _ = LoadDataAsync();
+            LoadDataAsync().FireAndForgetSafe(this);
         }
     }
 }

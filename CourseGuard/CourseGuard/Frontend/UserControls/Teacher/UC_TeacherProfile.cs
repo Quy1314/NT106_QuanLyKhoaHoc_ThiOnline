@@ -72,7 +72,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _teacherId = teacherId;
             _authController = new AuthController(_dbContext);
             BuildLayout();
-            _ = LoadDataAsync(showSkeleton: true);
+            LoadDataAsync(showSkeleton: true).FireAndForgetSafe(this);
             _savePasswordButton.Click += SavePasswordButton_Click;
             Disposed += (_, _) => _avatarImage?.Dispose();
         }
@@ -336,7 +336,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
             btnCancel.Click += (_, _) =>
             {
-                _ = LoadDataAsync(showSkeleton: false);
+                LoadDataAsync(showSkeleton: false).FireAndForgetSafe(this);
                 _personalEditGrid.Visible = false;
                 _personalViewGrid.Visible = true;
             };

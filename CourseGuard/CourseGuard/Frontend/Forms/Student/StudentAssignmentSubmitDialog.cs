@@ -7,6 +7,7 @@ using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Services;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.Forms.Student
@@ -349,7 +350,7 @@ namespace CourseGuard.Frontend.Forms.Student
                     string studentEmail = UserSessionContext.CurrentUsername + "@student.edu.vn";
                     string assignmentTitle = _assignment.Title;
 
-                    _ = Task.Run(() =>
+                    Task.Run(() =>
                     {
                         try
                         {
@@ -361,7 +362,7 @@ namespace CourseGuard.Frontend.Forms.Student
                         {
                             // Ignore SMTP errors so it doesn't crash the app
                         }
-                    });
+                    }).FireAndForgetSafe(this);
 
                     MetaTheme.ShowModernDialog("Nộp bài thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     this.DialogResult = DialogResult.OK;

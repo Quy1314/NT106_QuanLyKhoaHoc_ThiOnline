@@ -8,6 +8,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
@@ -42,12 +43,12 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 if (e.KeyCode == Keys.Enter)
                 {
                     e.SuppressKeyPress = true;
-                    _ = SendTextAsync();
+                    SendTextAsync().FireAndForgetSafe(this);
                 }
                 else if (e.Control && e.KeyCode == Keys.O)
                 {
                     e.SuppressKeyPress = true;
-                    _ = SendFileAsync();
+                    SendFileAsync().FireAndForgetSafe(this);
                 }
             };
 

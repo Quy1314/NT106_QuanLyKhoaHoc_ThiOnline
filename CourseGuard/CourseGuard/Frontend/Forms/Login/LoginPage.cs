@@ -15,6 +15,7 @@ using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.Forms.Login
@@ -800,7 +801,7 @@ namespace CourseGuard.Frontend.Forms.Login
                 UserSessionContext.SetCurrentUser(finalUser.Id, finalUser.Role, finalUser.Username, finalUser.FullName);
 
                 // Non-blocking post-login tasks
-                _ = RunPostLoginTasksAsync(finalUser, ipAddress);
+                RunPostLoginTasksAsync(finalUser, ipAddress).FireAndForgetSafe(this);
                 LogLoginTiming("load ui", stopwatch);
 
                 this.DialogResult = DialogResult.OK;

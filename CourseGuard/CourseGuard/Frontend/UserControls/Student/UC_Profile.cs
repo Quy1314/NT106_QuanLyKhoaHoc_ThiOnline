@@ -69,7 +69,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             _authController = new AuthController(_dbContext);
             InitializeComponent();
             BuildNewLayout();
-            _ = LoadDataAsync(showSkeleton: true);
+            LoadDataAsync(showSkeleton: true).FireAndForgetSafe(this);
 
             btnSavePassword.Click += BtnSavePassword_Click;
 
@@ -197,7 +197,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private void LoadProfileData()
         {
-            _ = LoadDataAsync(showSkeleton: false);
+            LoadDataAsync(showSkeleton: false).FireAndForgetSafe(this);
         }
 
         private void BindFallbackProfile()

@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Admin
@@ -24,7 +25,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
         {
             _dashboardController = new DashboardController(new CourseGuardDbContext(string.Empty));
             BuildLayout();
-            _ = LoadStatisticsAsync();
+            LoadStatisticsAsync().FireAndForgetSafe(this);
         }
 
         private void BuildLayout()

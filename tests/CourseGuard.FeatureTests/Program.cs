@@ -228,6 +228,296 @@ Run("student exam form constructor does not invoke before handle exists", () =>
         throw new InvalidOperationException(failure.Message, failure);
 });
 
+Run("fire and forget safe with null owner does not throw synchronously", () =>
+{
+    int reporterCallCount = 0;
+    Exception? observedException = null;
+    using var observed = new ManualResetEventSlim();
+    Task failedTask = Task.FromException(new InvalidOperationException("boom"));
+    SynchronizationContext? priorContext = SynchronizationContext.Current;
+
+    CourseGuard.Frontend.Helpers.TaskExtensions.ErrorReporter = (_, _, _, _) => reporterCallCount++;
+    CourseGuard.Frontend.Helpers.TaskExtensions.ObservationCompleted = exception =>
+    {
+        observedException = exception;
+        observed.Set();
+    };
+
+    try
+    {
+        SynchronizationContext.SetSynchronizationContext(null);
+        failedTask.FireAndForgetSafe(null);
+
+        AssertTrue(observed.Wait(TimeSpan.FromSeconds(3)), "null owner failed task was not observed");
+        AssertTrue(observedException is InvalidOperationException, "null owner should observe original exception");
+        AssertEqual(0, reporterCallCount);
+    }
+    finally
+    {
+        SynchronizationContext.SetSynchronizationContext(priorContext);
+        CourseGuard.Frontend.Helpers.TaskExtensions.ErrorReporter = null;
+        CourseGuard.Frontend.Helpers.TaskExtensions.ObservationCompleted = null;
+    }
+});
+
+Run("fire and forget safe with disposed uncreated control does not throw", () =>
+{
+    using var owner = new Control();
+    owner.Dispose();
+    int reporterCallCount = 0;
+    Exception? observedException = null;
+    using var observed = new ManualResetEventSlim();
+    Task failedTask = Task.FromException(new InvalidOperationException("boom"));
+    SynchronizationContext? priorContext = SynchronizationContext.Current;
+
+    CourseGuard.Frontend.Helpers.TaskExtensions.ErrorReporter = (_, _, _, _) => reporterCallCount++;
+    CourseGuard.Frontend.Helpers.TaskExtensions.ObservationCompleted = exception =>
+    {
+        observedException = exception;
+        observed.Set();
+    };
+
+    try
+    {
+        SynchronizationContext.SetSynchronizationContext(null);
+        failedTask.FireAndForgetSafe(owner);
+
+        AssertTrue(observed.Wait(TimeSpan.FromSeconds(3)), "disposed owner failed task was not observed");
+        AssertTrue(observedException is InvalidOperationException, "disposed owner should observe original exception");
+        AssertEqual(0, reporterCallCount);
+    }
+    finally
+    {
+        SynchronizationContext.SetSynchronizationContext(priorContext);
+        CourseGuard.Frontend.Helpers.TaskExtensions.ErrorReporter = null;
+        CourseGuard.Frontend.Helpers.TaskExtensions.ObservationCompleted = null;
+    }
+});
+
+Run("fire and forget safe observes canceled task without reporting", () =>
+{
+    int reporterCallCount = 0;
+    Exception? observedException = new InvalidOperationException("not observed");
+    using var observed = new ManualResetEventSlim();
+    using var cts = new CancellationTokenSource();
+    var context = new RecordingSynchronizationContext();
+    SynchronizationContext? priorContext = SynchronizationContext.Current;
+
+    cts.Cancel();
+    CourseGuard.Frontend.Helpers.TaskExtensions.ErrorReporter = (_, _, _, _) => reporterCallCount++;
+    CourseGuard.Frontend.Helpers.TaskExtensions.ObservationCompleted = exception =>
+    {
+        observedException = exception;
+        observed.Set();
+    };
+
+    try
+    {
+        SynchronizationContext.SetSynchronizationContext(context);
+        Task.FromCanceled(cts.Token).FireAndForgetSafe(null);
+
+        AssertTrue(observed.Wait(TimeSpan.FromSeconds(3)), "canceled task was not observed");
+        AssertEqual<Exception?>(null, observedException);
+        AssertFalse(context.WaitForPost(TimeSpan.FromMilliseconds(100)), "canceled task should not post a report");
+        AssertEqual(0, reporterCallCount);
+    }
+    finally
+    {
+        SynchronizationContext.SetSynchronizationContext(priorContext);
+        CourseGuard.Frontend.Helpers.TaskExtensions.ErrorReporter = null;
+        CourseGuard.Frontend.Helpers.TaskExtensions.ObservationCompleted = null;
+    }
+});
+
+Run("fire and forget safe suppresses context fallback when supplied owner becomes invalid", () =>
+{
+    using var owner = new Control();
+    IntPtr handle = owner.Handle;
+    int reporterCallCount = 0;
+    Exception? observedException = null;
+    using var observed = new ManualResetEventSlim();
+    var context = new RecordingSynchronizationContext();
+    var failedLater = new TaskCompletionSource();
+    SynchronizationContext? priorContext = SynchronizationContext.Current;
+
+    CourseGuard.Frontend.Helpers.TaskExtensions.ErrorReporter = (_, _, _, _) => reporterCallCount++;
+    CourseGuard.Frontend.Helpers.TaskExtensions.ObservationCompleted = exception =>
+    {
+        observedException = exception;
+        observed.Set();
+    };
+
+    try
+    {
+        SynchronizationContext.SetSynchronizationContext(context);
+        failedLater.Task.FireAndForgetSafe(owner);
+        owner.Dispose();
+        failedLater.SetException(new InvalidOperationException("boom"));
+
+        AssertTrue(observed.Wait(TimeSpan.FromSeconds(3)), "invalid owner failed task was not observed");
+        AssertTrue(observedException is InvalidOperationException, "invalid owner should observe original exception");
+        AssertFalse(context.WaitForPost(TimeSpan.FromMilliseconds(100)), "invalid supplied owner should not fall back to captured context");
+        AssertEqual(0, reporterCallCount);
+    }
+    finally
+    {
+        SynchronizationContext.SetSynchronizationContext(priorContext);
+        CourseGuard.Frontend.Helpers.TaskExtensions.ErrorReporter = null;
+        CourseGuard.Frontend.Helpers.TaskExtensions.ObservationCompleted = null;
+    }
+});
+
+Run("fire and forget safe posts to captured synchronization context", () =>
+{
+    Exception? capturedException = null;
+    string? capturedTitle = null;
+    string? capturedMessage = null;
+    var context = new RecordingSynchronizationContext();
+    SynchronizationContext? priorContext = SynchronizationContext.Current;
+    using var observed = new ManualResetEventSlim();
+
+    CourseGuard.Frontend.Helpers.TaskExtensions.ErrorReporter = (control, title, message, exception) =>
+    {
+        AssertEqual<Control?>(null, control);
+        capturedException = exception;
+        capturedTitle = title;
+        capturedMessage = message;
+        throw new InvalidOperationException("context reporter failure");
+    };
+    CourseGuard.Frontend.Helpers.TaskExtensions.ObservationCompleted = _ => observed.Set();
+
+    try
+    {
+        SynchronizationContext.SetSynchronizationContext(context);
+        Task.FromException(new InvalidOperationException("boom")).FireAndForgetSafe(null);
+        AssertTrue(observed.Wait(TimeSpan.FromSeconds(3)), "context failed task was not observed");
+        AssertTrue(context.WaitForPost(TimeSpan.FromSeconds(3)), "context callback was not posted");
+
+        context.ExecuteAll();
+
+        AssertEqual("Loi nen", capturedTitle);
+        AssertTrue(capturedMessage?.Contains("boom") == true, "context reporter message should include exception message");
+        AssertTrue(capturedException is InvalidOperationException, "context reporter should capture exception");
+    }
+    finally
+    {
+        SynchronizationContext.SetSynchronizationContext(priorContext);
+        CourseGuard.Frontend.Helpers.TaskExtensions.ErrorReporter = null;
+        CourseGuard.Frontend.Helpers.TaskExtensions.ObservationCompleted = null;
+    }
+});
+
+Run("fire and forget safe returns before reporting already failed live owner task", () =>
+{
+    using var ready = new ManualResetEventSlim();
+    using var reported = new ManualResetEventSlim();
+    Exception? threadFailure = null;
+
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            using var owner = new Control();
+            IntPtr handle = owner.Handle;
+            CourseGuard.Frontend.Helpers.TaskExtensions.ErrorReporter = (_, _, _, _) => reported.Set();
+
+            ready.Set();
+            Task.FromException(new InvalidOperationException("boom")).FireAndForgetSafe(owner, "Background task error");
+            if (reported.IsSet)
+                throw new InvalidOperationException("reporter ran before FireAndForgetSafe returned");
+
+            DateTime deadline = DateTime.UtcNow.AddSeconds(3);
+            while (!reported.IsSet && DateTime.UtcNow < deadline)
+            {
+                Application.DoEvents();
+                Thread.Sleep(10);
+            }
+        }
+        catch (Exception ex)
+        {
+            threadFailure = ex;
+        }
+        finally
+        {
+            CourseGuard.Frontend.Helpers.TaskExtensions.ErrorReporter = null;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    AssertTrue(ready.Wait(TimeSpan.FromSeconds(3)), "live control test did not start");
+    thread.Join();
+
+    if (threadFailure != null)
+        throw new InvalidOperationException(threadFailure.Message, threadFailure);
+    AssertTrue(reported.IsSet, "live control reporter was not scheduled");
+});
+
+Run("fire and forget safe live owner uses begin invoke and swallows reporter exceptions", () =>
+{
+    Exception? capturedException = null;
+    string? capturedTitle = null;
+    string? capturedMessage = null;
+    int uiThreadId = 0;
+    int reporterThreadId = 0;
+    using var ready = new ManualResetEventSlim();
+    using var reported = new ManualResetEventSlim();
+    var failingTask = new TaskCompletionSource();
+    Exception? threadFailure = null;
+
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            uiThreadId = Thread.CurrentThread.ManagedThreadId;
+            using var owner = new Control();
+            IntPtr handle = owner.Handle;
+            CourseGuard.Frontend.Helpers.TaskExtensions.ErrorReporter = (control, title, message, exception) =>
+            {
+                AssertTrue(ReferenceEquals(owner, control), "live owner reporter should receive owner");
+                reporterThreadId = Thread.CurrentThread.ManagedThreadId;
+                capturedException = exception;
+                capturedTitle = title;
+                capturedMessage = message;
+                reported.Set();
+                throw new InvalidOperationException("reporter failure");
+            };
+
+            ready.Set();
+            ThreadPool.QueueUserWorkItem(_ => failingTask.Task.FireAndForgetSafe(owner, "Background task error"));
+            failingTask.SetException(new InvalidOperationException("boom"));
+
+            DateTime deadline = DateTime.UtcNow.AddSeconds(3);
+            while (!reported.IsSet && DateTime.UtcNow < deadline)
+            {
+                Application.DoEvents();
+                Thread.Sleep(10);
+            }
+        }
+        catch (Exception ex)
+        {
+            threadFailure = ex;
+        }
+        finally
+        {
+            CourseGuard.Frontend.Helpers.TaskExtensions.ErrorReporter = null;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    AssertTrue(ready.Wait(TimeSpan.FromSeconds(3)), "begin invoke live control test did not start");
+    thread.Join();
+
+    if (threadFailure != null)
+        throw new InvalidOperationException(threadFailure.Message, threadFailure);
+    AssertTrue(reported.IsSet, "begin invoke live control reporter was not scheduled");
+    AssertEqual(uiThreadId, reporterThreadId);
+    AssertEqual("Background task error", capturedTitle);
+    AssertTrue(capturedMessage?.Contains("boom") == true, "reported message should include exception message");
+    AssertTrue(capturedException is InvalidOperationException, "reported exception should be captured");
+});
+
 Run("table grid border token is opaque in both themes", () =>
 {
     AppColors.IsDarkMode = true;
@@ -411,4 +701,43 @@ static void AssertFalse(bool value, string message)
 {
     if (value)
         throw new InvalidOperationException(message);
+}
+
+sealed class RecordingSynchronizationContext : SynchronizationContext
+{
+    private readonly Queue<(SendOrPostCallback Callback, object? State)> _callbacks = new();
+    private readonly ManualResetEventSlim _posted = new();
+
+    public override void Post(SendOrPostCallback d, object? state)
+    {
+        lock (_callbacks)
+        {
+            _callbacks.Enqueue((d, state));
+        }
+
+        _posted.Set();
+    }
+
+    public bool WaitForPost(TimeSpan timeout)
+    {
+        return _posted.Wait(timeout);
+    }
+
+    public void ExecuteAll()
+    {
+        while (true)
+        {
+            SendOrPostCallback callback;
+            object? state;
+            lock (_callbacks)
+            {
+                if (_callbacks.Count == 0)
+                    return;
+
+                (callback, state) = _callbacks.Dequeue();
+            }
+
+            callback(state);
+        }
+    }
 }

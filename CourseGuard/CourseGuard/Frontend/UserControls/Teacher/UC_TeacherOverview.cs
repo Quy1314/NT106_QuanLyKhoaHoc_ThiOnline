@@ -40,7 +40,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         {
             _teacherId = teacherId;
             BuildLayout();
-            _ = LoadDataAsync();
+            LoadDataAsync().FireAndForgetSafe(this);
         }
 
         private async Task LoadDataAsync()

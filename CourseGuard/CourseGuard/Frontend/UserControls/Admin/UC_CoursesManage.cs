@@ -15,6 +15,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Models;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Admin
@@ -52,7 +53,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
             WireEvents();
             // Initial load
-            _ = RefreshDataAsync();
+            RefreshDataAsync().FireAndForgetSafe(this);
         }
 
         private void ApplyAcademicStyle()

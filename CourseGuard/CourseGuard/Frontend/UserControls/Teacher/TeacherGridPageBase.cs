@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
@@ -44,7 +45,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 }
                 await DeleteAsync();
             };
-            _ = LoadDataAsync();
+            LoadDataAsync().FireAndForgetSafe(this);
         }
 
         protected virtual Task AddAsync() => Task.CompletedTask;

@@ -2,6 +2,7 @@ using AForge.Video;
 using AForge.Video.DirectShow;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services.Classroom;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.Forms.Teacher
@@ -438,7 +439,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             await BroadcastScreenShareStateAsync(ClassroomMessageType.ScreenShareOn);
 
             _screenShareTimer = new System.Windows.Forms.Timer { Interval = 220 };
-            _screenShareTimer.Tick += (_, _) => _ = CaptureAndSendScreenFrameAsync();
+            _screenShareTimer.Tick += (_, _) => CaptureAndSendScreenFrameAsync().FireAndForgetSafe(this);
             _screenShareTimer.Start();
         }
 
@@ -626,7 +627,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 }
             });
 
-            _ = SendVideoFrameAsync(frameForNetwork);
+            SendVideoFrameAsync(frameForNetwork).FireAndForgetSafe(this);
         }
 
         private DateTime _lastFrameSentAt = DateTime.MinValue;
