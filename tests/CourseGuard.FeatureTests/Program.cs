@@ -222,6 +222,76 @@ Run("activity display helper safely reads lists", () =>
     AssertEqual(0, failedValues.Count);
 });
 
+Run("classroom frame helper resize preserves aspect ratio within bounds", () =>
+{
+    using var wide = new Bitmap(400, 200);
+    using var tall = new Bitmap(100, 300);
+
+    using Bitmap resizedWide = ClassroomFrameHelper.ResizeFrame(wide, 120, 120);
+    using Bitmap resizedTall = ClassroomFrameHelper.ResizeFrame(tall, 120, 120);
+
+    AssertEqual(new Size(120, 60), resizedWide.Size);
+    AssertEqual(new Size(40, 120), resizedTall.Size);
+    AssertTrue(resizedWide.Width <= 120 && resizedWide.Height <= 120, "wide resize must stay inside max bounds");
+    AssertTrue(resizedTall.Width <= 120 && resizedTall.Height <= 120, "tall resize must stay inside max bounds");
+});
+
+Run("classroom frame helper jpeg encode decode round trips a small bitmap", () =>
+{
+    using var source = new Bitmap(8, 6);
+    using (Graphics graphics = Graphics.FromImage(source))
+    {
+        graphics.Clear(Color.CornflowerBlue);
+        graphics.FillRectangle(Brushes.IndianRed, 2, 1, 4, 3);
+    }
+
+    string encoded = ClassroomFrameHelper.EncodeJpegFrame(source, 80L);
+    using Bitmap decoded = ClassroomFrameHelper.DecodeFrame(encoded);
+
+    AssertEqual(source.Size, decoded.Size);
+    AssertTrue(decoded.Width > 0 && decoded.Height > 0, "decoded frame must be a usable bitmap");
+});
+
+Run("classroom frame helper replace image transfers ownership and disposes old image", () =>
+{
+    using var target = new PictureBox();
+    var oldImage = new Bitmap(2, 2);
+    var newImage = new Bitmap(3, 3);
+    target.Image = oldImage;
+
+    bool replaced = ClassroomFrameHelper.TryReplaceImage(target, newImage);
+
+    AssertTrue(replaced, "replacement should succeed for live picture box");
+    AssertTrue(ReferenceEquals(newImage, target.Image), "picture box should own the replacement image");
+    AssertImageDisposed(oldImage, "old image should be disposed after replacement");
+
+    target.Image = null;
+    newImage.Dispose();
+});
+
+Run("classroom frame helper replace image disposes dropped image", () =>
+{
+    var droppedImage = new Bitmap(2, 2);
+    using var target = new PictureBox();
+    target.Dispose();
+
+    bool replaced = ClassroomFrameHelper.TryReplaceImage(target, droppedImage);
+
+    AssertFalse(replaced, "replacement should fail for disposed picture box");
+    AssertImageDisposed(droppedImage, "dropped image should be disposed when replacement fails");
+});
+
+Run("classroom screen share manager normalizes empty bounds to available screen area", () =>
+{
+    Rectangle fallback = new Rectangle(10, 20, 300, 200);
+
+    Rectangle normalized = ClassroomScreenShareManager.NormalizeBounds(Rectangle.Empty, fallback);
+    Rectangle explicitBounds = ClassroomScreenShareManager.NormalizeBounds(new Rectangle(1, 2, 3, 4), fallback);
+
+    AssertEqual(fallback, normalized);
+    AssertEqual(new Rectangle(1, 2, 3, 4), explicitBounds);
+});
+
 Run("student exam form constructor does not invoke before handle exists", () =>
 {
     Environment.SetEnvironmentVariable("COURSEGUARD_DB_CONNECTION", "Host=localhost;Username=test;Password=test;Database=test");
@@ -719,6 +789,24 @@ static void AssertFalse(bool value, string message)
 {
     if (value)
         throw new InvalidOperationException(message);
+}
+
+static void AssertImageDisposed(Image image, string message)
+{
+    try
+    {
+        _ = image.Width;
+    }
+    catch (ObjectDisposedException)
+    {
+        return;
+    }
+    catch (ArgumentException)
+    {
+        return;
+    }
+
+    throw new InvalidOperationException(message);
 }
 
 sealed class RecordingSynchronizationContext : SynchronizationContext

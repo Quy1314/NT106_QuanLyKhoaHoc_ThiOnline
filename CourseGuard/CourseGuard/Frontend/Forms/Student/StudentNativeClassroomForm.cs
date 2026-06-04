@@ -1,5 +1,3 @@
-using AForge.Video;
-using AForge.Video.DirectShow;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Services.Classroom;
@@ -27,18 +25,9 @@ namespace CourseGuard.Frontend.Forms.Student
         private TextBox _chatInput = null!;
         private Button _btnSendChat = null!;
 
-        private FilterInfoCollection? _videoDevices;
-        private VideoCaptureDevice? _camera;
-        private bool _isCameraOn;
+        private ClassroomCameraManager _cameraManager = null!;
+        private ClassroomScreenShareManager _screenShareManager = null!;
         private bool _isMicOn = true;
-        private DateTime _lastFrameSentAt = DateTime.MinValue;
-        private DateTime _lastScreenFrameSentAt = DateTime.MinValue;
-        private int _isSendingFrame;
-        private int _isSendingScreenFrame;
-        private bool _isScreenSharing;
-        private Rectangle _screenShareBounds;
-        private string _screenShareTitle = "Màn hình";
-        private System.Windows.Forms.Timer? _screenShareTimer;
 
         public StudentNativeClassroomForm(int sessionId, string sessionName)
         {
@@ -52,6 +41,7 @@ namespace CourseGuard.Frontend.Forms.Student
             FormClosing += StudentNativeClassroomForm_FormClosing;
 
             BuildLayout();
+            InitializeMediaManagers();
             WireClientEvents();
         }
 
@@ -343,6 +333,64 @@ namespace CourseGuard.Frontend.Forms.Student
             _client.SignalReceived += (_, e) => HandleSignal(e.Signal);
         }
 
+        private void InitializeMediaManagers()
+        {
+            _screenShareManager = new ClassroomScreenShareManager(
+                timerIntervalMilliseconds: 240,
+                throttleMilliseconds: 260,
+                maxWidth: 1280,
+                maxHeight: 720,
+                jpegQuality: 44L,
+                canCaptureFrame: () => _client.IsConnected,
+                sendFrameAsync: SendScreenFrameAsync);
+
+            _cameraManager = new ClassroomCameraManager(
+                previewTargetProvider: () => _studentPreview,
+                maxWidth: 360,
+                maxHeight: 240,
+                jpegQuality: 40L,
+                throttleMilliseconds: 220,
+                canSendFrame: () => _client.IsConnected,
+                sendFrameAsync: SendCameraFrameAsync);
+        }
+
+        private async Task SendScreenFrameAsync(ClassroomScreenShareFrame frame)
+        {
+            await _client.SendAsync(new ClassroomSignalModel
+            {
+                Type = ClassroomMessageType.ScreenShareFrame,
+                SessionId = _sessionId,
+                SenderId = UserSessionContext.CurrentUserId ?? 0,
+                SenderName = UserSessionContext.CurrentUsername ?? "Student",
+                SenderRole = "STUDENT",
+                Payload =
+                {
+                    ["imageBase64"] = frame.ImageBase64,
+                    ["width"] = frame.Width.ToString(),
+                    ["height"] = frame.Height.ToString(),
+                    ["sourceTitle"] = frame.SourceTitle
+                }
+            });
+        }
+
+        private async Task SendCameraFrameAsync(ClassroomCameraFrame frame)
+        {
+            await _client.SendAsync(new ClassroomSignalModel
+            {
+                Type = ClassroomMessageType.VideoFrame,
+                SessionId = _sessionId,
+                SenderId = UserSessionContext.CurrentUserId ?? 0,
+                SenderName = UserSessionContext.CurrentUsername ?? "Student",
+                SenderRole = "STUDENT",
+                Payload =
+                {
+                    ["imageBase64"] = frame.ImageBase64,
+                    ["width"] = frame.Width.ToString(),
+                    ["height"] = frame.Height.ToString()
+                }
+            });
+        }
+
         private void HandleSignal(ClassroomSignalModel signal)
         {
             if (signal.Type == ClassroomMessageType.VideoFrame && signal.SenderRole == "TEACHER")
@@ -429,7 +477,7 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private async Task ToggleCameraAsync()
         {
-            if (_isCameraOn)
+            if (_cameraManager.IsRunning)
             {
                 StopCamera();
                 _btnCamera.Text = "Bật Camera";
@@ -440,24 +488,12 @@ namespace CourseGuard.Frontend.Forms.Student
 
             try
             {
-                _videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
-                if (_videoDevices.Count == 0)
+                if (!_cameraManager.Start())
                 {
                     MetaTheme.ShowModernDialog("Không tìm thấy webcam trên máy học sinh.", "Camera");
                     return;
                 }
 
-                _camera = new VideoCaptureDevice(_videoDevices[0].MonikerString);
-                if (_camera.VideoCapabilities.Length > 0)
-                {
-                    _camera.VideoResolution = _camera.VideoCapabilities
-                        .OrderByDescending(c => c.FrameSize.Width * c.FrameSize.Height)
-                        .First();
-                }
-
-                _camera.NewFrame += Camera_NewFrame;
-                _camera.Start();
-                _isCameraOn = true;
                 _btnCamera.Text = "Tắt Camera";
                 _btnCamera.BackColor = AppColors.Danger;
                 _statusLabel.Text = "Camera học sinh đang bật - giáo viên có thể nhìn thấy bạn.";
@@ -492,7 +528,7 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private async Task ToggleScreenShareAsync()
         {
-            if (_isScreenSharing)
+            if (_screenShareManager.IsSharing)
             {
                 StopScreenShare();
                 await SendStateAsync(ClassroomMessageType.ScreenShareOff);
@@ -505,141 +541,13 @@ namespace CourseGuard.Frontend.Forms.Student
                 return;
             }
 
-            _screenShareBounds = picker.SelectedBounds;
-            _screenShareTitle = picker.SelectedTitle;
-            _isScreenSharing = true;
             _btnShareScreen.Text = "Dừng trình bày";
             _btnShareScreen.BackColor = AppColors.Danger;
-            _statusLabel.Text = $"Bạn đang trình bày: {_screenShareTitle}";
-            SafeAddEvent($"Đang trình bày {_screenShareTitle} cho giáo viên.");
+            _statusLabel.Text = $"Bạn đang trình bày: {picker.SelectedTitle}";
+            SafeAddEvent($"Đang trình bày {picker.SelectedTitle} cho giáo viên.");
             await SendStateAsync(ClassroomMessageType.ScreenShareOn);
 
-            _screenShareTimer = new System.Windows.Forms.Timer { Interval = 240 };
-            _screenShareTimer.Tick += (_, _) => CaptureAndSendScreenFrameAsync().FireAndForgetSafe(this);
-            _screenShareTimer.Start();
-        }
-
-        private async Task CaptureAndSendScreenFrameAsync()
-        {
-            Bitmap? frame = null;
-            try
-            {
-                if (!_isScreenSharing || !_client.IsConnected) return;
-                if ((DateTime.UtcNow - _lastScreenFrameSentAt).TotalMilliseconds < 260) return;
-                if (Interlocked.Exchange(ref _isSendingScreenFrame, 1) == 1) return;
-
-                _lastScreenFrameSentAt = DateTime.UtcNow;
-                frame = CaptureScreenBounds(_screenShareBounds);
-                using Bitmap resized = ResizeFrame(frame, 1280, 720);
-                string base64Frame = EncodeJpegBase64(resized, 44L);
-
-                await _client.SendAsync(new ClassroomSignalModel
-                {
-                    Type = ClassroomMessageType.ScreenShareFrame,
-                    SessionId = _sessionId,
-                    SenderId = UserSessionContext.CurrentUserId ?? 0,
-                    SenderName = UserSessionContext.CurrentUsername ?? "Student",
-                    SenderRole = "STUDENT",
-                    Payload =
-                    {
-                        ["imageBase64"] = base64Frame,
-                        ["width"] = resized.Width.ToString(),
-                        ["height"] = resized.Height.ToString(),
-                        ["sourceTitle"] = _screenShareTitle
-                    }
-                });
-            }
-            catch
-            {
-                // Drop screen-share frames silently to keep classroom responsive.
-            }
-            finally
-            {
-                frame?.Dispose();
-                Interlocked.Exchange(ref _isSendingScreenFrame, 0);
-            }
-        }
-
-        private static Bitmap CaptureScreenBounds(Rectangle bounds)
-        {
-            if (bounds.Width <= 0 || bounds.Height <= 0)
-            {
-                bounds = Screen.PrimaryScreen?.Bounds ?? Screen.AllScreens[0].Bounds;
-            }
-
-            var bitmap = new Bitmap(bounds.Width, bounds.Height);
-            using Graphics graphics = Graphics.FromImage(bitmap);
-            graphics.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
-            return bitmap;
-        }
-
-        private void Camera_NewFrame(object sender, NewFrameEventArgs eventArgs)
-        {
-            Bitmap frame = (Bitmap)eventArgs.Frame.Clone();
-            if (_studentPreview.IsDisposed || !_studentPreview.IsHandleCreated)
-            {
-                frame.Dispose();
-                return;
-            }
-
-            Bitmap frameForNetwork = (Bitmap)frame.Clone();
-            _studentPreview.BeginInvoke(() =>
-            {
-                Image? old = _studentPreview.Image;
-                _studentPreview.Image = frame;
-                old?.Dispose();
-            });
-
-            SendStudentVideoFrameAsync(frameForNetwork).FireAndForgetSafe(this);
-        }
-
-        private async Task SendStudentVideoFrameAsync(Bitmap frame)
-        {
-            try
-            {
-                if (!_isCameraOn || !_client.IsConnected)
-                {
-                    return;
-                }
-
-                if ((DateTime.UtcNow - _lastFrameSentAt).TotalMilliseconds < 220)
-                {
-                    return;
-                }
-
-                if (Interlocked.Exchange(ref _isSendingFrame, 1) == 1)
-                {
-                    return;
-                }
-
-                _lastFrameSentAt = DateTime.UtcNow;
-                using Bitmap resized = ResizeFrame(frame, 360, 240);
-                string base64Frame = EncodeJpegBase64(resized, 40L);
-
-                await _client.SendAsync(new ClassroomSignalModel
-                {
-                    Type = ClassroomMessageType.VideoFrame,
-                    SessionId = _sessionId,
-                    SenderId = UserSessionContext.CurrentUserId ?? 0,
-                    SenderName = UserSessionContext.CurrentUsername ?? "Student",
-                    SenderRole = "STUDENT",
-                    Payload =
-                    {
-                        ["imageBase64"] = base64Frame,
-                        ["width"] = resized.Width.ToString(),
-                        ["height"] = resized.Height.ToString()
-                    }
-                });
-            }
-            catch
-            {
-                // Drop frame silently to keep UI/network stable.
-            }
-            finally
-            {
-                frame.Dispose();
-                Interlocked.Exchange(ref _isSendingFrame, 0);
-            }
+            _screenShareManager.Start(picker.SelectedBounds, picker.SelectedTitle);
         }
 
         private void RenderTeacherVideoFrame(ClassroomSignalModel signal)
@@ -647,33 +555,45 @@ namespace CourseGuard.Frontend.Forms.Student
             try
             {
                 if (!signal.Payload.TryGetValue("imageBase64", out string? base64) || string.IsNullOrWhiteSpace(base64)) return;
-                byte[] bytes = Convert.FromBase64String(base64);
-                using var stream = new MemoryStream(bytes);
-                Image frame = Image.FromStream(stream);
+                Image frame = ClassroomFrameHelper.DecodeFrame(base64);
 
-                if (IsDisposed || !_teacherVideo.IsHandleCreated)
-                {
-                    frame.Dispose();
-                    return;
-                }
+                ClassroomFrameHelper.TryBeginReplaceImage(
+                    this,
+                    frame,
+                    () =>
+                    {
+                        if (IsDisposed ||
+                            _teacherVideo.IsDisposed ||
+                            !_teacherVideo.IsHandleCreated ||
+                            _teacherCameraPip.IsDisposed ||
+                            _teacherCameraPipPreview.IsDisposed)
+                        {
+                            throw new ObjectDisposedException(nameof(StudentNativeClassroomForm));
+                        }
 
-                BeginInvoke(() =>
-                {
-                    PictureBox target = _teacherCameraPip.Visible ? _teacherCameraPipPreview : _teacherVideo;
-                    Image? old = target.Image;
-                    target.Image = frame;
-                    old?.Dispose();
-                    _videoPlaceholder.Visible = false;
-                    if (_teacherCameraPip.Visible)
+                        return _teacherCameraPip.Visible ? _teacherCameraPipPreview : _teacherVideo;
+                    },
+                    () =>
                     {
-                        _teacherCameraPip.BringToFront();
-                        _statusLabel.Text = $"Đang xem giáo viên trình bày, camera thu nhỏ - {DateTime.Now:HH:mm:ss}";
-                    }
-                    else
-                    {
-                        _statusLabel.Text = $"Đang xem video giáo viên - {DateTime.Now:HH:mm:ss}";
-                    }
-                });
+                        if (IsDisposed ||
+                            _videoPlaceholder.IsDisposed ||
+                            _teacherCameraPip.IsDisposed ||
+                            _statusLabel.IsDisposed)
+                        {
+                            return;
+                        }
+
+                        _videoPlaceholder.Visible = false;
+                        if (_teacherCameraPip.Visible)
+                        {
+                            _teacherCameraPip.BringToFront();
+                            _statusLabel.Text = $"Đang xem giáo viên trình bày, camera thu nhỏ - {DateTime.Now:HH:mm:ss}";
+                        }
+                        else
+                        {
+                            _statusLabel.Text = $"Đang xem video giáo viên - {DateTime.Now:HH:mm:ss}";
+                        }
+                    });
             }
             catch
             {
@@ -686,57 +606,34 @@ namespace CourseGuard.Frontend.Forms.Student
             try
             {
                 if (!signal.Payload.TryGetValue("imageBase64", out string? base64) || string.IsNullOrWhiteSpace(base64)) return;
-                byte[] bytes = Convert.FromBase64String(base64);
-                using var stream = new MemoryStream(bytes);
-                Image frame = Image.FromStream(stream);
+                Image frame = ClassroomFrameHelper.DecodeFrame(base64);
 
-                if (IsDisposed || !_teacherVideo.IsHandleCreated)
-                {
-                    frame.Dispose();
-                    return;
-                }
+                ClassroomFrameHelper.TryBeginReplaceImage(
+                    this,
+                    _teacherVideo,
+                    frame,
+                    () =>
+                    {
+                        if (IsDisposed ||
+                            _teacherVideo.IsDisposed ||
+                            _videoPlaceholder.IsDisposed ||
+                            _teacherCameraPip.IsDisposed ||
+                            _statusLabel.IsDisposed)
+                        {
+                            return;
+                        }
 
-                BeginInvoke(() =>
-                {
-                    Image? old = _teacherVideo.Image;
-                    _teacherVideo.Image = frame;
-                    old?.Dispose();
-                    _videoPlaceholder.Visible = false;
-                    _teacherCameraPip.Visible = true;
-                    _teacherCameraPip.BringToFront();
-                    string sourceTitle = signal.Payload.TryGetValue("sourceTitle", out string? title) ? title : "màn hình";
-                    _statusLabel.Text = $"Đang xem giáo viên trình bày: {sourceTitle} - {DateTime.Now:HH:mm:ss}";
-                });
+                        _videoPlaceholder.Visible = false;
+                        _teacherCameraPip.Visible = true;
+                        _teacherCameraPip.BringToFront();
+                        string sourceTitle = signal.Payload.TryGetValue("sourceTitle", out string? title) ? title : "màn hình";
+                        _statusLabel.Text = $"Đang xem giáo viên trình bày: {sourceTitle} - {DateTime.Now:HH:mm:ss}";
+                    });
             }
             catch
             {
                 // Drop corrupt screen-share frames silently.
             }
-        }
-
-        private static Bitmap ResizeFrame(Bitmap source, int maxWidth, int maxHeight)
-        {
-            double ratio = Math.Min((double)maxWidth / source.Width, (double)maxHeight / source.Height);
-            int width = Math.Max(1, (int)(source.Width * ratio));
-            int height = Math.Max(1, (int)(source.Height * ratio));
-            var resized = new Bitmap(width, height);
-            using Graphics graphics = Graphics.FromImage(resized);
-            graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighSpeed;
-            graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Low;
-            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighSpeed;
-            graphics.DrawImage(source, 0, 0, width, height);
-            return resized;
-        }
-
-        private static string EncodeJpegBase64(Bitmap bitmap, long quality)
-        {
-            using var stream = new MemoryStream();
-            System.Drawing.Imaging.ImageCodecInfo encoder = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders()
-                .First(codec => codec.MimeType == "image/jpeg");
-            using var encoderParameters = new System.Drawing.Imaging.EncoderParameters(1);
-            encoderParameters.Param[0] = new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
-            bitmap.Save(stream, encoder, encoderParameters);
-            return Convert.ToBase64String(stream.ToArray());
         }
 
         private void SafeShowTeacherPlaceholder(string text)
@@ -772,18 +669,8 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private void StopCamera()
         {
-            if (_camera != null)
-            {
-                _camera.NewFrame -= Camera_NewFrame;
-                if (_camera.IsRunning)
-                {
-                    _camera.SignalToStop();
-                    _camera.WaitForStop();
-                }
-                _camera = null;
-            }
+            _cameraManager.Stop();
 
-            _isCameraOn = false;
             Image? old = _studentPreview.Image;
             _studentPreview.Image = null;
             old?.Dispose();
@@ -791,14 +678,10 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private void StopScreenShare()
         {
-            _screenShareTimer?.Stop();
-            _screenShareTimer?.Dispose();
-            _screenShareTimer = null;
-            _isScreenSharing = false;
+            _screenShareManager.Stop();
             _btnShareScreen.Text = "Share màn hình";
             _btnShareScreen.BackColor = Color.FromArgb(139, 92, 246);
-            _statusLabel.Text = $"Đã dừng trình bày {_screenShareTitle}.";
-            Interlocked.Exchange(ref _isSendingScreenFrame, 0);
+            _statusLabel.Text = $"Đã dừng trình bày {_screenShareManager.SelectedTitle}.";
         }
 
         private async void StudentNativeClassroomForm_FormClosing(object? sender, FormClosingEventArgs e)
@@ -817,6 +700,8 @@ namespace CourseGuard.Frontend.Forms.Student
             Image? oldTeacher = _teacherVideo.Image;
             _teacherVideo.Image = null;
             oldTeacher?.Dispose();
+            _screenShareManager.Dispose();
+            _cameraManager.Dispose();
             await _client.DisconnectAsync();
         }
         private sealed class ScreenSharePickerDialog : Form
