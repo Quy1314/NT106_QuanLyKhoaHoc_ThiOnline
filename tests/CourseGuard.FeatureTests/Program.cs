@@ -419,7 +419,7 @@ Run("fire and forget safe observes canceled task without reporting", () =>
     }
 });
 
-Run("fire and forget safe suppresses context fallback when supplied owner becomes invalid", () =>
+Run("fire and forget safe falls back to context when supplied owner becomes invalid", () =>
 {
     using var owner = new Control();
     IntPtr handle = owner.Handle;
@@ -446,8 +446,12 @@ Run("fire and forget safe suppresses context fallback when supplied owner become
 
         AssertTrue(observed.Wait(TimeSpan.FromSeconds(3)), "invalid owner failed task was not observed");
         AssertTrue(observedException is InvalidOperationException, "invalid owner should observe original exception");
-        AssertFalse(context.WaitForPost(TimeSpan.FromMilliseconds(100)), "invalid supplied owner should not fall back to captured context");
+        AssertTrue(context.WaitForPost(TimeSpan.FromSeconds(3)), "invalid supplied owner should fall back to captured context");
         AssertEqual(0, reporterCallCount);
+
+        context.ExecuteAll();
+
+        AssertEqual(1, reporterCallCount);
     }
     finally
     {

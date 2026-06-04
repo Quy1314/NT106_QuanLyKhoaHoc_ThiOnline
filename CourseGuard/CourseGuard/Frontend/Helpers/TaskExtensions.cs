@@ -59,13 +59,9 @@ namespace CourseGuard.Frontend.Helpers
         {
             string message = $"A background task failed: {exception.Message}";
 
-            if (owner != null)
+            if (IsValidOwner(owner))
             {
-                if (IsValidOwner(owner))
-                {
-                    owner.InvokeIfRequired(() => SafeShowDialog(owner, errorTitle, message, exception));
-                }
-
+                owner!.InvokeIfRequired(() => SafeShowDialog(owner, errorTitle, message, exception));
                 return;
             }
 
