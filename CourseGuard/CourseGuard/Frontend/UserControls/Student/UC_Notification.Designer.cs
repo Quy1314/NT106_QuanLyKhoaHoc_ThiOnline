@@ -24,7 +24,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // lblTitle
             // 
             this.lblTitle.AutoSize = true;
-            this.lblTitle.Font = new System.Drawing.Font("Segoe UI", 16F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblTitle.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(16F);
             this.lblTitle.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(58)))), ((int)(((byte)(138)))));
             this.lblTitle.Location = new System.Drawing.Point(20, 20);
             this.lblTitle.Name = "lblTitle";
@@ -37,7 +37,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             this.btnMarkAsRead.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.btnMarkAsRead.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(37)))), ((int)(((byte)(99)))), ((int)(((byte)(235)))));
             this.btnMarkAsRead.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnMarkAsRead.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.btnMarkAsRead.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             this.btnMarkAsRead.ForeColor = System.Drawing.Color.White;
             this.btnMarkAsRead.Location = new System.Drawing.Point(680, 22);
             this.btnMarkAsRead.Name = "btnMarkAsRead";

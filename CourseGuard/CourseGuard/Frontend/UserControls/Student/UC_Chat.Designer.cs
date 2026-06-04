@@ -25,7 +25,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // lblTitle
             // 
             lblTitle.AutoSize = true;
-            lblTitle.Font = new Font("Segoe UI", 16F, FontStyle.Bold);
+            lblTitle.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(16F);
             lblTitle.ForeColor = Color.FromArgb(30, 58, 138);
             lblTitle.Location = new Point(20, 20);
             lblTitle.Name = "lblTitle";
@@ -36,7 +36,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // lstContacts
             // 
             lstContacts.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
-            lstContacts.Font = new Font("Segoe UI", 11F);
+            lstContacts.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.SubtitleMd();
             lstContacts.FormattingEnabled = true;
             lstContacts.Location = new Point(20, 80);
             lstContacts.Name = "lstContacts";
@@ -47,7 +47,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // 
             txtMessages.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             txtMessages.BackColor = Color.White;
-            txtMessages.Font = new Font("Segoe UI", 11F);
+            txtMessages.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.SubtitleMd();
             txtMessages.Location = new Point(290, 80);
             txtMessages.Multiline = true;
             txtMessages.Name = "txtMessages";
@@ -60,7 +60,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // txtInput
             // 
             txtInput.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            txtInput.Font = new Font("Segoe UI", 11F);
+            txtInput.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.SubtitleMd();
             txtInput.Location = new Point(290, 500);
             txtInput.Name = "txtInput";
             txtInput.PlaceholderText = "Nhập tin nhắn...";
@@ -72,7 +72,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             btnSend.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnSend.BackColor = Color.FromArgb(37, 99, 235);
             btnSend.FlatStyle = FlatStyle.Flat;
-            btnSend.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            btnSend.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             btnSend.ForeColor = Color.White;
             btnSend.Location = new Point(780, 498);
             btnSend.Name = "btnSend";

@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Admin
@@ -27,7 +28,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             InitializeComponent();
             _userController = new UserController(new CourseGuardDbContext(""));
             BuildDashboardFromTemplate();
-            _ = LoadDashboardDataAsync();
+            LoadDashboardDataAsync().FireAndForgetSafe(this);
         }
 
         private void BuildDashboardFromTemplate()
@@ -164,11 +165,11 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 ReadOnly = true,
                 RowHeadersVisible = false,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-                Font = new Font("Segoe UI", 9F, FontStyle.Regular),
+                Font = MetaTheme.Fonts.BodySm(),
                 EnableHeadersVisualStyles = false
             };
             AcademicTheme.StyleGrid(_requestsGrid);
-            _requestsGrid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            _requestsGrid.ColumnHeadersDefaultCellStyle.Font = MetaTheme.Fonts.BodySmBold();
             _requestsGrid.ColumnHeadersHeight = 30;
             _requestsGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
             _requestsGrid.RowTemplate.Height = 30;
@@ -180,7 +181,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             _requestsGrid.Rows.Add("Đang tải...", "Đăng ký", "PENDING", "Vui lòng chờ");
             AddCardContent(panel, _requestsGrid);
 
-            _ = LoadPendingRequestsAsync();
+            LoadPendingRequestsAsync().FireAndForgetSafe(this);
             return panel;
         }
 
@@ -357,7 +358,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Text = title,
                 Dock = DockStyle.Top,
                 Height = 30,
-                Font = new Font("Segoe UI", 11F, FontStyle.Bold),
+                Font = MetaTheme.Fonts.SubtitleLg(),
                 ForeColor = AppColors.TextPrimary
             };
 

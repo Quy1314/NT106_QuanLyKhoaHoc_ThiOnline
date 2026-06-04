@@ -68,7 +68,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // lblTitle
             // 
             this.lblTitle.Text = "BÁO CÁO & THỐNG KÊ";
-            this.lblTitle.Font = new System.Drawing.Font("Segoe UI", 16F, System.Drawing.FontStyle.Bold);
+            this.lblTitle.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(16F);
             this.lblTitle.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(58)))), ((int)(((byte)(138)))));
             this.lblTitle.Location = new System.Drawing.Point(20, 10);
             this.lblTitle.AutoSize = true;
@@ -80,7 +80,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             this.grpFilter.Text = "Bộ lọc và Tìm kiếm";
             this.grpFilter.Dock = System.Windows.Forms.DockStyle.Top;
             this.grpFilter.Height = 100;
-            this.grpFilter.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.grpFilter.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMdBold();
             this.grpFilter.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(58)))), ((int)(((byte)(138)))));
             this.grpFilter.BackColor = System.Drawing.Color.White;
             this.grpFilter.Padding = new System.Windows.Forms.Padding(10);
@@ -88,12 +88,12 @@ namespace CourseGuard.Frontend.UserControls.Admin
             
             // Report Type
             this.lblReportType.Text = "Loại báo cáo:";
-            this.lblReportType.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.lblReportType.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             this.lblReportType.Location = new System.Drawing.Point(20, 30);
             this.lblReportType.AutoSize = true;
             this.lblReportType.Name = "lblReportType";
 
-            this.cboReportType.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.cboReportType.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             this.cboReportType.Items.AddRange(new object[] { "Nhật ký hệ thống (Audit Logs)", "Danh sách vi phạm (Violations)" });
             this.cboReportType.Location = new System.Drawing.Point(20, 55);
             this.cboReportType.Size = new System.Drawing.Size(250, 30);
@@ -103,12 +103,12 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
             // Start Date
             this.lblStartDate.Text = "Từ ngày:";
-            this.lblStartDate.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.lblStartDate.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             this.lblStartDate.Location = new System.Drawing.Point(300, 30);
             this.lblStartDate.AutoSize = true;
             this.lblStartDate.Name = "lblStartDate";
 
-            this.dtpStartDate.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.dtpStartDate.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             this.dtpStartDate.Format = System.Windows.Forms.DateTimePickerFormat.Short;
             this.dtpStartDate.Location = new System.Drawing.Point(300, 55);
             this.dtpStartDate.Size = new System.Drawing.Size(150, 30);
@@ -116,12 +116,12 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
             // End Date
             this.lblEndDate.Text = "Đến ngày:";
-            this.lblEndDate.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.lblEndDate.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             this.lblEndDate.Location = new System.Drawing.Point(470, 30);
             this.lblEndDate.AutoSize = true;
             this.lblEndDate.Name = "lblEndDate";
 
-            this.dtpEndDate.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.dtpEndDate.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             this.dtpEndDate.Format = System.Windows.Forms.DateTimePickerFormat.Short;
             this.dtpEndDate.Location = new System.Drawing.Point(470, 55);
             this.dtpEndDate.Size = new System.Drawing.Size(150, 30);
@@ -133,7 +133,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             this.btnFilter.ForeColor = System.Drawing.Color.White;
             this.btnFilter.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnFilter.FlatAppearance.BorderSize = 0;
-            this.btnFilter.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.btnFilter.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             this.btnFilter.Location = new System.Drawing.Point(650, 50);
             this.btnFilter.Size = new System.Drawing.Size(150, 35);
             this.btnFilter.Name = "btnFilter";
@@ -152,7 +152,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             this.grpExport.Text = "Xuất dữ liệu";
             this.grpExport.Dock = System.Windows.Forms.DockStyle.Top;
             this.grpExport.Height = 80;
-            this.grpExport.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.grpExport.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMdBold();
             this.grpExport.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(58)))), ((int)(((byte)(138)))));
             this.grpExport.BackColor = System.Drawing.Color.White;
             this.grpExport.Padding = new System.Windows.Forms.Padding(10);
@@ -164,7 +164,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             this.btnExportCSV.ForeColor = System.Drawing.Color.White;
             this.btnExportCSV.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnExportCSV.FlatAppearance.BorderSize = 0;
-            this.btnExportCSV.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.btnExportCSV.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             this.btnExportCSV.Location = new System.Drawing.Point(20, 30);
             this.btnExportCSV.Size = new System.Drawing.Size(120, 35);
             this.btnExportCSV.Name = "btnExportCSV";
@@ -175,7 +175,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             this.btnExportExcel.ForeColor = System.Drawing.Color.White;
             this.btnExportExcel.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnExportExcel.FlatAppearance.BorderSize = 0;
-            this.btnExportExcel.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.btnExportExcel.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             this.btnExportExcel.Location = new System.Drawing.Point(160, 30);
             this.btnExportExcel.Size = new System.Drawing.Size(120, 35);
             this.btnExportExcel.Name = "btnExportExcel";
@@ -186,7 +186,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             this.btnExportPDF.ForeColor = System.Drawing.Color.White;
             this.btnExportPDF.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnExportPDF.FlatAppearance.BorderSize = 0;
-            this.btnExportPDF.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.btnExportPDF.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             this.btnExportPDF.Location = new System.Drawing.Point(300, 30);
             this.btnExportPDF.Size = new System.Drawing.Size(120, 35);
             this.btnExportPDF.Name = "btnExportPDF";

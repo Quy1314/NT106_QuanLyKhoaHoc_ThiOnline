@@ -11,6 +11,7 @@ using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Services;
 using CourseGuard.Frontend.Forms.Student;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Student
@@ -18,7 +19,7 @@ namespace CourseGuard.Frontend.UserControls.Student
     public partial class UC_TakeExam : UserControl, IStudentSearchTarget
     {
         private readonly CourseGuardDbContext _dbContext = new("");
-        private readonly AuthController _authController = new(new CourseGuardDbContext(""));
+        private readonly AuthController _authController;
         private DataTable? _examTable;
         private List<StudentExamListItemModel> _exams = new();
         private string _globalSearchKeyword = string.Empty;
@@ -27,10 +28,11 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         public UC_TakeExam()
         {
+            _authController = new AuthController(_dbContext);
             InitializeComponent();
             BuildCardLayout();
             ApplyAcademicStyle();
-            _ = LoadDataAsync();
+            LoadDataAsync().FireAndForgetSafe(this);
 
             RoundedButtonHelper.Apply(btnStartExam, 10);
         }
@@ -210,7 +212,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             using var form = new DoExamForm(examId);
             form.ShowDialog(this.FindForm());
-            _ = LoadDataAsync();
+            LoadDataAsync().FireAndForgetSafe(this);
         }
     }
 }

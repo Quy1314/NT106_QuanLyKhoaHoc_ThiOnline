@@ -8,6 +8,7 @@ using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Student
@@ -83,7 +84,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 else if (e.Control && e.KeyCode == Keys.O)
                 {
                     e.SuppressKeyPress = true;
-                    _ = SendFileAsync();
+                    SendFileAsync().FireAndForgetSafe(this);
                 }
             };
 
@@ -135,7 +136,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 Dock = DockStyle.Fill,
                 AutoSize = false,
                 BackColor = Color.Transparent,
-                Font = new System.Drawing.Font("Segoe UI", 12f, System.Drawing.FontStyle.Bold),
+                Font = MetaTheme.Fonts.HeadingSm(),
                 ForeColor = AppColors.TextPrimary,
                 Text = "Nội dung trao đổi",
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft

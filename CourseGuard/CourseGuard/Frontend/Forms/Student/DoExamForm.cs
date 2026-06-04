@@ -8,14 +8,15 @@ using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Services.Monitoring;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.Forms.Student
 {
     public partial class DoExamForm : Form
     {
-        private readonly AuthController _authController = new(new CourseGuardDbContext(""));
         private readonly CourseGuardDbContext _dbContext = new("");
+        private readonly AuthController _authController;
         private readonly int _examId;
         private readonly System.Threading.CancellationTokenSource _monitoringCts = new();
         private readonly System.Windows.Forms.Timer _timer = new();
@@ -32,6 +33,7 @@ namespace CourseGuard.Frontend.Forms.Student
         public DoExamForm(int examId)
         {
             _examId = examId;
+            _authController = new AuthController(_dbContext);
             InitializeComponent();
             ApplyAcademicExamTheme();
             WireEvents();
@@ -123,7 +125,8 @@ namespace CourseGuard.Frontend.Forms.Student
                 return;
 
             _screenStreamClient = new StudentScreenStreamClient(_examId, studentId, _session.AttemptId);
-            _ = System.Threading.Tasks.Task.Run(() => _screenStreamClient.StartAsync(_monitoringCts.Token));
+            StudentScreenStreamClient client = _screenStreamClient;
+            System.Threading.Tasks.Task.Run(() => client.StartAsync(_monitoringCts.Token)).FireAndForgetSafe(this);
         }
 
         private void ApplyAcademicExamTheme()
@@ -272,7 +275,7 @@ namespace CourseGuard.Frontend.Forms.Student
                     _authController.LogUserActivity(userId, "EXAM_SUBMIT", $"Người dùng {username} đã nộp bài thi ID={_examId}, điểm={result.Score:0.##}.", string.Empty);
                 }
                 catch { }
-            });
+            }).FireAndForgetSafe(this);
             MetaTheme.ShowModernDialog(this, $"Đã nộp bài. Điểm của bạn: {result.Score:0.##}/10", "Hoàn tất");
             Close();
         }
@@ -363,7 +366,7 @@ namespace CourseGuard.Frontend.Forms.Student
                     _authController.LogUserActivity(userId, "EXAM_EXIT", $"Người dùng {username} đã thoát màn hình làm bài thi ID={_examId}.", string.Empty);
                 }
                 catch { }
-            });
+            }).FireAndForgetSafe(this);
         }
     }
 }

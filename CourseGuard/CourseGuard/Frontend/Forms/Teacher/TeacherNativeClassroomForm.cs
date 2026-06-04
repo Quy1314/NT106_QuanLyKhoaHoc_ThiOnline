@@ -1,7 +1,6 @@
-using AForge.Video;
-using AForge.Video.DirectShow;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services.Classroom;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.Forms.Teacher
@@ -26,16 +25,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private readonly Dictionary<int, PictureBox> _studentVideoBoxes = new();
         private readonly Dictionary<int, Label> _studentVideoLabels = new();
 
-        private FilterInfoCollection? _videoDevices;
-        private VideoCaptureDevice? _camera;
-        private System.Windows.Forms.Timer? _screenShareTimer;
-        private bool _isCameraOn;
+        private ClassroomCameraManager _cameraManager = null!;
+        private ClassroomScreenShareManager _screenShareManager = null!;
         private bool _isMicOn = true;
-        private bool _isScreenSharing;
-        private Rectangle _screenShareBounds;
-        private string _screenShareTitle = "Màn hình";
-        private DateTime _lastScreenFrameSentAt = DateTime.MinValue;
-        private int _isSendingScreenFrame;
 
         public TeacherNativeClassroomForm(int sessionId)
         {
@@ -48,6 +40,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             FormClosing += TeacherNativeClassroomForm_FormClosing;
 
             BuildLayout();
+            InitializeMediaManagers();
             WireServerEvents();
         }
 
@@ -99,7 +92,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 Text = "Camera giáo viên đang tắt\nBấm 'Bật Camera' để bắt đầu video call native",
                 ForeColor = AppColors.TextSecondary,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Font = new Font("Segoe UI", 16, FontStyle.Regular),
+                Font = new Font(AppFonts.Body.FontFamily, 16F, FontStyle.Regular),
                 BackColor = Color.Transparent
             };
             stage.Controls.Add(placeholder);
@@ -163,7 +156,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 Text = "Camera học sinh",
                 ForeColor = AppColors.TextPrimary,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 11, FontStyle.Bold)
+                Font = MetaTheme.Fonts.SubtitleLg()
             };
             sideLayout.Controls.Add(studentVideoTitle, 0, 0);
 
@@ -185,7 +178,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 Text = "Hoạt động lớp học",
                 ForeColor = AppColors.TextPrimary,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 10, FontStyle.Bold)
+                Font = MetaTheme.Fonts.BodyMdBold()
             };
             sideLayout.Controls.Add(participantTitle, 0, 2);
 
@@ -195,7 +188,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 BackColor = AppColors.BgInput,
                 ForeColor = AppColors.TextPrimary,
                 BorderStyle = BorderStyle.None,
-                Font = new Font("Segoe UI", 9)
+                Font = MetaTheme.Fonts.BodySm()
             };
             sideLayout.Controls.Add(_eventsList, 0, 3);
 
@@ -205,7 +198,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 Text = "Chat lớp học",
                 ForeColor = AppColors.TextPrimary,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 10, FontStyle.Bold)
+                Font = MetaTheme.Fonts.BodyMdBold()
             }, 0, 4);
 
             var chatPanel = new TableLayoutPanel
@@ -228,7 +221,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 BackColor = Color.FromArgb(15, 23, 42),
                 ForeColor = Color.FromArgb(226, 232, 240),
                 BorderStyle = BorderStyle.None,
-                Font = new Font("Segoe UI", 9, FontStyle.Bold)
+                Font = MetaTheme.Fonts.BodySmBold()
             };
             chatPanel.SetColumnSpan(_chatList, 2);
             chatPanel.Controls.Add(_chatList, 0, 0);
@@ -239,7 +232,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 BackColor = Color.FromArgb(241, 245, 249),
                 ForeColor = Color.FromArgb(15, 23, 42),
                 BorderStyle = BorderStyle.FixedSingle,
-                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                Font = MetaTheme.Fonts.BodyMdBold(),
                 PlaceholderText = "Nhập tin nhắn..."
             };
             _chatInput.KeyDown += async (_, e) =>
@@ -259,7 +252,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 BackColor = AppColors.AccentBlue,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                Font = MetaTheme.Fonts.BodySmBold(),
                 Cursor = Cursors.Hand
             };
             _btnSendChat.FlatAppearance.BorderSize = 0;
@@ -305,7 +298,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 Text = "Đang khởi động socket classroom...",
                 ForeColor = AppColors.TextPrimary,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 11, FontStyle.Bold),
+                Font = MetaTheme.Fonts.SubtitleLg(),
                 Padding = new Padding(14),
                 BackColor = AppColors.BgCard
             };
@@ -324,7 +317,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 BackColor = color,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                Font = MetaTheme.Fonts.ButtonMd(),
                 Cursor = Cursors.Hand
             };
             button.FlatAppearance.BorderSize = 0;
@@ -336,6 +329,115 @@ namespace CourseGuard.Frontend.Forms.Teacher
         {
             _server.StatusChanged += (_, e) => SafeAddEvent(e.Status);
             _server.SignalReceived += (_, e) => HandleIncomingSignal(e.Signal);
+        }
+
+        private void InitializeMediaManagers()
+        {
+            _screenShareManager = new ClassroomScreenShareManager(
+                timerIntervalMilliseconds: 220,
+                throttleMilliseconds: 240,
+                maxWidth: 1280,
+                maxHeight: 720,
+                jpegQuality: 46L,
+                canCaptureFrame: () => !IsDisposed,
+                previewFrame: ShowTeacherScreenSharePreview,
+                sendFrameAsync: BroadcastScreenFrameAsync);
+
+            _cameraManager = new ClassroomCameraManager(
+                previewTargetProvider: () => _screenShareManager.IsSharing ? _teacherCameraPipPreview : _teacherPreview,
+                maxWidth: 640,
+                maxHeight: 360,
+                jpegQuality: 45L,
+                throttleMilliseconds: 160,
+                canSendFrame: () => _server.Clients.Count > 0,
+                sendFrameAsync: BroadcastCameraFrameAsync,
+                afterPreviewUpdated: AfterTeacherCameraPreviewUpdated);
+        }
+
+        private async Task BroadcastScreenFrameAsync(ClassroomScreenShareFrame frame)
+        {
+            if (_server.Clients.Count == 0) return;
+
+            await _server.BroadcastAsync(new ClassroomSignalModel
+            {
+                Type = ClassroomMessageType.ScreenShareFrame,
+                SessionId = _sessionId,
+                SenderId = 0,
+                SenderName = "Giáo viên",
+                SenderRole = "TEACHER",
+                Payload =
+                {
+                    ["imageBase64"] = frame.ImageBase64,
+                    ["width"] = frame.Width.ToString(),
+                    ["height"] = frame.Height.ToString(),
+                    ["sourceTitle"] = frame.SourceTitle
+                }
+            });
+        }
+
+        private async Task BroadcastCameraFrameAsync(ClassroomCameraFrame frame)
+        {
+            await _server.BroadcastAsync(new ClassroomSignalModel
+            {
+                Type = ClassroomMessageType.VideoFrame,
+                SessionId = _sessionId,
+                SenderId = 0,
+                SenderName = "Giáo viên",
+                SenderRole = "TEACHER",
+                Payload =
+                {
+                    ["imageBase64"] = frame.ImageBase64,
+                    ["width"] = frame.Width.ToString(),
+                    ["height"] = frame.Height.ToString()
+                }
+            });
+        }
+
+        private void ShowTeacherScreenSharePreview(Bitmap frame)
+        {
+            if (IsDisposed || !_teacherPreview.IsHandleCreated)
+            {
+                frame.Dispose();
+                return;
+            }
+
+            try
+            {
+                _teacherPreview.BeginInvoke(() =>
+                {
+                    if (IsDisposed || _teacherPreview.IsDisposed)
+                    {
+                        frame.Dispose();
+                        return;
+                    }
+
+                    Image? old = _teacherPreview.Image;
+                    _teacherPreview.Image = frame;
+                    old?.Dispose();
+                    HideCameraPlaceholder();
+                    if (_cameraManager.IsRunning)
+                    {
+                        _teacherCameraPip.Visible = true;
+                        _teacherCameraPip.BringToFront();
+                    }
+                });
+            }
+            catch
+            {
+                frame.Dispose();
+            }
+        }
+
+        private void AfterTeacherCameraPreviewUpdated()
+        {
+            if (_screenShareManager.IsSharing)
+            {
+                _teacherCameraPip.Visible = true;
+                _teacherCameraPip.BringToFront();
+                return;
+            }
+
+            HideCameraPlaceholder();
         }
 
         private void HandleIncomingSignal(ClassroomSignalModel signal)
@@ -414,7 +516,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private async Task ToggleScreenShareAsync()
         {
-            if (_isScreenSharing)
+            if (_screenShareManager.IsSharing)
             {
                 StopScreenShare();
                 await BroadcastScreenShareStateAsync(ClassroomMessageType.ScreenShareOff);
@@ -427,19 +529,14 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 return;
             }
 
-            _screenShareBounds = picker.SelectedBounds;
-            _screenShareTitle = picker.SelectedTitle;
-            _isScreenSharing = true;
             _btnShareScreen.Text = "Dừng trình bày";
             _btnShareScreen.BackColor = AppColors.Danger;
-            _statusLabel.Text = $"Bạn đang trình bày: {_screenShareTitle}";
+            _statusLabel.Text = $"Bạn đang trình bày: {picker.SelectedTitle}";
             HideCameraPlaceholder();
-            SafeAddEvent($"Đang trình bày {_screenShareTitle}.");
+            SafeAddEvent($"Đang trình bày {picker.SelectedTitle}.");
             await BroadcastScreenShareStateAsync(ClassroomMessageType.ScreenShareOn);
 
-            _screenShareTimer = new System.Windows.Forms.Timer { Interval = 220 };
-            _screenShareTimer.Tick += (_, _) => _ = CaptureAndSendScreenFrameAsync();
-            _screenShareTimer.Start();
+            _screenShareManager.Start(picker.SelectedBounds, picker.SelectedTitle);
         }
 
         private async Task BroadcastScreenShareStateAsync(string type)
@@ -454,82 +551,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
             });
         }
 
-        private async Task CaptureAndSendScreenFrameAsync()
-        {
-            Bitmap? frame = null;
-            try
-            {
-                if (!_isScreenSharing) return;
-                if ((DateTime.UtcNow - _lastScreenFrameSentAt).TotalMilliseconds < 240) return;
-                if (Interlocked.Exchange(ref _isSendingScreenFrame, 1) == 1) return;
-
-                _lastScreenFrameSentAt = DateTime.UtcNow;
-                frame = CaptureScreenBounds(_screenShareBounds);
-                using Bitmap resized = ResizeFrame(frame, 1280, 720);
-                string base64Frame = EncodeJpegBase64(resized, 46L);
-
-                if (!IsDisposed && _teacherPreview.IsHandleCreated)
-                {
-                    Bitmap localPreview = (Bitmap)resized.Clone();
-                    _teacherPreview.BeginInvoke(() =>
-                    {
-                        Image? old = _teacherPreview.Image;
-                        _teacherPreview.Image = localPreview;
-                        old?.Dispose();
-                        HideCameraPlaceholder();
-                        if (_isCameraOn)
-                        {
-                            _teacherCameraPip.Visible = true;
-                            _teacherCameraPip.BringToFront();
-                        }
-                    });
-                }
-
-                if (_server.Clients.Count == 0) return;
-
-                await _server.BroadcastAsync(new ClassroomSignalModel
-                {
-                    Type = ClassroomMessageType.ScreenShareFrame,
-                    SessionId = _sessionId,
-                    SenderId = 0,
-                    SenderName = "Giáo viên",
-                    SenderRole = "TEACHER",
-                    Payload =
-                    {
-                        ["imageBase64"] = base64Frame,
-                        ["width"] = resized.Width.ToString(),
-                        ["height"] = resized.Height.ToString(),
-                        ["sourceTitle"] = _screenShareTitle
-                    }
-                });
-            }
-            catch
-            {
-                // Drop screen frames silently for smooth sharing.
-            }
-            finally
-            {
-                frame?.Dispose();
-                Interlocked.Exchange(ref _isSendingScreenFrame, 0);
-            }
-        }
-
-        private static Bitmap CaptureScreenBounds(Rectangle bounds)
-        {
-            if (bounds.Width <= 0 || bounds.Height <= 0)
-            {
-                bounds = Screen.PrimaryScreen?.Bounds ?? Screen.AllScreens[0].Bounds;
-            }
-
-            var bitmap = new Bitmap(bounds.Width, bounds.Height);
-            using Graphics graphics = Graphics.FromImage(bitmap);
-            graphics.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
-            return bitmap;
-        }
-
         private async Task ToggleCameraAsync()
         {
-            if (_isCameraOn)
+            if (_cameraManager.IsRunning)
             {
                 StopCamera();
                 _btnCamera.Text = "Bật Camera";
@@ -548,24 +572,12 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             try
             {
-                _videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
-                if (_videoDevices.Count == 0)
+                if (!_cameraManager.Start())
                 {
                     MetaTheme.ShowModernDialog("Không tìm thấy webcam trên máy giáo viên.", "Camera");
                     return;
                 }
 
-                _camera = new VideoCaptureDevice(_videoDevices[0].MonikerString);
-                if (_camera.VideoCapabilities.Length > 0)
-                {
-                    _camera.VideoResolution = _camera.VideoCapabilities
-                        .OrderByDescending(c => c.FrameSize.Width * c.FrameSize.Height)
-                        .First();
-                }
-
-                _camera.NewFrame += Camera_NewFrame;
-                _camera.Start();
-                _isCameraOn = true;
                 _btnCamera.Text = "Tắt Camera";
                 _btnCamera.BackColor = AppColors.Danger;
                 _statusLabel.Text = "Camera giáo viên đang bật - video call native đã bắt đầu.";
@@ -603,109 +615,6 @@ namespace CourseGuard.Frontend.Forms.Teacher
             });
         }
 
-        private void Camera_NewFrame(object sender, NewFrameEventArgs eventArgs)
-        {
-            Bitmap frame = (Bitmap)eventArgs.Frame.Clone();
-            if (_teacherPreview.IsDisposed || !_teacherPreview.IsHandleCreated)
-            {
-                frame.Dispose();
-                return;
-            }
-
-            Bitmap frameForNetwork = (Bitmap)frame.Clone();
-            _teacherPreview.BeginInvoke(() =>
-            {
-                PictureBox target = _isScreenSharing ? _teacherCameraPipPreview : _teacherPreview;
-                Image? old = target.Image;
-                target.Image = frame;
-                old?.Dispose();
-                if (_isScreenSharing)
-                {
-                    _teacherCameraPip.Visible = true;
-                    _teacherCameraPip.BringToFront();
-                }
-            });
-
-            _ = SendVideoFrameAsync(frameForNetwork);
-        }
-
-        private DateTime _lastFrameSentAt = DateTime.MinValue;
-        private int _isSendingFrame;
-
-        private async Task SendVideoFrameAsync(Bitmap frame)
-        {
-            try
-            {
-                if (!_isCameraOn || _server.Clients.Count == 0)
-                {
-                    return;
-                }
-
-                if ((DateTime.UtcNow - _lastFrameSentAt).TotalMilliseconds < 160)
-                {
-                    return;
-                }
-
-                if (Interlocked.Exchange(ref _isSendingFrame, 1) == 1)
-                {
-                    return;
-                }
-
-                _lastFrameSentAt = DateTime.UtcNow;
-                using Bitmap resized = ResizeFrame(frame, 640, 360);
-                string base64Frame = EncodeJpegBase64(resized, 45L);
-
-                await _server.BroadcastAsync(new Backend.Models.ClassroomSignalModel
-                {
-                    Type = ClassroomMessageType.VideoFrame,
-                    SessionId = _sessionId,
-                    SenderId = 0,
-                    SenderName = "Giáo viên",
-                    SenderRole = "TEACHER",
-                    Payload =
-                    {
-                        ["imageBase64"] = base64Frame,
-                        ["width"] = resized.Width.ToString(),
-                        ["height"] = resized.Height.ToString()
-                    }
-                });
-            }
-            catch
-            {
-                // Drop frame silently to keep video smooth and avoid UI freezes.
-            }
-            finally
-            {
-                frame.Dispose();
-                Interlocked.Exchange(ref _isSendingFrame, 0);
-            }
-        }
-
-        private static Bitmap ResizeFrame(Bitmap source, int maxWidth, int maxHeight)
-        {
-            double ratio = Math.Min((double)maxWidth / source.Width, (double)maxHeight / source.Height);
-            int width = Math.Max(1, (int)(source.Width * ratio));
-            int height = Math.Max(1, (int)(source.Height * ratio));
-            var resized = new Bitmap(width, height);
-            using Graphics graphics = Graphics.FromImage(resized);
-            graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighSpeed;
-            graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Low;
-            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighSpeed;
-            graphics.DrawImage(source, 0, 0, width, height);
-            return resized;
-        }
-
-        private static string EncodeJpegBase64(Bitmap bitmap, long quality)
-        {
-            using var stream = new MemoryStream();
-            System.Drawing.Imaging.ImageCodecInfo encoder = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders()
-                .First(codec => codec.MimeType == "image/jpeg");
-            using var encoderParameters = new System.Drawing.Imaging.EncoderParameters(1);
-            encoderParameters.Param[0] = new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
-            bitmap.Save(stream, encoder, encoderParameters);
-            return Convert.ToBase64String(stream.ToArray());
-        }
-
         private void HideCameraPlaceholder()
         {
             if (_teacherPreview.Tag is Label placeholder)
@@ -725,19 +634,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void StopCamera()
         {
-            if (_camera != null)
-            {
-                _camera.NewFrame -= Camera_NewFrame;
-                if (_camera.IsRunning)
-                {
-                    _camera.SignalToStop();
-                    _camera.WaitForStop();
-                }
-                _camera = null;
-            }
+            _cameraManager.Stop();
 
-            _isCameraOn = false;
-            if (!_isScreenSharing)
+            if (!_screenShareManager.IsSharing)
             {
                 Image? old = _teacherPreview.Image;
                 _teacherPreview.Image = null;
@@ -765,23 +664,20 @@ namespace CourseGuard.Frontend.Forms.Teacher
                     return;
                 }
 
-                byte[] bytes = Convert.FromBase64String(base64);
-                using var stream = new MemoryStream(bytes);
-                Image frame = Image.FromStream(stream);
+                Image frame = ClassroomFrameHelper.DecodeFrame(base64);
 
-                if (IsDisposed || !_studentVideoGrid.IsHandleCreated)
-                {
-                    frame.Dispose();
-                    return;
-                }
+                ClassroomFrameHelper.TryBeginReplaceImage(
+                    this,
+                    frame,
+                    () =>
+                    {
+                        if (IsDisposed || _studentVideoGrid.IsDisposed || !_studentVideoGrid.IsHandleCreated)
+                        {
+                            throw new ObjectDisposedException(nameof(TeacherNativeClassroomForm));
+                        }
 
-                BeginInvoke(() =>
-                {
-                    PictureBox box = GetOrCreateStudentVideoBox(signal.SenderId, signal.SenderName);
-                    Image? old = box.Image;
-                    box.Image = frame;
-                    old?.Dispose();
-                });
+                        return GetOrCreateStudentVideoBox(signal.SenderId, signal.SenderName);
+                    });
             }
             catch
             {
@@ -794,25 +690,23 @@ namespace CourseGuard.Frontend.Forms.Teacher
             try
             {
                 if (!signal.Payload.TryGetValue("imageBase64", out string? base64) || string.IsNullOrWhiteSpace(base64)) return;
-                byte[] bytes = Convert.FromBase64String(base64);
-                using var stream = new MemoryStream(bytes);
-                Image frame = Image.FromStream(stream);
+                Image frame = ClassroomFrameHelper.DecodeFrame(base64);
 
-                if (IsDisposed || !_teacherPreview.IsHandleCreated)
-                {
-                    frame.Dispose();
-                    return;
-                }
+                ClassroomFrameHelper.TryBeginReplaceImage(
+                    this,
+                    _teacherPreview,
+                    frame,
+                    () =>
+                    {
+                        if (IsDisposed || _teacherPreview.IsDisposed || _statusLabel.IsDisposed)
+                        {
+                            return;
+                        }
 
-                BeginInvoke(() =>
-                {
-                    Image? old = _teacherPreview.Image;
-                    _teacherPreview.Image = frame;
-                    old?.Dispose();
-                    HideCameraPlaceholder();
-                    string sourceTitle = signal.Payload.TryGetValue("sourceTitle", out string? title) ? title : "màn hình";
-                    _statusLabel.Text = $"Đang xem {signal.SenderName} trình bày: {sourceTitle} - {DateTime.Now:HH:mm:ss}";
-                });
+                        HideCameraPlaceholder();
+                        string sourceTitle = signal.Payload.TryGetValue("sourceTitle", out string? title) ? title : "màn hình";
+                        _statusLabel.Text = $"Đang xem {signal.SenderName} trình bày: {sourceTitle} - {DateTime.Now:HH:mm:ss}";
+                    });
             }
             catch
             {
@@ -873,7 +767,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 ForeColor = Color.White,
                 BackColor = Color.FromArgb(180, 0, 0, 0),
                 TextAlign = ContentAlignment.MiddleCenter,
-                Font = new Font("Segoe UI", 8, FontStyle.Bold)
+                Font = MetaTheme.Fonts.CaptionBold()
             };
             tile.Controls.Add(label);
             label.BringToFront();
@@ -916,18 +810,14 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void StopScreenShare()
         {
-            _screenShareTimer?.Stop();
-            _screenShareTimer?.Dispose();
-            _screenShareTimer = null;
-            _isScreenSharing = false;
+            _screenShareManager.Stop();
             _btnShareScreen.Text = "Share màn hình";
             _btnShareScreen.BackColor = Color.FromArgb(139, 92, 246);
             _teacherCameraPip.Visible = false;
             Image? oldPip = _teacherCameraPipPreview.Image;
             _teacherCameraPipPreview.Image = null;
             oldPip?.Dispose();
-            _statusLabel.Text = $"Đã dừng trình bày {_screenShareTitle}.";
-            Interlocked.Exchange(ref _isSendingScreenFrame, 0);
+            _statusLabel.Text = $"Đã dừng trình bày {_screenShareManager.SelectedTitle}.";
         }
 
         private async void TeacherNativeClassroomForm_FormClosing(object? sender, FormClosingEventArgs e)
@@ -942,6 +832,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
             }
             _studentVideoBoxes.Clear();
             _studentVideoLabels.Clear();
+            _screenShareManager.Dispose();
+            _cameraManager.Dispose();
             await _server.StopAsync();
         }
         private sealed class ScreenSharePickerDialog : Form
@@ -977,7 +869,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                     Dock = DockStyle.Fill,
                     Text = "Chọn nội dung muốn trình bày\nGiống Google Meet: bạn chọn màn hình trước, rồi mới bắt đầu share.",
                     ForeColor = AppColors.TextPrimary,
-                    Font = new Font("Segoe UI", 13, FontStyle.Bold),
+                    Font = AppFonts.Semibold(13F),
                     TextAlign = ContentAlignment.MiddleLeft
                 }, 0, 0);
 
@@ -1015,7 +907,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                     BackColor = AppColors.BgInput,
                     ForeColor = AppColors.TextPrimary,
                     FlatStyle = FlatStyle.Flat,
-                    Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                    Font = MetaTheme.Fonts.ButtonMd(),
                     DialogResult = DialogResult.Cancel
                 };
                 cancel.FlatAppearance.BorderSize = 0;
@@ -1051,7 +943,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                     Dock = DockStyle.Fill,
                     Text = "▣",
                     ForeColor = Color.FromArgb(139, 92, 246),
-                    Font = new Font("Segoe UI", 34, FontStyle.Bold),
+                    Font = AppFonts.Semibold(34F),
                     TextAlign = ContentAlignment.MiddleCenter
                 };
                 preview.Controls.Add(icon);
@@ -1061,7 +953,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                     Dock = DockStyle.Fill,
                     Text = primary ? $"{title} · Chính" : title,
                     ForeColor = AppColors.TextPrimary,
-                    Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                    Font = MetaTheme.Fonts.BodyMdBold(),
                     TextAlign = ContentAlignment.MiddleCenter
                 };
                 card.Controls.Add(name);

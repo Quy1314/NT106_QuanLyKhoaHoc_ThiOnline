@@ -24,7 +24,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // lblTitle
             // 
             this.lblTitle.AutoSize = true;
-            this.lblTitle.Font = new System.Drawing.Font("Segoe UI", 16F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblTitle.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(16F);
             this.lblTitle.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(58)))), ((int)(((byte)(138)))));
             this.lblTitle.Location = new System.Drawing.Point(20, 20);
             this.lblTitle.Name = "lblTitle";
@@ -37,7 +37,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             this.btnReview.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.btnReview.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(185)))), ((int)(((byte)(129)))));
             this.btnReview.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnReview.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.btnReview.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             this.btnReview.ForeColor = System.Drawing.Color.White;
             this.btnReview.Location = new System.Drawing.Point(730, 22);
             this.btnReview.Name = "btnReview";

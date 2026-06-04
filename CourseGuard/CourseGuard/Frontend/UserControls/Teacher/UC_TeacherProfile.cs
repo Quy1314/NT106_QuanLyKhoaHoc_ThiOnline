@@ -10,6 +10,7 @@ using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
@@ -20,7 +21,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         private readonly int _teacherId;
         private readonly CourseGuardDbContext _dbContext = new("");
-        private readonly TeacherController _teacherController = new(new CourseGuardDbContext(""));
+        private readonly TeacherController _teacherController;
         private readonly NotificationRepository _notificationRepository = new();
         private readonly AuthController _authController;
 
@@ -57,7 +58,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private TableLayoutPanel _personalEditGrid = new();
         private FlowLayoutPanel _activityList = null!;
         private Panel _avatarPanel = null!;
-        private Image? _avatarImage;
+        private AvatarManager? _avatarManager;
         private string _teacherCode = "GV00000";
         private string _avatarPath = string.Empty;
 
@@ -69,11 +70,12 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         public UC_TeacherProfile(int teacherId)
         {
             _teacherId = teacherId;
+            _teacherController = new TeacherController(_dbContext);
             _authController = new AuthController(_dbContext);
             BuildLayout();
-            _ = LoadDataAsync(showSkeleton: true);
+            LoadDataAsync(showSkeleton: true).FireAndForgetSafe(this);
             _savePasswordButton.Click += SavePasswordButton_Click;
-            Disposed += (_, _) => _avatarImage?.Dispose();
+            Disposed += (_, _) => _avatarManager?.Dispose();
         }
 
         private async Task LoadDataAsync(bool showSkeleton)
@@ -102,8 +104,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             UserModel? user = _dbContext.GetUserById(_teacherId);
             TeacherProfileModel? profile = _teacherController.GetTeacherProfile(_teacherId);
             TeacherDashboardSummaryModel summary = _teacherController.GetDashboardSummary(_teacherId);
-            int unreadNotifications = SafeCount(() => _notificationRepository.LoadByUserId(_teacherId).Count(n => !n.IsRead));
-            List<RecentUserActivityModel> activities = SafeList(() => _dbContext.GetRecentUserActivitiesByUser(_teacherId, 6));
+            int unreadNotifications = ActivityDisplayHelper.SafeMetricCount(() => _notificationRepository.LoadByUserId(_teacherId).Count(n => !n.IsRead));
+            List<RecentUserActivityModel> activities = ActivityDisplayHelper.SafeList(() => _dbContext.GetRecentUserActivitiesByUser(_teacherId, 6));
 
             return new TeacherProfileData
             {
@@ -193,7 +195,14 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 Cursor = Cursors.Hand,
                 BackColor = Color.Transparent
             };
-            _avatarPanel.Paint += (_, e) => DrawAvatar(e.Graphics, _avatarPanel.ClientRectangle);
+            _avatarManager = new AvatarManager(
+                this,
+                _avatarPanel,
+                () => _fullName.Text,
+                () => null,
+                path => _avatarPath = path,
+                "GV");
+            _avatarPanel.Paint += (_, e) => _avatarManager?.Draw(e.Graphics, _avatarPanel.ClientRectangle);
             _avatarPanel.Click += (_, _) => ChangeAvatar();
 
             _lblHeaderName.Text = "Giảng viên";
@@ -335,7 +344,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
             btnCancel.Click += (_, _) =>
             {
-                _ = LoadDataAsync(showSkeleton: false);
+                LoadDataAsync(showSkeleton: false).FireAndForgetSafe(this);
                 _personalEditGrid.Visible = false;
                 _personalViewGrid.Visible = true;
             };
@@ -629,35 +638,30 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             else
             {
                 foreach (RecentUserActivityModel activity in activities.Take(5))
-                    AddActivity(TranslateActivity(activity), FormatDateTime(activity.CreatedAt), GetActivityAccent(activity.Action));
+                    AddActivity(
+                        ActivityDisplayHelper.TranslateActivity(activity, ActivityDisplayContext.Teacher),
+                        FormatDateTime(activity.CreatedAt),
+                        ActivityDisplayHelper.GetActivityAccent(activity.Action));
             }
             _activityList.ResumeLayout(true);
         }
 
         private void ChangeAvatar()
         {
-            using var dialog = new OpenFileDialog
-            {
-                Title = "Chọn ảnh đại diện",
-                Filter = "Image files (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|All files (*.*)|*.*"
-            };
-
-            if (dialog.ShowDialog(this) != DialogResult.OK)
+            if (_avatarManager == null)
                 return;
 
-            try
+            if (!_avatarManager.TrySelectAvatar(out _, out string? errorMessage))
             {
-                SetAvatarImage(dialog.FileName);
-                _avatarPath = dialog.FileName;
-                if (SaveProfile())
-                {
-                    UpdateViewLabels();
-                    _avatarPanel.Invalidate();
-                }
+                if (!string.IsNullOrWhiteSpace(errorMessage))
+                    MetaTheme.ShowModernDialog("Không thể tải ảnh đại diện: " + errorMessage, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
-            catch (Exception ex)
+
+            if (SaveProfile())
             {
-                MetaTheme.ShowModernDialog("Không thể tải ảnh đại diện: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                UpdateViewLabels();
+                _avatarPanel.Invalidate();
             }
         }
 
@@ -911,113 +915,9 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _gender.Items.AddRange(new object[] { "Nam", "Nữ", "Khác" });
         }
 
-        private void DrawAvatar(Graphics graphics, Rectangle bounds)
-        {
-            graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            Rectangle ellipse = new Rectangle(bounds.Left, bounds.Top, Math.Max(1, bounds.Width - 1), Math.Max(1, bounds.Height - 1));
-            using var fillBrush = new SolidBrush(MetaTheme.Colors.Accent);
-            graphics.FillEllipse(fillBrush, ellipse);
-
-            if (_avatarImage != null)
-            {
-                using var path = new GraphicsPath();
-                path.AddEllipse(ellipse);
-                graphics.SetClip(path);
-                graphics.DrawImage(_avatarImage, GetCoverRectangle(_avatarImage.Size, ellipse));
-                graphics.ResetClip();
-            }
-            else
-            {
-                using var textBrush = new SolidBrush(Color.White);
-                using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                graphics.DrawString(GetInitials(), AppFonts.Semibold(22f), textBrush, ellipse, sf);
-            }
-
-            GraphicsHelpers.DrawRoundedBorder(graphics, ellipse, ellipse.Width / 2, MetaTheme.Colors.BorderSoft, 1f);
-        }
-
         private void LoadAvatarFromPath(string avatarPath)
         {
-            if (string.IsNullOrWhiteSpace(avatarPath) || !System.IO.File.Exists(avatarPath))
-            {
-                Image? oldAvatar = _avatarImage;
-                _avatarImage = null;
-                oldAvatar?.Dispose();
-                _avatarPanel?.Invalidate();
-                return;
-            }
-
-            try
-            {
-                SetAvatarImage(avatarPath);
-            }
-            catch
-            {
-                _avatarPath = string.Empty;
-            }
-        }
-
-        private void SetAvatarImage(string filePath)
-        {
-            using Image selected = Image.FromFile(filePath);
-            Image newAvatar = new Bitmap(selected);
-            Image? oldAvatar = _avatarImage;
-            _avatarImage = newAvatar;
-            oldAvatar?.Dispose();
-            _avatarPanel?.Invalidate();
-        }
-
-        private static Rectangle GetCoverRectangle(Size sourceSize, Rectangle target)
-        {
-            if (sourceSize.Width <= 0 || sourceSize.Height <= 0)
-                return target;
-
-            float scale = Math.Max((float)target.Width / sourceSize.Width, (float)target.Height / sourceSize.Height);
-            int width = (int)Math.Ceiling(sourceSize.Width * scale);
-            int height = (int)Math.Ceiling(sourceSize.Height * scale);
-            return new Rectangle(target.Left + (target.Width - width) / 2, target.Top + (target.Height - height) / 2, width, height);
-        }
-
-        private string GetInitials()
-        {
-            string source = string.IsNullOrWhiteSpace(_fullName.Text) ? "GV" : _fullName.Text;
-            string[] parts = source.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 2)
-                return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
-            return parts.Length == 0 ? "GV" : (parts[0].Length >= 2 ? parts[0][..2].ToUpperInvariant() : parts[0][..1].ToUpperInvariant());
-        }
-
-        private static string TranslateActivity(RecentUserActivityModel activity)
-        {
-            string title = (activity.Action ?? string.Empty).ToUpperInvariant() switch
-            {
-                "LOGIN" => "Đã đăng nhập vào hệ thống",
-                "LOGOUT" => "Đã đăng xuất khỏi hệ thống",
-                "CHANGE_PASSWORD" => "Đã đổi mật khẩu",
-                "CHAT_USE" => "Đã trao đổi với học viên",
-                _ => "Đã cập nhật hoạt động giảng dạy"
-            };
-            string details = CleanDetails(activity.Details);
-            return string.IsNullOrWhiteSpace(details) ? title : $"{title} - {details}";
-        }
-
-        private static string CleanDetails(string? details)
-        {
-            if (string.IsNullOrWhiteSpace(details))
-                return string.Empty;
-            string value = details.Trim();
-            return value.Length > 72 ? value[..72] + "..." : value;
-        }
-
-        private static Color GetActivityAccent(string? action)
-        {
-            return (action ?? string.Empty).ToUpperInvariant() switch
-            {
-                "LOGIN" or "CHANGE_PASSWORD" => AppColors.Success,
-                "CHAT_USE" => AppColors.Warning,
-                "LOGOUT" => AppColors.TextMuted,
-                _ => AppColors.AccentBlue
-            };
+            _avatarManager?.LoadFromPath(avatarPath);
         }
 
         private static string FormatDateTime(DateTime value)
@@ -1030,18 +930,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private static string FlattenMultiline(string value)
         {
             return string.Join("; ", value.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries).Select(v => v.Trim()));
-        }
-
-        private static int SafeCount(Func<int> getter)
-        {
-            try { return Math.Max(0, getter()); }
-            catch { return 0; }
-        }
-
-        private static List<T> SafeList<T>(Func<List<T>> getter)
-        {
-            try { return getter() ?? new List<T>(); }
-            catch { return new List<T>(); }
         }
 
         private sealed class TeacherProfileData

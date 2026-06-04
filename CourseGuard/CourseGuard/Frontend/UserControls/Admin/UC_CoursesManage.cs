@@ -15,6 +15,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Models;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Admin
@@ -39,8 +40,9 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 btnAddCourse, btnUpdateCourse, btnDeleteCourse,
                 btnApproveStudent, btnRemoveStudent);
 
-            _userService = new CourseGuard.Backend.Controllers.UserController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
-            _courseService = new CourseGuard.Backend.Controllers.CourseController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
+            var dbContext = new CourseGuard.Backend.Data.CourseGuardDbContext("");
+            _userService = new CourseGuard.Backend.Controllers.UserController(dbContext);
+            _courseService = new CourseGuard.Backend.Controllers.CourseController(dbContext);
 
             // Set up cboRegStatus items
             cboRegStatus.Items.Clear();
@@ -52,7 +54,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
             WireEvents();
             // Initial load
-            _ = RefreshDataAsync();
+            RefreshDataAsync().FireAndForgetSafe(this);
         }
 
         private void ApplyAcademicStyle()
@@ -88,7 +90,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             _btnApproveCourse.Size = new Size(125, 35);
             _btnApproveCourse.FlatStyle = FlatStyle.Flat;
             _btnApproveCourse.FlatAppearance.BorderSize = 0;
-            _btnApproveCourse.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            _btnApproveCourse.Font = MetaTheme.Fonts.ButtonMd();
             _btnApproveCourse.BackColor = AcademicTheme.Primary;
             _btnApproveCourse.ForeColor = Color.White;
 
@@ -97,7 +99,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             _btnRejectCourse.Size = new Size(125, 35);
             _btnRejectCourse.FlatStyle = FlatStyle.Flat;
             _btnRejectCourse.FlatAppearance.BorderSize = 0;
-            _btnRejectCourse.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            _btnRejectCourse.Font = MetaTheme.Fonts.ButtonMd();
             _btnRejectCourse.BackColor = Color.FromArgb(220, 38, 38);
             _btnRejectCourse.ForeColor = Color.White;
 

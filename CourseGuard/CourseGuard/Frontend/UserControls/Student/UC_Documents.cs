@@ -9,226 +9,99 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 using Npgsql;
 
 namespace CourseGuard.Frontend.UserControls.Student
 {
-    public class UC_Documents : UserControl, IStudentSearchTarget
+    public sealed class UC_Documents : StudentGridPageBase, IStudentSearchTarget
     {
-        private readonly CourseGuardDbContext _dbContext = new("");
-        private readonly BindingSource _bindingSource = new();
-        private readonly List<StudentDocumentRow> _documents = new();
+        private const string AllCoursesText = "Tất cả khóa học";
+        private const string DefaultHintText = "Chỉ hiển thị tài liệu thuộc các khóa học bạn đã được duyệt tham gia.";
+        private const string EmptyHintText = "Không có tài liệu phù hợp. Tài liệu chỉ hiển thị khi bạn đã được duyệt tham gia khóa học.";
 
-        private Label lblTitle = null!;
-        private TextBox txtSearch = null!;
-        private ComboBox cboCourse = null!;
-        private Button btnSearch = null!;
-        private Button btnRefresh = null!;
-        private Button btnOpen = null!;
-        private DataGridView dgvDocuments = null!;
-        private Label lblHint = null!;
-        private RoundedPanel _documentsBody = null!;
-        private Label _emptyStateLabel = null!;
+        private readonly CourseGuardDbContext _dbContext = new("");
+        private readonly List<StudentDocumentRow> _documents = new();
+        private readonly Button _openButton = new() { Text = "Tải xuống" };
 
         public UC_Documents()
+            : base(
+                "Tài liệu khóa học",
+                "Tìm kiếm, lọc và mở tài liệu từ các khóa học đã tham gia.",
+                "Danh sách tài liệu",
+                "Chưa có tài liệu trong các khóa học đang học.",
+                hintText: DefaultHintText,
+                showSearch: true,
+                searchPlaceholder: "Tìm theo tên tài liệu hoặc khóa học...",
+                showCourseFilter: true,
+                showSearchButton: true)
         {
-            InitializeComponent();
-            BuildCardLayout();
-            ApplyStyle();
-            WireEvents();
-            _ = LoadDocumentsAsync();
-        }
-
-        private void InitializeComponent()
-        {
-            SuspendLayout();
-
-            lblTitle = new Label
-            {
-                AutoSize = true,
-                Font = new Font("Segoe UI", 16F, FontStyle.Bold),
-                Location = new Point(20, 15),
-                Text = "Tài liệu khóa học"
-            };
-
-            txtSearch = new TextBox
-            {
-                Font = new Font("Segoe UI", 11F),
-                Location = new Point(20, 65),
-                PlaceholderText = "Tìm theo tên tài liệu hoặc khóa học...",
-                Size = new Size(330, 32)
-            };
-
-            cboCourse = new ComboBox
-            {
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Font = new Font("Segoe UI", 10F),
-                Location = new Point(365, 65),
-                Size = new Size(220, 31)
-            };
-
-            btnSearch = new Button
-            {
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                Location = new Point(600, 63),
-                Size = new Size(105, 35),
-                Text = "Tìm kiếm"
-            };
-
-            btnRefresh = new Button
-            {
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                Location = new Point(715, 63),
-                Size = new Size(95, 35),
-                Text = "Tải lại"
-            };
-
-            btnOpen = new Button
-            {
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                Location = new Point(820, 63),
-                Size = new Size(120, 35),
-                Text = "Mở/Tải"
-            };
-
-            dgvDocuments = new DataGridView
-            {
-                AllowUserToAddRows = false,
-                AllowUserToDeleteRows = false,
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                BorderStyle = BorderStyle.None,
-                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize,
-                Location = new Point(20, 112),
-                MultiSelect = false,
-                Name = "dgvDocuments",
-                ReadOnly = true,
-                RowHeadersWidth = 30,
-                RowTemplate = { Height = 32 },
-                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-                Size = new Size(920, 375)
-            };
-
-            lblHint = new Label
-            {
-                Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                Font = new Font("Segoe UI", 9F, FontStyle.Italic),
-                Location = new Point(20, 500),
-                Size = new Size(920, 42),
-                Text = "Chỉ hiển thị tài liệu thuộc các khóa học bạn đã được duyệt tham gia."
-            };
-
-            AutoScaleMode = AutoScaleMode.Font;
-            BackColor = MetaTheme.Colors.SurfaceSoft;
-            Controls.Add(lblTitle);
-            Controls.Add(txtSearch);
-            Controls.Add(cboCourse);
-            Controls.Add(btnSearch);
-            Controls.Add(btnRefresh);
-            Controls.Add(btnOpen);
-            Controls.Add(dgvDocuments);
-            Controls.Add(lblHint);
             Name = "UC_Documents";
             Size = new Size(960, 560);
 
-            ResumeLayout(false);
-            PerformLayout();
+            _openButton.Enabled = false;
+            StudentTabChrome.StylePrimaryButton(_openButton);
+            AddHeaderAction(_openButton);
+
+            _openButton.Click += (_, _) => OpenSelectedDocument();
+
+            LoadDataAsync().FireAndForgetSafe(this);
         }
 
-        private void ApplyStyle()
+        protected override string LoadErrorMessagePrefix => "Lỗi tải tài liệu";
+
+        protected override async Task<DataTable> CreateTableAsync()
         {
-            BackColor = AppColors.BgBase;
-            lblTitle.ForeColor = AppColors.TextPrimary;
-            lblHint.ForeColor = AppColors.TextSecondary;
-
-            StudentTabChrome.StyleGrid(dgvDocuments);
-            StudentTabChrome.StylePrimaryButton(btnSearch);
-            StudentTabChrome.StyleSecondaryButton(btnRefresh);
-            StudentTabChrome.StylePrimaryButton(btnOpen);
-            StudentTabChrome.StyleSearchInput(txtSearch);
-            StudentTabChrome.StyleInput(cboCourse);
-        }
-
-        private void BuildCardLayout()
-        {
-            btnRefresh.Text = "Tải lại";
-            btnOpen.Text = "Tải xuống";
-
-            var root = StudentTabChrome.CreateRoot(this);
-            root.Controls.Add(StudentTabChrome.CreateHeader(
-                "Tài liệu khóa học",
-                "Tìm kiếm, lọc và mở tài liệu từ các khóa học đã tham gia.",
-                StudentTabChrome.CreateSearchBox(txtSearch, 330), cboCourse, btnSearch, btnRefresh, btnOpen), 0, 0);
-
-            var content = new TableLayoutPanel
+            int studentId = UserSessionContext.CurrentUserId ?? 0;
+            if (studentId == 0)
             {
-                Dock = DockStyle.Fill,
-                BackColor = AppColors.BgBase,
-                ColumnCount = 1,
-                RowCount = 2
-            };
-            content.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 42f));
-            _documentsBody = StudentTabChrome.CreateTableBody(dgvDocuments, out _emptyStateLabel);
-            content.Controls.Add(StudentTabChrome.CreateDataCard("Danh sách tài liệu", _documentsBody), 0, 0);
-            lblHint.Dock = DockStyle.Fill;
-            lblHint.TextAlign = ContentAlignment.MiddleLeft;
-            lblHint.Margin = new Padding(0, 12, 0, 0);
-            content.Controls.Add(lblHint, 0, 1);
-            root.Controls.Add(content, 0, 1);
-            StudentTabChrome.EnableNaturalFocusClear(this, dgvDocuments);
-        }
-
-        private void WireEvents()
-        {
-            txtSearch.KeyDown += (_, e) =>
-            {
-                if (e.KeyCode == Keys.Enter)
-                {
-                    e.SuppressKeyPress = true;
-                    ApplyFilter();
-                }
-            };
-            btnSearch.Click += (_, _) => ApplyFilter();
-            btnRefresh.Click += async (_, _) => await LoadDocumentsAsync();
-            btnOpen.Click += (_, _) => OpenSelectedDocument();
-            cboCourse.SelectedIndexChanged += (_, _) => ApplyFilter();
-        }
-
-        private async Task LoadDocumentsAsync()
-        {
-            this.ShowSkeleton(SkeletonType.TableWithToolbar);
-
-            try
-            {
-                int studentId = UserSessionContext.CurrentUserId ?? 0;
-                if (studentId == 0)
-                {
-                    MetaTheme.ShowModernDialog("Không xác định được tài khoản. Vui lòng đăng nhập lại.",
-                        "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                var rows = await Task.Run(() => QueryDocuments(studentId));
+                MetaTheme.ShowModernDialog(
+                    "Không xác định được tài khoản. Vui lòng đăng nhập lại.",
+                    "Lỗi",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
                 _documents.Clear();
-                _documents.AddRange(rows);
-
                 ReloadCourseFilter();
+                return CreateDocumentsTable(new List<StudentDocumentRow>());
+            }
+
+            var rows = await Task.Run(() => QueryDocuments(studentId));
+            _documents.Clear();
+            _documents.AddRange(rows);
+
+            ReloadCourseFilter();
+            return CreateDocumentsTable(GetFilteredDocuments().ToList());
+        }
+
+        protected override string GetEmptyMessage()
+        {
+            return string.IsNullOrWhiteSpace(SearchBox?.Text)
+                ? "Chưa có tài liệu trong các khóa học đang học."
+                : "Không tìm thấy tài liệu phù hợp.";
+        }
+
+        protected override void OnSearchRequested() => ApplyFilter();
+
+        protected override void OnCourseFilterChanged() => ApplyFilter();
+
+        protected override void OnTableBound(DataTable table, bool hasRows)
+        {
+            _openButton.Enabled = hasRows;
+            HideColumn("Đường dẫn");
+            HideColumn("HasContent");
+
+            if (HintLabel != null)
+                HintLabel.Text = hasRows ? DefaultHintText : EmptyHintText;
+        }
+
+        public void ApplyGlobalSearch(string keyword)
+        {
+            if (SearchBox != null)
+                SearchBox.Text = keyword ?? string.Empty;
+
+            if (_documents.Count > 0)
                 ApplyFilter();
-            }
-            catch (Exception ex)
-            {
-                MetaTheme.ShowModernDialog("Lỗi tải tài liệu: " + ex.Message,
-                    "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                this.HideSkeleton();
-            }
         }
 
         private List<StudentDocumentRow> QueryDocuments(int studentId)
@@ -285,7 +158,10 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private void ReloadCourseFilter()
         {
-            string? selected = cboCourse.SelectedItem?.ToString();
+            if (CourseFilter == null)
+                return;
+
+            string? selected = CourseFilter.SelectedItem?.ToString();
             var courses = _documents
                 .Select(d => d.CourseName)
                 .Where(name => !string.IsNullOrWhiteSpace(name))
@@ -293,19 +169,24 @@ namespace CourseGuard.Frontend.UserControls.Student
                 .OrderBy(name => name)
                 .ToList();
 
-            cboCourse.Items.Clear();
-            cboCourse.Items.Add("Tất cả khóa học");
+            CourseFilter.Items.Clear();
+            CourseFilter.Items.Add(AllCoursesText);
             foreach (string course in courses)
-                cboCourse.Items.Add(course);
+                CourseFilter.Items.Add(course);
 
-            int selectedIndex = selected != null ? cboCourse.Items.IndexOf(selected) : -1;
-            cboCourse.SelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+            int selectedIndex = selected != null ? CourseFilter.Items.IndexOf(selected) : -1;
+            CourseFilter.SelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
         }
 
         private void ApplyFilter()
         {
-            string keyword = txtSearch.Text.Trim().ToLowerInvariant();
-            string courseFilter = cboCourse.SelectedItem?.ToString() ?? "Tất cả khóa học";
+            SetGridTable(CreateDocumentsTable(GetFilteredDocuments().ToList()));
+        }
+
+        private IEnumerable<StudentDocumentRow> GetFilteredDocuments()
+        {
+            string keyword = SearchBox?.Text.Trim().ToLowerInvariant() ?? string.Empty;
+            string courseFilter = CourseFilter?.SelectedItem?.ToString() ?? AllCoursesText;
 
             IEnumerable<StudentDocumentRow> filtered = _documents;
 
@@ -317,22 +198,13 @@ namespace CourseGuard.Frontend.UserControls.Student
                     d.UploadedBy.ToLowerInvariant().Contains(keyword));
             }
 
-            if (courseFilter != "Tất cả khóa học")
-            {
+            if (courseFilter != AllCoursesText)
                 filtered = filtered.Where(d => d.CourseName == courseFilter);
-            }
 
-            BindToGrid(filtered.ToList());
+            return filtered;
         }
 
-        public void ApplyGlobalSearch(string keyword)
-        {
-            txtSearch.Text = keyword ?? string.Empty;
-            if (_documents.Count > 0)
-                ApplyFilter();
-        }
-
-        private void BindToGrid(List<StudentDocumentRow> rows)
+        private static DataTable CreateDocumentsTable(List<StudentDocumentRow> rows)
         {
             DataTable table = new();
             table.Columns.Add("ID", typeof(int));
@@ -359,43 +231,24 @@ namespace CourseGuard.Frontend.UserControls.Student
                     row.HasStoredContent);
             }
 
-            _bindingSource.DataSource = table;
-            dgvDocuments.DataSource = _bindingSource;
-            dgvDocuments.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            bool hasRows = table.Rows.Count > 0;
-            string emptyMessage = string.IsNullOrWhiteSpace(txtSearch.Text)
-                ? "Chưa có tài liệu trong các khóa học đang học."
-                : "Không tìm thấy tài liệu phù hợp.";
-            StudentTabChrome.SetTableState(_documentsBody, dgvDocuments, _emptyStateLabel, hasRows, emptyMessage);
-            btnOpen.Enabled = hasRows;
-            lblHint.Text = rows.Count == 0
-                ? "Không có tài liệu phù hợp. Tài liệu chỉ hiển thị khi bạn đã được duyệt tham gia khóa học."
-                : "Chỉ hiển thị tài liệu thuộc các khóa học bạn đã được duyệt tham gia.";
-
-            DataGridViewColumn? idColumn = dgvDocuments.Columns["ID"];
-            if (idColumn != null)
-                idColumn.Visible = false;
-            if (dgvDocuments.Columns["Đường dẫn"] != null)
-                dgvDocuments.Columns["Đường dẫn"]!.Visible = false;
-            if (dgvDocuments.Columns["HasContent"] != null)
-                dgvDocuments.Columns["HasContent"]!.Visible = false;
-
-            dgvDocuments.ClearSelection();
-            dgvDocuments.CurrentCell = null;
+            return table;
         }
 
         private void OpenSelectedDocument()
         {
-            if (dgvDocuments.CurrentRow == null || dgvDocuments.CurrentRow.IsNewRow)
+            int materialId = CurrentInt("ID");
+            if (materialId <= 0 || Grid.CurrentRow == null)
             {
                 MetaTheme.ShowModernDialog("Vui lòng chọn một tài liệu.", "Thông báo");
                 return;
             }
 
-            int materialId = Convert.ToInt32(dgvDocuments.CurrentRow.Cells["ID"].Value);
-            string fileName = dgvDocuments.CurrentRow.Cells["Tên tài liệu"].Value?.ToString() ?? "tailieu";
-            bool hasContent = Convert.ToBoolean(dgvDocuments.CurrentRow.Cells["HasContent"].Value);
-            string path = dgvDocuments.CurrentRow.Cells["Đường dẫn"].Value?.ToString() ?? string.Empty;
+            string fileName = CurrentString("Tên tài liệu");
+            if (string.IsNullOrWhiteSpace(fileName))
+                fileName = "tailieu";
+
+            bool hasContent = Convert.ToBoolean(Grid.CurrentRow.Cells["HasContent"].Value);
+            string path = CurrentString("Đường dẫn");
 
             if (hasContent)
             {
@@ -420,7 +273,10 @@ namespace CourseGuard.Frontend.UserControls.Student
                 {
                     Process.Start(new ProcessStartInfo(save.FileName) { UseShellExecute = true });
                 }
-                catch { /* Ignore if no default app */ }
+                catch
+                {
+                    // Ignore if no default app is available.
+                }
                 return;
             }
 
@@ -436,8 +292,11 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
             catch (Exception ex)
             {
-                MetaTheme.ShowModernDialog("Không thể mở hoặc tải tài liệu: " + ex.Message,
-                    "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MetaTheme.ShowModernDialog(
+                    "Không thể mở hoặc tải tài liệu: " + ex.Message,
+                    "Lỗi",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
 

@@ -114,7 +114,7 @@ namespace CourseGuard.Frontend.Forms.Login
             linkLabel1.ActiveLinkColor = Color.RoyalBlue;
             linkLabel1.AutoSize = true;
             linkLabel1.BackColor = Color.White;
-            linkLabel1.Font = new Font("Segoe UI", 9F);
+            linkLabel1.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodySm();
             linkLabel1.LinkColor = Color.DodgerBlue;
             linkLabel1.Location = new Point(322, 250);
             linkLabel1.Name = "linkLabel1";
@@ -128,7 +128,7 @@ namespace CourseGuard.Frontend.Forms.Login
             // 
             chkRemember.AutoSize = true;
             chkRemember.BackColor = Color.White;
-            chkRemember.Font = new Font("Segoe UI", 9F);
+            chkRemember.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodySm();
             chkRemember.ForeColor = Color.DimGray;
             chkRemember.Location = new Point(25, 243);
             chkRemember.Name = "chkRemember";
@@ -139,7 +139,7 @@ namespace CourseGuard.Frontend.Forms.Login
             // 
             // LoginTitle
             // 
-            LoginTitle.Font = new Font("Segoe UI", 24F, FontStyle.Bold);
+            LoginTitle.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(24F);
             LoginTitle.ForeColor = Color.FromArgb(56, 113, 224);
             LoginTitle.Location = new Point(0, 20);
             LoginTitle.Margin = new Padding(4, 0, 4, 0);
@@ -151,7 +151,7 @@ namespace CourseGuard.Frontend.Forms.Login
             // 
             // LOGO
             // 
-            LOGO.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            LOGO.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMdBold();
             LOGO.ForeColor = Color.Gray;
             LOGO.Location = new Point(0, 75);
             LOGO.Margin = new Padding(4, 0, 4, 0);
@@ -235,7 +235,7 @@ namespace CourseGuard.Frontend.Forms.Login
             // 
             // RegisterTitle
             // 
-            RegisterTitle.Font = new Font("Segoe UI", 20F, FontStyle.Bold);
+            RegisterTitle.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(20F);
             RegisterTitle.ForeColor = Color.FromArgb(56, 113, 224);
             RegisterTitle.Location = new Point(0, 20);
             RegisterTitle.Name = "RegisterTitle";
@@ -274,7 +274,7 @@ namespace CourseGuard.Frontend.Forms.Login
             // 
             // ForgotTitle
             // 
-            ForgotTitle.Font = new Font("Segoe UI", 20F, FontStyle.Bold);
+            ForgotTitle.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(20F);
             ForgotTitle.ForeColor = Color.FromArgb(56, 113, 224);
             ForgotTitle.Location = new Point(0, 20);
             ForgotTitle.Name = "ForgotTitle";
@@ -294,7 +294,7 @@ namespace CourseGuard.Frontend.Forms.Login
             Controls.Add(RegisterPanel);
             Controls.Add(ForgotPassPanel);
             DoubleBuffered = true;
-            Font = new Font("Segoe UI", 10.2F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(10.2F);
             Margin = new Padding(4, 3, 4, 3);
             Name = "LoginPage";
             StartPosition = FormStartPosition.CenterScreen;

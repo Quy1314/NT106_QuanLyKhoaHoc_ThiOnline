@@ -8,6 +8,7 @@ using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Frontend.Forms.Student;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Student
@@ -28,7 +29,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             ApplyAcademicStyle();
             btnMarkAsRead.Click += async (_, _) => await MarkSelectedNotificationAsRead();
             dgvNotifications.CellClick += async (_, e) => await MarkClickedNotificationAsRead(e.RowIndex);
-            _ = LoadDataAsync();
+            LoadDataAsync().FireAndForgetSafe(this);
 
             RoundedButtonHelper.Apply(btnMarkAsRead, 10);
         }

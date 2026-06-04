@@ -10,6 +10,7 @@ using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services.Realtime;
 using CourseGuard.Frontend.Forms.Teacher;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
@@ -39,14 +40,14 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         public UC_TeacherSchedule(int teacherId)
         {
             _teacherId = teacherId;
-            _controller = new TeacherController(new CourseGuardDbContext(""));
             _db = new CourseGuardDbContext("");
+            _controller = new TeacherController(_db);
             BuildUI();
             
             // Khởi tạo TCP Server để broadcast tín hiệu mở lớp
             TcpClassroomService.Instance.StartListening();
             
-            _ = LoadDataAsync();
+            LoadDataAsync().FireAndForgetSafe(this);
         }
 
         private void BuildUI()
@@ -100,7 +101,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             {
                 Text = "Chưa có lịch dạy.",
                 ForeColor = AppColors.TextSecondary,
-                Font = new Font("Segoe UI", 12),
+                Font = new Font(AppFonts.Body.FontFamily, 12F, FontStyle.Regular),
                 AutoSize = true,
                 Visible = false
             };
@@ -252,7 +253,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     var lblDate = new Label
                     {
                         Text = $"{GetVietnameseDayOfWeek(currentDate.DayOfWeek)} - {currentDate:dd/MM}",
-                        Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                        Font = MetaTheme.Fonts.BodySmBold(),
                         ForeColor = AppColors.TextPrimary,
                         AutoSize = true,
                         Dock = DockStyle.Top
@@ -264,7 +265,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                         var lblSession = new Label
                         {
                             Text = $"{s.StartTime:HH:mm} - {s.Title}",
-                            Font = new Font("Segoe UI", 8),
+                            Font = MetaTheme.Fonts.Caption(),
                             ForeColor = AppColors.TextSecondary,
                             AutoSize = false,
                             Height = 38,

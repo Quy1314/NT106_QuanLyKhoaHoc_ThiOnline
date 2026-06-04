@@ -45,6 +45,11 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         public static RoundedPanel CreateHeader(string title, string subtitle, params Control[] actions)
         {
+            return CreateHeader(title, subtitle, out _, actions);
+        }
+
+        public static RoundedPanel CreateHeader(string title, string subtitle, out FlowLayoutPanel actionPanel, params Control[] actions)
+        {
             var card = CreateCard();
             card.Padding = new Padding(20, 16, 20, 16);
             card.Margin = new Padding(0, 0, 0, 16);
@@ -93,7 +98,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 Margin = Padding.Empty
             });
 
-            var actionPanel = new FlowLayoutPanel
+            actionPanel = new FlowLayoutPanel
             {
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,

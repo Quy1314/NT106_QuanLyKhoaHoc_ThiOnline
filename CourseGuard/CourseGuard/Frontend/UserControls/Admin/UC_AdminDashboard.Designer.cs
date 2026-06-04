@@ -50,7 +50,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // lblTitle
             // 
             this.lblTitle.Text = "TỔNG QUAN HỆ THỐNG"; // Dashboard in Vietnamese
-            this.lblTitle.Font = new System.Drawing.Font("Segoe UI", 16F, System.Drawing.FontStyle.Bold);
+            this.lblTitle.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(16F);
             this.lblTitle.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(58)))), ((int)(((byte)(138)))));
             this.lblTitle.Location = new System.Drawing.Point(20, 10);
             this.lblTitle.AutoSize = true;

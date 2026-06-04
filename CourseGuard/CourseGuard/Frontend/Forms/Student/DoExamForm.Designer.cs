@@ -51,7 +51,7 @@ namespace CourseGuard.Frontend.Forms.Student
             // lblExamName
             // 
             this.lblExamName.AutoSize = true;
-            this.lblExamName.Font = new System.Drawing.Font("Segoe UI", 16F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblExamName.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(16F);
             this.lblExamName.ForeColor = System.Drawing.Color.White;
             this.lblExamName.Location = new System.Drawing.Point(20, 11);
             this.lblExamName.Name = "lblExamName";
@@ -76,7 +76,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.btnSubmit.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.btnSubmit.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(185)))), ((int)(((byte)(129)))));
             this.btnSubmit.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnSubmit.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.btnSubmit.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             this.btnSubmit.ForeColor = System.Drawing.Color.White;
             this.btnSubmit.Location = new System.Drawing.Point(860, 12);
             this.btnSubmit.Name = "btnSubmit";
@@ -99,7 +99,7 @@ namespace CourseGuard.Frontend.Forms.Student
             // lblSidebarTitle
             // 
             this.lblSidebarTitle.Dock = System.Windows.Forms.DockStyle.Top;
-            this.lblSidebarTitle.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblSidebarTitle.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.HeadingSm();
             this.lblSidebarTitle.Location = new System.Drawing.Point(0, 0);
             this.lblSidebarTitle.Name = "lblSidebarTitle";
             this.lblSidebarTitle.Padding = new System.Windows.Forms.Padding(10, 10, 0, 0);
@@ -137,7 +137,7 @@ namespace CourseGuard.Frontend.Forms.Student
             // lblQuestionText
             // 
             this.lblQuestionText.Dock = System.Windows.Forms.DockStyle.Top;
-            this.lblQuestionText.Font = new System.Drawing.Font("Segoe UI", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.lblQuestionText.Font = new System.Drawing.Font(global::CourseGuard.Frontend.Theme.AppFonts.Body.FontFamily, 14F, System.Drawing.FontStyle.Regular);
             this.lblQuestionText.Location = new System.Drawing.Point(40, 40);
             this.lblQuestionText.Name = "lblQuestionText";
             this.lblQuestionText.Size = new System.Drawing.Size(670, 100);
@@ -147,7 +147,7 @@ namespace CourseGuard.Frontend.Forms.Student
             // rbA
             // 
             this.rbA.AutoSize = true;
-            this.rbA.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.rbA.Font = new System.Drawing.Font(global::CourseGuard.Frontend.Theme.AppFonts.Body.FontFamily, 12F, System.Drawing.FontStyle.Regular);
             this.rbA.Location = new System.Drawing.Point(40, 160);
             this.rbA.Name = "rbA";
             this.rbA.Size = new System.Drawing.Size(325, 32);
@@ -159,7 +159,7 @@ namespace CourseGuard.Frontend.Forms.Student
             // rbB
             // 
             this.rbB.AutoSize = true;
-            this.rbB.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.rbB.Font = new System.Drawing.Font(global::CourseGuard.Frontend.Theme.AppFonts.Body.FontFamily, 12F, System.Drawing.FontStyle.Regular);
             this.rbB.Location = new System.Drawing.Point(40, 210);
             this.rbB.Name = "rbB";
             this.rbB.Size = new System.Drawing.Size(262, 32);
@@ -171,7 +171,7 @@ namespace CourseGuard.Frontend.Forms.Student
             // rbC
             // 
             this.rbC.AutoSize = true;
-            this.rbC.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.rbC.Font = new System.Drawing.Font(global::CourseGuard.Frontend.Theme.AppFonts.Body.FontFamily, 12F, System.Drawing.FontStyle.Regular);
             this.rbC.Location = new System.Drawing.Point(40, 260);
             this.rbC.Name = "rbC";
             this.rbC.Size = new System.Drawing.Size(183, 32);
@@ -183,7 +183,7 @@ namespace CourseGuard.Frontend.Forms.Student
             // rbD
             // 
             this.rbD.AutoSize = true;
-            this.rbD.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.rbD.Font = new System.Drawing.Font(global::CourseGuard.Frontend.Theme.AppFonts.Body.FontFamily, 12F, System.Drawing.FontStyle.Regular);
             this.rbD.Location = new System.Drawing.Point(40, 310);
             this.rbD.Name = "rbD";
             this.rbD.Size = new System.Drawing.Size(225, 32);
@@ -197,7 +197,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.btnPrev.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.btnPrev.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(226)))), ((int)(((byte)(232)))), ((int)(((byte)(240)))));
             this.btnPrev.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnPrev.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.btnPrev.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             this.btnPrev.Location = new System.Drawing.Point(40, 460);
             this.btnPrev.Name = "btnPrev";
             this.btnPrev.Size = new System.Drawing.Size(100, 40);
@@ -210,7 +210,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.btnNext.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.btnNext.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(37)))), ((int)(((byte)(99)))), ((int)(((byte)(235)))));
             this.btnNext.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnNext.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.btnNext.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             this.btnNext.ForeColor = System.Drawing.Color.White;
             this.btnNext.Location = new System.Drawing.Point(160, 460);
             this.btnNext.Name = "btnNext";
@@ -223,7 +223,7 @@ namespace CourseGuard.Frontend.Forms.Student
             // 
             this.chkMark.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.chkMark.AutoSize = true;
-            this.chkMark.Font = new System.Drawing.Font("Segoe UI", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.chkMark.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.SubtitleMd();
             this.chkMark.Location = new System.Drawing.Point(540, 466);
             this.chkMark.Name = "chkMark";
             this.chkMark.Size = new System.Drawing.Size(176, 29);

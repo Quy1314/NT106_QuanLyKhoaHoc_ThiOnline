@@ -7,6 +7,7 @@ using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Services;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.Forms.Student
@@ -54,11 +55,11 @@ namespace CourseGuard.Frontend.Forms.Student
             this.MaximizeBox = false;
             this.MinimizeBox = false;
 
-            lblTitle = new Label { Location = new Point(20, 20), AutoSize = true, Font = new Font("Segoe UI", 14, FontStyle.Bold) };
-            lblCourse = new Label { Location = new Point(20, 50), AutoSize = true, Font = new Font("Segoe UI", 10) };
-            lblDueDate = new Label { Location = new Point(20, 75), AutoSize = true, Font = new Font("Segoe UI", 10, FontStyle.Bold), ForeColor = Color.Red };
+            lblTitle = new Label { Location = new Point(20, 20), AutoSize = true, Font = MetaTheme.Fonts.HeadingMd() };
+            lblCourse = new Label { Location = new Point(20, 50), AutoSize = true, Font = MetaTheme.Fonts.BodyMd() };
+            lblDueDate = new Label { Location = new Point(20, 75), AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), ForeColor = Color.Red };
 
-            lblDescriptionTitle = new Label { Location = new Point(20, 105), AutoSize = true, Font = new Font("Segoe UI", 10, FontStyle.Bold), Text = "Mô tả đề bài:" };
+            lblDescriptionTitle = new Label { Location = new Point(20, 105), AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Text = "Mô tả đề bài:" };
 
             txtDescription = new TextBox
             {
@@ -67,29 +68,29 @@ namespace CourseGuard.Frontend.Forms.Student
                 Multiline = true,
                 ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical,
-                Font = new Font("Segoe UI", 10)
+                Font = MetaTheme.Fonts.BodyMd()
             };
 
-            lblDownloadTitle = new Label { Location = new Point(20, 215), AutoSize = true, Font = new Font("Segoe UI", 10, FontStyle.Bold), Text = "Download bài tập:" };
+            lblDownloadTitle = new Label { Location = new Point(20, 215), AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Text = "Download bài tập:" };
 
             btnDownloadTeacherFile = new Button
             {
                 Location = new Point(20, 240),
                 Size = new Size(200, 35),
                 Text = "Tải đề bài đính kèm",
-                Font = new Font("Segoe UI", 10),
+                Font = MetaTheme.Fonts.BodyMd(),
                 FlatStyle = FlatStyle.Flat
             };
             btnDownloadTeacherFile.Click += BtnDownloadTeacherFile_Click;
 
-            lblUploadTitle = new Label { Location = new Point(20, 285), AutoSize = true, Font = new Font("Segoe UI", 10, FontStyle.Bold), Text = "Bài làm của bạn (Tối đa 10MB):" };
+            lblUploadTitle = new Label { Location = new Point(20, 285), AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Text = "Bài làm của bạn (Tối đa 10MB):" };
 
             txtSelectedFile = new TextBox
             {
                 Location = new Point(20, 315),
                 Size = new Size(410, 30),
                 ReadOnly = true,
-                Font = new Font("Segoe UI", 10)
+                Font = MetaTheme.Fonts.BodyMd()
             };
 
             btnSelectFile = new Button
@@ -97,7 +98,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 Location = new Point(440, 313),
                 Size = new Size(120, 32),
                 Text = "Chọn file...",
-                Font = new Font("Segoe UI", 10),
+                Font = MetaTheme.Fonts.BodyMd(),
                 FlatStyle = FlatStyle.Flat
             };
             btnSelectFile.Click += BtnSelectFile_Click;
@@ -107,7 +108,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 Location = new Point(340, 395),
                 Size = new Size(110, 40),
                 Text = "Nộp bài",
-                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                Font = MetaTheme.Fonts.ButtonMd(),
                 FlatStyle = FlatStyle.Flat
             };
             btnSubmit.Click += async (s, e) => await BtnSubmit_Click();
@@ -117,7 +118,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 Location = new Point(460, 395),
                 Size = new Size(100, 40),
                 Text = "Đóng",
-                Font = new Font("Segoe UI", 10),
+                Font = MetaTheme.Fonts.BodyMd(),
                 FlatStyle = FlatStyle.Flat
             };
             btnCancel.Click += (s, e) => this.Close();
@@ -349,7 +350,7 @@ namespace CourseGuard.Frontend.Forms.Student
                     string studentEmail = UserSessionContext.CurrentUsername + "@student.edu.vn";
                     string assignmentTitle = _assignment.Title;
 
-                    _ = Task.Run(() =>
+                    Task.Run(() =>
                     {
                         try
                         {
@@ -361,7 +362,7 @@ namespace CourseGuard.Frontend.Forms.Student
                         {
                             // Ignore SMTP errors so it doesn't crash the app
                         }
-                    });
+                    }).FireAndForgetSafe(this);
 
                     MetaTheme.ShowModernDialog("Nộp bài thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     this.DialogResult = DialogResult.OK;

@@ -19,8 +19,6 @@ namespace CourseGuard.Frontend.UserControls.Student
 {
     public partial class UC_CourseList : UserControl, IStudentSearchTarget
     {
-        private readonly AuthController _authController = new(new CourseGuardDbContext(""));
-        private readonly CourseController _courseController = new(new CourseGuardDbContext(""));
         private readonly BindingSource _coursesBinding = new();
         private readonly CourseController _controller;
         private List<CourseModel> _allCourses = new();

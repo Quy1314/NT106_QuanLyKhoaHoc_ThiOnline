@@ -25,7 +25,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // lblTitle
             // 
             this.lblTitle.AutoSize = true;
-            this.lblTitle.Font = new System.Drawing.Font("Segoe UI", 16F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblTitle.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(16F);
             this.lblTitle.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(58)))), ((int)(((byte)(138)))));
             this.lblTitle.Location = new System.Drawing.Point(20, 20);
             this.lblTitle.Name = "lblTitle";
@@ -36,7 +36,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // cboTimeFilter
             // 
             this.cboTimeFilter.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.cboTimeFilter.Font = new System.Drawing.Font("Segoe UI", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.cboTimeFilter.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.SubtitleMd();
             this.cboTimeFilter.FormattingEnabled = true;
             this.cboTimeFilter.Items.AddRange(new object[] {
             "Tuần này",
@@ -52,7 +52,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             this.btnJoinOnline.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.btnJoinOnline.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(37)))), ((int)(((byte)(99)))), ((int)(((byte)(235)))));
             this.btnJoinOnline.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnJoinOnline.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.btnJoinOnline.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             this.btnJoinOnline.ForeColor = System.Drawing.Color.White;
             this.btnJoinOnline.Location = new System.Drawing.Point(730, 68);
             this.btnJoinOnline.Name = "btnJoinOnline";
