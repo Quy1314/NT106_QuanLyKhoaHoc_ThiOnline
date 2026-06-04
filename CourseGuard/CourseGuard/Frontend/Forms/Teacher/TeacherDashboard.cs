@@ -8,6 +8,7 @@ using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 using CourseGuard.Frontend.UserControls.Teacher;
 
@@ -97,9 +98,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 UserName = _teacherName,
                 UseStudentTopbar = true,
                 QuickSearchPlaceholder = "Tìm khóa học, bài kiểm tra, học viên, tài liệu...",
-                OpenExamCount = SafeCount(() => _teacherController.GetActiveExamSessions(_teacherId).Count),
+                OpenExamCount = ActivityDisplayHelper.SafeMetricCount(() => _teacherController.GetActiveExamSessions(_teacherId).Count),
                 IsOnline = true,
-                NotificationCount = SafeCount(() => _dbContext.CountUnreadNotifications(_teacherId)),
+                NotificationCount = ActivityDisplayHelper.SafeMetricCount(() => _dbContext.CountUnreadNotifications(_teacherId)),
                 NotificationPreviewItems = BuildNotificationPreviewItems()
             };
             _topbar.ThemeToggled += (_, _) => ReloadCurrentPage();
@@ -224,8 +225,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _rightPanel.BackColor = AppColors.BgBase;
             _content.BackColor = AppColors.BgBase;
             _topbar.BackColor = AppColors.BgCard;
-            _topbar.OpenExamCount = SafeCount(() => _teacherController.GetActiveExamSessions(_teacherId).Count);
-            _topbar.NotificationCount = SafeCount(() => _dbContext.CountUnreadNotifications(_teacherId));
+            _topbar.OpenExamCount = ActivityDisplayHelper.SafeMetricCount(() => _teacherController.GetActiveExamSessions(_teacherId).Count);
+            _topbar.NotificationCount = ActivityDisplayHelper.SafeMetricCount(() => _dbContext.CountUnreadNotifications(_teacherId));
             _topbar.NotificationPreviewItems = BuildNotificationPreviewItems();
             _topbar.PageTitle = _currentPageName == ProfilePage ? ProfileTitle : _currentPageName;
             _sidebar.SetActiveByName(_currentPageName);
@@ -250,7 +251,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private IEnumerable<string> BuildNotificationPreviewItems()
         {
-            return SafeList(() => new NotificationRepository().LoadByUserId(_teacherId))
+            return ActivityDisplayHelper.SafeList(() => new NotificationRepository().LoadByUserId(_teacherId))
                 .OrderByDescending(n => n.CreatedAt)
                 .Take(5)
                 .Select(n =>
@@ -288,30 +289,6 @@ namespace CourseGuard.Frontend.Forms.Teacher
             if (!string.IsNullOrWhiteSpace(user.Username))
                 return user.Username.Trim();
             return "teacher";
-        }
-
-        private static int SafeCount(Func<int> getter)
-        {
-            try
-            {
-                return Math.Max(0, getter());
-            }
-            catch
-            {
-                return 0;
-            }
-        }
-
-        private static List<T> SafeList<T>(Func<List<T>> getter)
-        {
-            try
-            {
-                return getter() ?? new List<T>();
-            }
-            catch
-            {
-                return new List<T>();
-            }
         }
 
         private static string GetLocalIpAddress()
