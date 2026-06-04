@@ -3,7 +3,6 @@ using System.Data;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
-using CourseGuard.Backend.Data;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
@@ -12,7 +11,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
     public abstract class TeacherGridPageBase : UserControl
     {
         protected readonly int TeacherId;
-        protected readonly TeacherController Controller = new(new CourseGuardDbContext(""));
+        protected readonly TeacherController Controller;
         protected readonly DataGridView Grid = new();
         protected readonly BindingSource BindingSource = new();
         protected readonly Button RefreshButton = TeacherTabChrome.SecondaryButton("Tải lại");
@@ -24,9 +23,10 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private RoundedPanel _gridBody = null!;
         private Label _emptyStateLabel = null!;
 
-        protected TeacherGridPageBase(int teacherId, string title, string subtitle, string cardTitle, bool showCrud = true)
+        protected TeacherGridPageBase(int teacherId, TeacherController controller, string title, string subtitle, string cardTitle, bool showCrud = true)
         {
             TeacherId = teacherId;
+            Controller = controller ?? throw new ArgumentNullException(nameof(controller));
             _emptyMessage = $"Chưa có dữ liệu trong {cardTitle.ToLowerInvariant()}.";
             InitializeComponent(title, subtitle, cardTitle, showCrud);
             RefreshButton.Click += async (_, _) => await LoadDataAsync();

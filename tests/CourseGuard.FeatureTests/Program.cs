@@ -1,3 +1,4 @@
+using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services;
 using CourseGuard.Backend.Services.Realtime;
@@ -5,6 +6,7 @@ using CourseGuard.Frontend.Forms.Student;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 using CourseGuard.Frontend.UserControls.Student;
+using CourseGuard.Frontend.UserControls.Teacher;
 using System.Data;
 using System.Drawing;
 using System.Reflection;
@@ -52,6 +54,29 @@ Run("teacher exam scoring sums only correct selected options", () =>
     decimal score = ExamScoringService.CalculateScore(questions, selected);
 
     AssertEqual(7.5m, score);
+});
+
+Run("teacher grid pages accept shared teacher controller", () =>
+{
+    Type[] pageTypes =
+    {
+        typeof(UC_TeacherCourses),
+        typeof(UC_TeacherLessons),
+        typeof(UC_TeacherAssignments),
+        typeof(UC_TeacherExams),
+        typeof(UC_ExamMonitor),
+        typeof(UC_TeacherResults),
+        typeof(UC_TeacherStudents),
+        typeof(UC_TeacherMaterials)
+    };
+    Type[] parameterTypes = { typeof(int), typeof(TeacherController) };
+
+    foreach (Type pageType in pageTypes)
+    {
+        AssertTrue(
+            pageType.GetConstructor(parameterTypes) != null,
+            $"{pageType.Name} must expose public constructor (int, TeacherController)");
+    }
 });
 
 Run("material file policy accepts common documents and rejects unsafe files", () =>

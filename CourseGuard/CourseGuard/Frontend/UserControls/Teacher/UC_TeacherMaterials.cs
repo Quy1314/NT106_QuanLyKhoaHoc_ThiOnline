@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services;
 using CourseGuard.Frontend.Forms.Teacher;
@@ -14,7 +15,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
     {
         private readonly ComboBox _courseFilter = new();
 
-        public UC_TeacherMaterials(int teacherId) : base(teacherId, "Tài liệu", "Đăng và quản lý tài liệu cho khóa học thuộc quyền.", "Danh sách tài liệu")
+        public UC_TeacherMaterials(int teacherId, TeacherController controller) : base(teacherId, controller, "Tài liệu", "Đăng và quản lý tài liệu cho khóa học thuộc quyền.", "Danh sách tài liệu")
         {
             _courseFilter.Width = 220;
             _courseFilter.DropDownStyle = ComboBoxStyle.DropDownList;

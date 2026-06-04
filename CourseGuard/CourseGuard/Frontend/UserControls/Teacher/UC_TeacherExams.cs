@@ -3,6 +3,7 @@ using System.Data;
 using System.Globalization;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Models;
 using CourseGuard.Frontend.Forms.Teacher;
 using CourseGuard.Frontend.Theme;
@@ -11,7 +12,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 {
     public partial class UC_TeacherExams : TeacherGridPageBase
     {
-        public UC_TeacherExams(int teacherId) : base(teacherId, "Bài kiểm tra", "Tạo và quản lý kỳ thi. Giám sát nằm ở tab riêng.", "Danh sách bài kiểm tra")
+        public UC_TeacherExams(int teacherId, TeacherController controller) : base(teacherId, controller, "Bài kiểm tra", "Tạo và quản lý kỳ thi. Giám sát nằm ở tab riêng.", "Danh sách bài kiểm tra")
         {
             var questionsButton = TeacherTabChrome.SecondaryButton("Soạn câu hỏi");
             questionsButton.Click += async (_, _) => await EditQuestionsAsync();

@@ -2,12 +2,13 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using CourseGuard.Backend.Controllers;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
 {
     public partial class UC_TeacherStudents : TeacherGridPageBase
     {
-        public UC_TeacherStudents(int teacherId) : base(teacherId, "Sinh viên", "Duyệt ghi danh và xem danh sách học viên thuộc khóa học của mình.", "Yêu cầu và học viên") 
+        public UC_TeacherStudents(int teacherId, TeacherController controller) : base(teacherId, controller, "Sinh viên", "Duyệt ghi danh và xem danh sách học viên thuộc khóa học của mình.", "Yêu cầu và học viên")
         {
             AddButton.Text = "Duyệt";
             EditButton.Text = "Từ chối";

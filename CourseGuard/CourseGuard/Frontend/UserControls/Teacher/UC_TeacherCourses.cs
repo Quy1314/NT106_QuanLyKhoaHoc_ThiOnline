@@ -1,5 +1,6 @@
 using System.Data;
 using System.Threading.Tasks;
+using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Models;
 using CourseGuard.Frontend.Forms.Teacher;
 using CourseGuard.Frontend.Theme;
@@ -10,7 +11,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
     {
         private readonly System.Windows.Forms.Button _submitButton = TeacherTabChrome.PrimaryButton("Gửi duyệt");
 
-        public UC_TeacherCourses(int teacherId) : base(teacherId, "Khóa học của tôi", "Tạo và quản lý các khóa học thuộc quyền giảng viên.", "Danh sách khóa học")
+        public UC_TeacherCourses(int teacherId, TeacherController controller) : base(teacherId, controller, "Khóa học của tôi", "Tạo và quản lý các khóa học thuộc quyền giảng viên.", "Danh sách khóa học")
         {
             _submitButton.Click += async (_, _) => await SubmitForApprovalAsync();
             AddHeaderAction(_submitButton);
