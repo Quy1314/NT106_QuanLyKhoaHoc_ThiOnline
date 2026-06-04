@@ -106,7 +106,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.btnLeave.BackColor = System.Drawing.Color.FromArgb(255, 69, 58);
             this.btnLeave.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnLeave.FlatAppearance.BorderSize = 0;
-            this.btnLeave.Font = new System.Drawing.Font("Segoe UI Semibold", 11F);
+            this.btnLeave.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.SubtitleLg();
             this.btnLeave.ForeColor = System.Drawing.Color.White;
             this.btnLeave.Location = new System.Drawing.Point(740, 20);
             this.btnLeave.Name = "btnLeave";
@@ -153,7 +153,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.btnMicDrop.BackColor = System.Drawing.Color.FromArgb(44, 44, 46);
             this.btnMicDrop.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnMicDrop.FlatAppearance.BorderSize = 0;
-            this.btnMicDrop.Font = new System.Drawing.Font("Segoe UI", 9F);
+            this.btnMicDrop.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodySm();
             this.btnMicDrop.ForeColor = System.Drawing.Color.FromArgb(152, 152, 159);
             this.btnMicDrop.Margin = new System.Windows.Forms.Padding(0, 4, 10, 4);
             this.btnMicDrop.Name = "btnMicDrop";
@@ -181,7 +181,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.btnSpeakerDrop.BackColor = System.Drawing.Color.FromArgb(44, 44, 46);
             this.btnSpeakerDrop.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnSpeakerDrop.FlatAppearance.BorderSize = 0;
-            this.btnSpeakerDrop.Font = new System.Drawing.Font("Segoe UI", 9F);
+            this.btnSpeakerDrop.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodySm();
             this.btnSpeakerDrop.ForeColor = System.Drawing.Color.FromArgb(152, 152, 159);
             this.btnSpeakerDrop.Margin = new System.Windows.Forms.Padding(0, 4, 10, 4);
             this.btnSpeakerDrop.Name = "btnSpeakerDrop";
@@ -223,7 +223,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.btnRaiseHand.BackColor = System.Drawing.Color.FromArgb(44, 44, 46);
             this.btnRaiseHand.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnRaiseHand.FlatAppearance.BorderSize = 0;
-            this.btnRaiseHand.Font = new System.Drawing.Font("Segoe UI", 16F);
+            this.btnRaiseHand.Font = new System.Drawing.Font(global::CourseGuard.Frontend.Theme.AppFonts.Body.FontFamily, 16F, System.Drawing.FontStyle.Regular);
             this.btnRaiseHand.ForeColor = System.Drawing.Color.FromArgb(255, 214, 10);
             this.btnRaiseHand.Margin = new System.Windows.Forms.Padding(6, 4, 6, 4);
             this.btnRaiseHand.Name = "btnRaiseHand";
@@ -290,7 +290,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.txtInput.BackColor = System.Drawing.Color.FromArgb(58, 58, 60);
             this.txtInput.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.txtInput.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.txtInput.Font = new System.Drawing.Font("Segoe UI", 11F);
+            this.txtInput.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.SubtitleMd();
             this.txtInput.ForeColor = System.Drawing.Color.White;
             this.txtInput.Location = new System.Drawing.Point(12, 356);
             this.txtInput.Name = "txtInput";
@@ -303,7 +303,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.txtChatHistory.BackColor = System.Drawing.Color.FromArgb(44, 44, 46);
             this.txtChatHistory.BorderStyle = System.Windows.Forms.BorderStyle.None;
             this.txtChatHistory.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.txtChatHistory.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.txtChatHistory.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             this.txtChatHistory.ForeColor = System.Drawing.Color.FromArgb(235, 235, 245);
             this.txtChatHistory.Location = new System.Drawing.Point(12, 44);
             this.txtChatHistory.Multiline = true;
@@ -317,7 +317,7 @@ namespace CourseGuard.Frontend.Forms.Student
             // lblChatTitle
             // 
             this.lblChatTitle.Dock = System.Windows.Forms.DockStyle.Top;
-            this.lblChatTitle.Font = new System.Drawing.Font("Segoe UI Semibold", 13F);
+            this.lblChatTitle.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(13F);
             this.lblChatTitle.ForeColor = System.Drawing.Color.White;
             this.lblChatTitle.Location = new System.Drawing.Point(12, 12);
             this.lblChatTitle.Name = "lblChatTitle";
@@ -342,7 +342,7 @@ namespace CourseGuard.Frontend.Forms.Student
             this.lstParticipants.BackColor = System.Drawing.Color.FromArgb(36, 36, 38);
             this.lstParticipants.BorderStyle = System.Windows.Forms.BorderStyle.None;
             this.lstParticipants.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.lstParticipants.Font = new System.Drawing.Font("Segoe UI", 11F);
+            this.lstParticipants.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.SubtitleMd();
             this.lstParticipants.ForeColor = System.Drawing.Color.FromArgb(174, 174, 178);
             this.lstParticipants.FormattingEnabled = true;
             this.lstParticipants.ItemHeight = 25;
@@ -360,7 +360,7 @@ namespace CourseGuard.Frontend.Forms.Student
             // lblPartTitle
             // 
             this.lblPartTitle.Dock = System.Windows.Forms.DockStyle.Top;
-            this.lblPartTitle.Font = new System.Drawing.Font("Segoe UI Semibold", 13F);
+            this.lblPartTitle.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(13F);
             this.lblPartTitle.ForeColor = System.Drawing.Color.White;
             this.lblPartTitle.Location = new System.Drawing.Point(12, 12);
             this.lblPartTitle.Name = "lblPartTitle";

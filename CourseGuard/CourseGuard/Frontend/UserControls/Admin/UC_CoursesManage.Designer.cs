@@ -84,7 +84,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // 
             dgvCourses.BackgroundColor = Color.White;
             dataGridViewCellStyle2.BackColor = Color.FromArgb(30, 58, 138);
-            dataGridViewCellStyle2.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            dataGridViewCellStyle2.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMdBold();
             dataGridViewCellStyle2.ForeColor = Color.White;
             dgvCourses.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle2;
             dgvCourses.ColumnHeadersHeight = 35;
@@ -109,7 +109,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // lblListTitle
             // 
             lblListTitle.Dock = DockStyle.Fill;
-            lblListTitle.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
+            lblListTitle.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.SubtitleLg();
             lblListTitle.ForeColor = Color.FromArgb(17, 24, 39);
             lblListTitle.Location = new Point(0, 0);
             lblListTitle.Name = "lblListTitle";
@@ -144,7 +144,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             grpStudentManage.Controls.Add(btnApproveStudent);
             grpStudentManage.Controls.Add(btnRemoveStudent);
             grpStudentManage.Dock = DockStyle.Top;
-            grpStudentManage.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            grpStudentManage.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMdBold();
             grpStudentManage.ForeColor = Color.FromArgb(30, 58, 138);
             grpStudentManage.Location = new Point(10, 360);
             grpStudentManage.Name = "grpStudentManage";
@@ -157,7 +157,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // lblSelectCourse
             // 
             lblSelectCourse.AutoSize = true;
-            lblSelectCourse.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+            lblSelectCourse.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodySm();
             lblSelectCourse.ForeColor = Color.FromArgb(75, 85, 99);
             lblSelectCourse.Location = new Point(20, 25);
             lblSelectCourse.Name = "lblSelectCourse";
@@ -167,7 +167,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // cboSelectCourse
             // 
             cboSelectCourse.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            cboSelectCourse.Font = new Font("Segoe UI", 10F);
+            cboSelectCourse.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             cboSelectCourse.Location = new Point(20, 48);
             cboSelectCourse.Name = "cboSelectCourse";
             cboSelectCourse.Size = new Size(280, 31);
@@ -177,7 +177,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // lblStudent
             // 
             lblStudent.AutoSize = true;
-            lblStudent.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+            lblStudent.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodySm();
             lblStudent.ForeColor = Color.FromArgb(75, 85, 99);
             lblStudent.Location = new Point(20, 88);
             lblStudent.Name = "lblStudent";
@@ -187,7 +187,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // cboStudent
             // 
             cboStudent.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            cboStudent.Font = new Font("Segoe UI", 10F);
+            cboStudent.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             cboStudent.Location = new Point(20, 111);
             cboStudent.Name = "cboStudent";
             cboStudent.Size = new Size(280, 31);
@@ -197,7 +197,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // lblRegStatus
             // 
             lblRegStatus.AutoSize = true;
-            lblRegStatus.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+            lblRegStatus.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodySm();
             lblRegStatus.ForeColor = Color.FromArgb(75, 85, 99);
             lblRegStatus.Location = new Point(20, 151);
             lblRegStatus.Name = "lblRegStatus";
@@ -207,7 +207,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // cboRegStatus
             // 
             cboRegStatus.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            cboRegStatus.Font = new Font("Segoe UI", 10F);
+            cboRegStatus.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             cboRegStatus.Items.AddRange(new object[] { "Pending", "Approved", "Rejected" });
             cboRegStatus.Location = new Point(20, 174);
             cboRegStatus.Name = "cboRegStatus";
@@ -220,7 +220,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btnApproveStudent.BackColor = Color.FromArgb(16, 185, 129);
             btnApproveStudent.FlatAppearance.BorderSize = 0;
             btnApproveStudent.FlatStyle = FlatStyle.Flat;
-            btnApproveStudent.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            btnApproveStudent.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             btnApproveStudent.ForeColor = Color.White;
             btnApproveStudent.Location = new Point(20, 220);
             btnApproveStudent.Name = "btnApproveStudent";
@@ -234,7 +234,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btnRemoveStudent.BackColor = Color.FromArgb(220, 38, 38);
             btnRemoveStudent.FlatAppearance.BorderSize = 0;
             btnRemoveStudent.FlatStyle = FlatStyle.Flat;
-            btnRemoveStudent.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            btnRemoveStudent.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             btnRemoveStudent.ForeColor = Color.White;
             btnRemoveStudent.Location = new Point(170, 220);
             btnRemoveStudent.Name = "btnRemoveStudent";
@@ -258,7 +258,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             grpCourseInfo.Controls.Add(btnUpdateCourse);
             grpCourseInfo.Controls.Add(btnDeleteCourse);
             grpCourseInfo.Dock = DockStyle.Top;
-            grpCourseInfo.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            grpCourseInfo.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMdBold();
             grpCourseInfo.ForeColor = Color.FromArgb(30, 58, 138);
             grpCourseInfo.Location = new Point(10, 10);
             grpCourseInfo.Name = "grpCourseInfo";
@@ -271,7 +271,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // txtCourseName
             // 
             txtCourseName.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            txtCourseName.Font = new Font("Segoe UI", 10F);
+            txtCourseName.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             txtCourseName.Location = new Point(20, 30);
             txtCourseName.Name = "txtCourseName";
             txtCourseName.PlaceholderText = "Tên khóa học";
@@ -281,7 +281,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // txtDescription
             // 
             txtDescription.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            txtDescription.Font = new Font("Segoe UI", 10F);
+            txtDescription.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             txtDescription.Location = new Point(20, 70);
             txtDescription.Multiline = true;
             txtDescription.Name = "txtDescription";
@@ -293,7 +293,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // 
             cboTeacher.Anchor = AnchorStyles.Top | AnchorStyles.Left; // Removed Right anchor to prevent overflow/stretching
             cboTeacher.DropDownStyle = ComboBoxStyle.DropDownList;
-            cboTeacher.Font = new Font("Segoe UI", 10F);
+            cboTeacher.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             cboTeacher.Location = new Point(20, 140);
             cboTeacher.Name = "cboTeacher";
             cboTeacher.Size = new Size(250, 31); // Reduced width to fit
@@ -303,7 +303,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // 
             cboStatus.Anchor = AnchorStyles.Top | AnchorStyles.Left; // Match cboTeacher
             cboStatus.DropDownStyle = ComboBoxStyle.DropDownList;
-            cboStatus.Font = new Font("Segoe UI", 10F);
+            cboStatus.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             cboStatus.Items.AddRange(new object[] { "Active", "Closed" });
             cboStatus.Location = new Point(20, 177);
             cboStatus.Name = "cboStatus";
@@ -314,7 +314,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // lblStartDate
             // 
             lblStartDate.AutoSize = true;
-            lblStartDate.Font = new Font("Segoe UI", 9F);
+            lblStartDate.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodySm();
             lblStartDate.Location = new Point(11, 228);
             lblStartDate.Name = "lblStartDate";
             lblStartDate.Size = new Size(63, 20);
@@ -324,7 +324,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // dtpStartDate
             // 
             dtpStartDate.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            dtpStartDate.Font = new Font("Segoe UI", 10F);
+            dtpStartDate.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             dtpStartDate.Format = DateTimePickerFormat.Short;
             dtpStartDate.Location = new Point(80, 220);
             dtpStartDate.Name = "dtpStartDate";
@@ -334,7 +334,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // lblEndDate
             // 
             lblEndDate.AutoSize = true;
-            lblEndDate.Font = new Font("Segoe UI", 9F);
+            lblEndDate.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodySm();
             lblEndDate.Location = new Point(11, 265);
             lblEndDate.Name = "lblEndDate";
             lblEndDate.Size = new Size(66, 20);
@@ -344,7 +344,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // dtpEndDate
             // 
             dtpEndDate.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            dtpEndDate.Font = new Font("Segoe UI", 10F);
+            dtpEndDate.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             dtpEndDate.Format = DateTimePickerFormat.Short;
             dtpEndDate.Location = new Point(80, 260);
             dtpEndDate.Name = "dtpEndDate";
@@ -356,7 +356,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btnAddCourse.BackColor = Color.FromArgb(37, 99, 235);
             btnAddCourse.FlatAppearance.BorderSize = 0;
             btnAddCourse.FlatStyle = FlatStyle.Flat;
-            btnAddCourse.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            btnAddCourse.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             btnAddCourse.ForeColor = Color.White;
             btnAddCourse.Location = new Point(20, 300);
             btnAddCourse.Name = "btnAddCourse";
@@ -370,7 +370,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btnUpdateCourse.BackColor = Color.FromArgb(245, 158, 11);
             btnUpdateCourse.FlatAppearance.BorderSize = 0;
             btnUpdateCourse.FlatStyle = FlatStyle.Flat;
-            btnUpdateCourse.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            btnUpdateCourse.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             btnUpdateCourse.ForeColor = Color.White;
             btnUpdateCourse.Location = new Point(110, 300);
             btnUpdateCourse.Name = "btnUpdateCourse";
@@ -384,7 +384,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btnDeleteCourse.BackColor = Color.FromArgb(220, 38, 38);
             btnDeleteCourse.FlatAppearance.BorderSize = 0;
             btnDeleteCourse.FlatStyle = FlatStyle.Flat;
-            btnDeleteCourse.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            btnDeleteCourse.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             btnDeleteCourse.ForeColor = Color.White;
             btnDeleteCourse.Location = new Point(200, 300);
             btnDeleteCourse.Name = "btnDeleteCourse";

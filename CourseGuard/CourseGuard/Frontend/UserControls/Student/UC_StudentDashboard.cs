@@ -123,7 +123,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             lblTitle.Margin = Padding.Empty;
             lblTitle.Text = "Tổng quan cá nhân";
             lblTitle.TextAlign = ContentAlignment.MiddleLeft;
-            lblTitle.Font = new Font("Segoe UI", 18f, FontStyle.Bold);
+            lblTitle.Font = MetaTheme.Fonts.HeadingLg();
             lblTitle.ForeColor = AppColors.TextPrimary;
 
             _statsGrid = new TableLayoutPanel
@@ -218,7 +218,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             lblRecentNotices.Margin = Padding.Empty;
             lblRecentNotices.Text = "Thông báo gần đây";
             lblRecentNotices.TextAlign = ContentAlignment.MiddleLeft;
-            lblRecentNotices.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
+            lblRecentNotices.Font = MetaTheme.Fonts.HeadingSm();
             lblRecentNotices.ForeColor = AppColors.TextPrimary;
 
             dgvRecentNotices.Dock = DockStyle.Fill;
@@ -260,7 +260,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 Dock = DockStyle.Fill,
                 Text = "Hoạt động gần đây",
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 12f, FontStyle.Bold),
+                Font = MetaTheme.Fonts.HeadingSm(),
                 ForeColor = AppColors.TextPrimary,
                 BackColor = Color.Transparent
             };

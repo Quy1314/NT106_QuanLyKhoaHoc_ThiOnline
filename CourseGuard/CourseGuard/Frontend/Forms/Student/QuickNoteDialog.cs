@@ -39,7 +39,7 @@ namespace CourseGuard.Frontend.Forms.Student
             var lblTitle = new Label
             {
                 Text = "Ghi chú cho buổi học này:",
-                Font = new Font("Segoe UI", 12, FontStyle.Bold),
+                Font = MetaTheme.Fonts.HeadingSm(),
                 Location = new Point(20, 20),
                 AutoSize = true
             };
@@ -49,7 +49,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 Multiline = true,
                 Location = new Point(20, 60),
                 Size = new Size(440, 180),
-                Font = new Font("Segoe UI", 11)
+                Font = MetaTheme.Fonts.SubtitleMd()
             };
 
             _btnSave = new Button

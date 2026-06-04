@@ -90,7 +90,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             _btnApproveCourse.Size = new Size(125, 35);
             _btnApproveCourse.FlatStyle = FlatStyle.Flat;
             _btnApproveCourse.FlatAppearance.BorderSize = 0;
-            _btnApproveCourse.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            _btnApproveCourse.Font = MetaTheme.Fonts.ButtonMd();
             _btnApproveCourse.BackColor = AcademicTheme.Primary;
             _btnApproveCourse.ForeColor = Color.White;
 
@@ -99,7 +99,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             _btnRejectCourse.Size = new Size(125, 35);
             _btnRejectCourse.FlatStyle = FlatStyle.Flat;
             _btnRejectCourse.FlatAppearance.BorderSize = 0;
-            _btnRejectCourse.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            _btnRejectCourse.Font = MetaTheme.Fonts.ButtonMd();
             _btnRejectCourse.BackColor = Color.FromArgb(220, 38, 38);
             _btnRejectCourse.ForeColor = Color.White;
 

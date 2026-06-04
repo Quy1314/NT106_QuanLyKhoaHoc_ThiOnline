@@ -32,7 +32,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // lblTitle
             // 
             this.lblTitle.AutoSize = true;
-            this.lblTitle.Font = new System.Drawing.Font("Segoe UI", 16F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblTitle.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(16F);
             this.lblTitle.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(58)))), ((int)(((byte)(138)))));
             this.lblTitle.Location = new System.Drawing.Point(20, 20);
             this.lblTitle.Name = "lblTitle";
@@ -53,7 +53,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // 
             this.cardCourses.BackColor = System.Drawing.Color.White;
             this.cardCourses.Controls.Add(this.lblCourseCount);
-            this.cardCourses.Font = new System.Drawing.Font("Segoe UI", 11F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.cardCourses.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.SubtitleLg();
             this.cardCourses.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(37)))), ((int)(((byte)(99)))), ((int)(((byte)(235)))));
             this.cardCourses.Location = new System.Drawing.Point(3, 3);
             this.cardCourses.Name = "cardCourses";
@@ -64,7 +64,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // 
             // lblCourseCount
             // 
-            this.lblCourseCount.Font = new System.Drawing.Font("Segoe UI", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblCourseCount.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(24F);
             this.lblCourseCount.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(17)))), ((int)(((byte)(24)))), ((int)(((byte)(39)))));
             this.lblCourseCount.Location = new System.Drawing.Point(6, 40);
             this.lblCourseCount.Name = "lblCourseCount";
@@ -77,7 +77,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // 
             this.cardExams.BackColor = System.Drawing.Color.White;
             this.cardExams.Controls.Add(this.lblExamCount);
-            this.cardExams.Font = new System.Drawing.Font("Segoe UI", 11F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.cardExams.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.SubtitleLg();
             this.cardExams.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(245)))), ((int)(((byte)(158)))), ((int)(((byte)(11)))));
             this.cardExams.Location = new System.Drawing.Point(259, 3);
             this.cardExams.Name = "cardExams";
@@ -88,7 +88,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // 
             // lblExamCount
             // 
-            this.lblExamCount.Font = new System.Drawing.Font("Segoe UI", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblExamCount.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(24F);
             this.lblExamCount.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(17)))), ((int)(((byte)(24)))), ((int)(((byte)(39)))));
             this.lblExamCount.Location = new System.Drawing.Point(6, 40);
             this.lblExamCount.Name = "lblExamCount";
@@ -100,7 +100,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // lblRecentNotices
             // 
             this.lblRecentNotices.AutoSize = true;
-            this.lblRecentNotices.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblRecentNotices.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.HeadingSm();
             this.lblRecentNotices.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(58)))), ((int)(((byte)(138)))));
             this.lblRecentNotices.Location = new System.Drawing.Point(20, 250);
             this.lblRecentNotices.Name = "lblRecentNotices";

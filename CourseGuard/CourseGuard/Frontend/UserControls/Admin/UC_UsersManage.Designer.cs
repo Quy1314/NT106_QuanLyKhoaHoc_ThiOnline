@@ -47,7 +47,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // 
             // cb_roleID
             // 
-            cb_roleID.Font = new Font("Segoe UI", 10F);
+            cb_roleID.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             cb_roleID.FormattingEnabled = true;
             cb_roleID.Items.AddRange(new object[] { "Teacher", "Student" });
             cb_roleID.Location = new Point(20, 110);
@@ -58,7 +58,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // 
             // txt_Email
             // 
-            txt_Email.Font = new Font("Segoe UI", 10F);
+            txt_Email.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             txt_Email.Location = new Point(740, 65);
             txt_Email.Name = "txt_Email";
             txt_Email.PlaceholderText = "Email";
@@ -67,7 +67,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // 
             // txt_FullName
             // 
-            txt_FullName.Font = new Font("Segoe UI", 10F);
+            txt_FullName.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             txt_FullName.Location = new Point(500, 65);
             txt_FullName.Name = "txt_FullName";
             txt_FullName.PlaceholderText = "Full Name";
@@ -76,7 +76,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // 
             // txt_Password
             // 
-            txt_Password.Font = new Font("Segoe UI", 10F);
+            txt_Password.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             txt_Password.Location = new Point(260, 65);
             txt_Password.Name = "txt_Password";
             txt_Password.PlaceholderText = "Password";
@@ -86,7 +86,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // 
             // txt_Username
             // 
-            txt_Username.Font = new Font("Segoe UI", 10F);
+            txt_Username.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             txt_Username.Location = new Point(20, 65);
             txt_Username.Name = "txt_Username";
             txt_Username.PlaceholderText = "Username";
@@ -98,7 +98,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btn_search.BackColor = Color.FromArgb(107, 114, 128);
             btn_search.FlatAppearance.BorderSize = 0;
             btn_search.FlatStyle = FlatStyle.Flat;
-            btn_search.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            btn_search.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             btn_search.ForeColor = Color.White;
             btn_search.Location = new Point(340, 150);
             btn_search.Name = "btn_search";
@@ -112,7 +112,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btn_delete.BackColor = Color.FromArgb(220, 38, 38);
             btn_delete.FlatAppearance.BorderSize = 0;
             btn_delete.FlatStyle = FlatStyle.Flat;
-            btn_delete.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            btn_delete.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             btn_delete.ForeColor = Color.White;
             btn_delete.Location = new Point(180, 150);
             btn_delete.Name = "btn_delete";
@@ -126,7 +126,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btn_insert.BackColor = Color.FromArgb(37, 99, 235);
             btn_insert.FlatAppearance.BorderSize = 0;
             btn_insert.FlatStyle = FlatStyle.Flat;
-            btn_insert.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            btn_insert.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             btn_insert.ForeColor = Color.White;
             btn_insert.Location = new Point(20, 150);
             btn_insert.Name = "btn_insert";
@@ -138,7 +138,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // 
             // cb_StatusFilter
             // 
-            cb_StatusFilter.Font = new Font("Segoe UI", 10F);
+            cb_StatusFilter.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             cb_StatusFilter.FormattingEnabled = true;
             cb_StatusFilter.Items.AddRange(new object[] { "ALL", "ACTIVE", "PENDING", "RESET_REQUEST" });
             cb_StatusFilter.Location = new Point(500, 155);
@@ -152,7 +152,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btn_Approve.BackColor = Color.FromArgb(16, 185, 129);
             btn_Approve.FlatAppearance.BorderSize = 0;
             btn_Approve.FlatStyle = FlatStyle.Flat;
-            btn_Approve.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            btn_Approve.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             btn_Approve.ForeColor = Color.White;
             btn_Approve.Location = new Point(700, 150);
             btn_Approve.Name = "btn_Approve";
@@ -164,7 +164,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // lbl_Logo
             // 
             lbl_Logo.AutoSize = true;
-            lbl_Logo.Font = new Font("Segoe UI", 16F, FontStyle.Bold);
+            lbl_Logo.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(16F);
             lbl_Logo.ForeColor = Color.FromArgb(56, 113, 224);
             lbl_Logo.Location = new Point(20, 15);
             lbl_Logo.Name = "lbl_Logo";

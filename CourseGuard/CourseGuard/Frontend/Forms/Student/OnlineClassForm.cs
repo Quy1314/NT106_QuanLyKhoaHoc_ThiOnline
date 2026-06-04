@@ -38,7 +38,7 @@ namespace CourseGuard.Frontend.Forms.Student
         private static readonly Color CLR_LABEL2 = Color.FromArgb(152, 152, 159);    // secondaryLabel
 
         // Font cho video overlay
-        private readonly Font _videoFont = new Font("Segoe UI", 16, FontStyle.Bold);
+        private readonly Font _videoFont = AppFonts.Semibold(16F);
 
         // Popup forms (để track và close)
         private Form? _activePopup = null;
@@ -156,7 +156,7 @@ namespace CourseGuard.Frontend.Forms.Student
             Label lblTitle = new Label
             {
                 Text = title,
-                Font = new Font("Segoe UI Semibold", 10F),
+                Font = MetaTheme.Fonts.BodyMdBold(),
                 ForeColor = Color.FromArgb(235, 235, 245),
                 BackColor = CLR_POPUP,
                 AutoSize = false,
@@ -169,7 +169,7 @@ namespace CourseGuard.Frontend.Forms.Student
             Label lblPercent = new Label
             {
                 Text = $"{currentValue}%",
-                Font = new Font("Segoe UI Semibold", 10F),
+                Font = MetaTheme.Fonts.BodyMdBold(),
                 ForeColor = CLR_BLUE,
                 BackColor = CLR_POPUP,
                 AutoSize = false,

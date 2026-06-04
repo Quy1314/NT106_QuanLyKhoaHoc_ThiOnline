@@ -49,11 +49,11 @@ namespace CourseGuard.Frontend.Forms.Student
             this.MaximizeBox = false;
             this.MinimizeBox = false;
 
-            lblTitle = new Label { Location = new Point(20, 20), AutoSize = true, Font = new Font("Segoe UI", 16, FontStyle.Bold) };
-            lblCourse = new Label { Location = new Point(20, 55), AutoSize = true, Font = new Font("Segoe UI", 10) };
-            lblPublishDate = new Label { Location = new Point(20, 80), AutoSize = true, Font = new Font("Segoe UI", 10, FontStyle.Italic), ForeColor = Color.Gray };
+            lblTitle = new Label { Location = new Point(20, 20), AutoSize = true, Font = AppFonts.Semibold(16F) };
+            lblCourse = new Label { Location = new Point(20, 55), AutoSize = true, Font = MetaTheme.Fonts.BodyMd() };
+            lblPublishDate = new Label { Location = new Point(20, 80), AutoSize = true, Font = new Font(AppFonts.Body.FontFamily, 10F, FontStyle.Italic), ForeColor = Color.Gray };
 
-            lblContentTitle = new Label { Location = new Point(20, 115), AutoSize = true, Font = new Font("Segoe UI", 11, FontStyle.Bold), Text = "Nội dung bài học:" };
+            lblContentTitle = new Label { Location = new Point(20, 115), AutoSize = true, Font = MetaTheme.Fonts.SubtitleLg(), Text = "Nội dung bài học:" };
 
             txtContent = new TextBox
             {
@@ -62,17 +62,17 @@ namespace CourseGuard.Frontend.Forms.Student
                 Multiline = true,
                 ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical,
-                Font = new Font("Segoe UI", 10)
+                Font = MetaTheme.Fonts.BodyMd()
             };
 
-            lblDownloadTitle = new Label { Location = new Point(20, 365), AutoSize = true, Font = new Font("Segoe UI", 11, FontStyle.Bold), Text = "Tài liệu đính kèm:" };
+            lblDownloadTitle = new Label { Location = new Point(20, 365), AutoSize = true, Font = MetaTheme.Fonts.SubtitleLg(), Text = "Tài liệu đính kèm:" };
 
             btnDownloadFile = new Button
             {
                 Location = new Point(20, 395),
                 Size = new Size(590, 40),
                 Text = "Tải tài liệu",
-                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                Font = MetaTheme.Fonts.ButtonMd(),
                 FlatStyle = FlatStyle.Flat,
                 AutoEllipsis = true,
                 TextAlign = ContentAlignment.MiddleLeft,
@@ -85,7 +85,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 Location = new Point(510, 450),
                 Size = new Size(100, 40),
                 Text = "Đóng",
-                Font = new Font("Segoe UI", 10),
+                Font = MetaTheme.Fonts.BodyMd(),
                 FlatStyle = FlatStyle.Flat
             };
             btnClose.Click += (s, e) => this.Close();

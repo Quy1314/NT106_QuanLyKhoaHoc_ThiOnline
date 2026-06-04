@@ -105,7 +105,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 Text = "Đang chờ video từ giáo viên...\nKhi giáo viên bật camera, hình ảnh sẽ hiện tại đây.",
                 ForeColor = AppColors.TextSecondary,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Font = new Font("Segoe UI", 16, FontStyle.Regular),
+                Font = new Font(AppFonts.Body.FontFamily, 16F, FontStyle.Regular),
                 BackColor = Color.Transparent
             };
             stage.Controls.Add(_videoPlaceholder);
@@ -168,7 +168,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 Text = "Camera của bạn",
                 ForeColor = AppColors.TextPrimary,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 10, FontStyle.Bold)
+                Font = MetaTheme.Fonts.BodyMdBold()
             }, 0, 0);
 
             _studentPreview = new PictureBox
@@ -186,7 +186,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 Text = "Hoạt động lớp học",
                 ForeColor = AppColors.TextPrimary,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 10, FontStyle.Bold)
+                Font = MetaTheme.Fonts.BodyMdBold()
             }, 0, 2);
 
             _eventsList = new ListBox
@@ -195,7 +195,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 BackColor = AppColors.BgInput,
                 ForeColor = AppColors.TextPrimary,
                 BorderStyle = BorderStyle.None,
-                Font = new Font("Segoe UI", 9)
+                Font = MetaTheme.Fonts.BodySm()
             };
             sideLayout.Controls.Add(_eventsList, 0, 3);
 
@@ -205,7 +205,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 Text = "Chat lớp học",
                 ForeColor = AppColors.TextPrimary,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 10, FontStyle.Bold)
+                Font = MetaTheme.Fonts.BodyMdBold()
             }, 0, 4);
 
             var chatPanel = new TableLayoutPanel
@@ -228,7 +228,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 BackColor = Color.FromArgb(15, 23, 42),
                 ForeColor = Color.FromArgb(226, 232, 240),
                 BorderStyle = BorderStyle.None,
-                Font = new Font("Segoe UI", 9, FontStyle.Bold)
+                Font = MetaTheme.Fonts.BodySmBold()
             };
             chatPanel.SetColumnSpan(_chatList, 2);
             chatPanel.Controls.Add(_chatList, 0, 0);
@@ -239,7 +239,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 BackColor = Color.FromArgb(241, 245, 249),
                 ForeColor = Color.FromArgb(15, 23, 42),
                 BorderStyle = BorderStyle.FixedSingle,
-                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                Font = MetaTheme.Fonts.BodyMdBold(),
                 PlaceholderText = "Nhập tin nhắn..."
             };
             _chatInput.KeyDown += async (_, e) =>
@@ -259,7 +259,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 BackColor = AppColors.AccentBlue,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                Font = MetaTheme.Fonts.BodySmBold(),
                 Cursor = Cursors.Hand
             };
             _btnSendChat.FlatAppearance.BorderSize = 0;
@@ -300,7 +300,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 Text = "Đang kết nối classroom socket...",
                 ForeColor = AppColors.TextPrimary,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 11, FontStyle.Bold),
+                Font = MetaTheme.Fonts.SubtitleLg(),
                 Padding = new Padding(14),
                 BackColor = AppColors.BgCard
             };
@@ -319,7 +319,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 BackColor = color,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                Font = MetaTheme.Fonts.ButtonMd(),
                 Cursor = Cursors.Hand
             };
             button.FlatAppearance.BorderSize = 0;
@@ -737,7 +737,7 @@ namespace CourseGuard.Frontend.Forms.Student
                     Dock = DockStyle.Fill,
                     Text = "Chọn nội dung muốn trình bày\nBạn chọn màn hình trước, sau đó lớp học mới nhận được màn hình.",
                     ForeColor = AppColors.TextPrimary,
-                    Font = new Font("Segoe UI", 13, FontStyle.Bold),
+                    Font = AppFonts.Semibold(13F),
                     TextAlign = ContentAlignment.MiddleLeft
                 }, 0, 0);
 
@@ -775,7 +775,7 @@ namespace CourseGuard.Frontend.Forms.Student
                     BackColor = AppColors.BgInput,
                     ForeColor = AppColors.TextPrimary,
                     FlatStyle = FlatStyle.Flat,
-                    Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                    Font = MetaTheme.Fonts.ButtonMd(),
                     DialogResult = DialogResult.Cancel
                 };
                 cancel.FlatAppearance.BorderSize = 0;
@@ -811,7 +811,7 @@ namespace CourseGuard.Frontend.Forms.Student
                     Dock = DockStyle.Fill,
                     Text = "▣",
                     ForeColor = Color.FromArgb(139, 92, 246),
-                    Font = new Font("Segoe UI", 34, FontStyle.Bold),
+                    Font = AppFonts.Semibold(34F),
                     TextAlign = ContentAlignment.MiddleCenter
                 };
                 preview.Controls.Add(icon);
@@ -821,7 +821,7 @@ namespace CourseGuard.Frontend.Forms.Student
                     Dock = DockStyle.Fill,
                     Text = primary ? $"{title} · Chính" : title,
                     ForeColor = AppColors.TextPrimary,
-                    Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                    Font = MetaTheme.Fonts.BodyMdBold(),
                     TextAlign = ContentAlignment.MiddleCenter
                 };
                 card.Controls.Add(name);

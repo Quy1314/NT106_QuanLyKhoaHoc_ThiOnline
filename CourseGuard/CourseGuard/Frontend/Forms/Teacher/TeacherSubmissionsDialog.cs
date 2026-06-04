@@ -63,8 +63,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             // Filter
             var filterPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
-            filterPanel.Controls.Add(new Label { Text = "Lọc theo khóa học:", AutoSize = true, Font = new Font("Segoe UI", 10, FontStyle.Bold), Margin = new Padding(0, 5, 10, 0) });
-            _cboCourse = new ComboBox { Width = 300, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font("Segoe UI", 10) };
+            filterPanel.Controls.Add(new Label { Text = "Lọc theo khóa học:", AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Margin = new Padding(0, 5, 10, 0) });
+            _cboCourse = new ComboBox { Width = 300, DropDownStyle = ComboBoxStyle.DropDownList, Font = MetaTheme.Fonts.BodyMd() };
             _cboCourse.Items.Add(new { Id = 0, Name = "Tất cả khóa học" });
             foreach (var c in _courses) _cboCourse.Items.Add(new { Id = c.Id, Name = c.Name });
             _cboCourse.DisplayMember = "Name";
@@ -87,7 +87,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             // Grading Panel
             _gradingPanel = new Panel { Dock = DockStyle.Fill, BackColor = AppColors.BgCard, Padding = new Padding(10) };
             
-            _lblStudentName = new Label { Location = new Point(10, 10), AutoSize = true, Font = new Font("Segoe UI", 11, FontStyle.Bold) };
+            _lblStudentName = new Label { Location = new Point(10, 10), AutoSize = true, Font = MetaTheme.Fonts.SubtitleLg() };
             _gradingPanel.Controls.Add(_lblStudentName);
 
             _btnDownload = TeacherTabChrome.SecondaryButton("Tải bài làm xuống");
@@ -95,12 +95,12 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _btnDownload.Click += BtnDownload_Click;
             _gradingPanel.Controls.Add(_btnDownload);
 
-            _gradingPanel.Controls.Add(new Label { Text = "Điểm số (0-10):", Location = new Point(200, 45), AutoSize = true, Font = new Font("Segoe UI", 10) });
-            _numScore = new NumericUpDown { Location = new Point(200, 70), Width = 100, Font = new Font("Segoe UI", 10), Minimum = 0, Maximum = 10, DecimalPlaces = 1, Increment = 0.5m };
+            _gradingPanel.Controls.Add(new Label { Text = "Điểm số (0-10):", Location = new Point(200, 45), AutoSize = true, Font = MetaTheme.Fonts.BodyMd() });
+            _numScore = new NumericUpDown { Location = new Point(200, 70), Width = 100, Font = MetaTheme.Fonts.BodyMd(), Minimum = 0, Maximum = 10, DecimalPlaces = 1, Increment = 0.5m };
             _gradingPanel.Controls.Add(_numScore);
 
-            _gradingPanel.Controls.Add(new Label { Text = "Nhận xét:", Location = new Point(340, 45), AutoSize = true, Font = new Font("Segoe UI", 10) });
-            _txtFeedback = new TextBox { Location = new Point(340, 70), Width = 500, Height = 60, Multiline = true, Font = new Font("Segoe UI", 10) };
+            _gradingPanel.Controls.Add(new Label { Text = "Nhận xét:", Location = new Point(340, 45), AutoSize = true, Font = MetaTheme.Fonts.BodyMd() });
+            _txtFeedback = new TextBox { Location = new Point(340, 70), Width = 500, Height = 60, Multiline = true, Font = MetaTheme.Fonts.BodyMd() };
             _gradingPanel.Controls.Add(_txtFeedback);
 
             _btnSaveGrade = TeacherTabChrome.PrimaryButton("Cập nhật điểm");

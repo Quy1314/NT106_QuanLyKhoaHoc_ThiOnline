@@ -37,7 +37,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // lblTitle
             // 
             this.lblTitle.AutoSize = true;
-            this.lblTitle.Font = new System.Drawing.Font("Segoe UI", 16F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblTitle.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(16F);
             this.lblTitle.ForeColor = System.Drawing.Color.FromArgb(30, 58, 138);
             this.lblTitle.Location = new System.Drawing.Point(20, 15);
             this.lblTitle.Name = "lblTitle";
@@ -47,7 +47,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // 
             // txtSearch
             // 
-            this.txtSearch.Font = new System.Drawing.Font("Segoe UI", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.txtSearch.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.SubtitleMd();
             this.txtSearch.Location = new System.Drawing.Point(20, 65);
             this.txtSearch.Name = "txtSearch";
             this.txtSearch.PlaceholderText = "Tìm kiếm theo tên khóa học hoặc giảng viên...";
@@ -59,7 +59,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             this.btnSearch.BackColor = System.Drawing.Color.FromArgb(37, 99, 235);
             this.btnSearch.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnSearch.FlatAppearance.BorderSize = 0;
-            this.btnSearch.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.btnSearch.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             this.btnSearch.ForeColor = System.Drawing.Color.White;
             this.btnSearch.Location = new System.Drawing.Point(380, 63);
             this.btnSearch.Name = "btnSearch";
@@ -73,7 +73,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             this.btnRefresh.BackColor = System.Drawing.Color.FromArgb(100, 116, 139);
             this.btnRefresh.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnRefresh.FlatAppearance.BorderSize = 0;
-            this.btnRefresh.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.btnRefresh.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             this.btnRefresh.ForeColor = System.Drawing.Color.White;
             this.btnRefresh.Location = new System.Drawing.Point(490, 63);
             this.btnRefresh.Name = "btnRefresh";
@@ -88,7 +88,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             this.btnViewDetails.BackColor = System.Drawing.Color.FromArgb(16, 185, 129);
             this.btnViewDetails.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnViewDetails.FlatAppearance.BorderSize = 0;
-            this.btnViewDetails.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.btnViewDetails.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             this.btnViewDetails.ForeColor = System.Drawing.Color.White;
             this.btnViewDetails.Location = new System.Drawing.Point(610, 63);
             this.btnViewDetails.Name = "btnViewDetails";
@@ -103,7 +103,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             this.btnJoin.BackColor = System.Drawing.Color.FromArgb(245, 158, 11);
             this.btnJoin.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnJoin.FlatAppearance.BorderSize = 0;
-            this.btnJoin.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.btnJoin.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             this.btnJoin.ForeColor = System.Drawing.Color.White;
             this.btnJoin.Location = new System.Drawing.Point(740, 63);
             this.btnJoin.Name = "btnJoin";
@@ -152,7 +152,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // lblDetailName
             // 
             this.lblDetailName.AutoSize = true;
-            this.lblDetailName.Font = new System.Drawing.Font("Segoe UI", 13F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblDetailName.Font = global::CourseGuard.Frontend.Theme.AppFonts.Semibold(13F);
             this.lblDetailName.ForeColor = System.Drawing.Color.FromArgb(30, 58, 138);
             this.lblDetailName.Location = new System.Drawing.Point(15, 10);
             this.lblDetailName.Name = "lblDetailName";
@@ -163,7 +163,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // lblDetailTeacher
             // 
             this.lblDetailTeacher.AutoSize = true;
-            this.lblDetailTeacher.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.lblDetailTeacher.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             this.lblDetailTeacher.ForeColor = System.Drawing.Color.FromArgb(100, 116, 139);
             this.lblDetailTeacher.Location = new System.Drawing.Point(15, 45);
             this.lblDetailTeacher.Name = "lblDetailTeacher";
@@ -174,7 +174,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // lblDetailDates
             // 
             this.lblDetailDates.AutoSize = true;
-            this.lblDetailDates.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.lblDetailDates.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             this.lblDetailDates.ForeColor = System.Drawing.Color.FromArgb(100, 116, 139);
             this.lblDetailDates.Location = new System.Drawing.Point(15, 72);
             this.lblDetailDates.Name = "lblDetailDates";
@@ -185,7 +185,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // lblDetailStudents
             // 
             this.lblDetailStudents.AutoSize = true;
-            this.lblDetailStudents.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblDetailStudents.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMdBold();
             this.lblDetailStudents.ForeColor = System.Drawing.Color.FromArgb(37, 99, 235);
             this.lblDetailStudents.Location = new System.Drawing.Point(15, 99);
             this.lblDetailStudents.Name = "lblDetailStudents";
@@ -195,7 +195,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // 
             // lblDetailDesc
             // 
-            this.lblDetailDesc.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Italic, System.Drawing.GraphicsUnit.Point);
+            this.lblDetailDesc.Font = new System.Drawing.Font(global::CourseGuard.Frontend.Theme.AppFonts.Body.FontFamily, 9F, System.Drawing.FontStyle.Italic);
             this.lblDetailDesc.ForeColor = System.Drawing.Color.FromArgb(71, 85, 105);
             this.lblDetailDesc.Location = new System.Drawing.Point(15, 125);
             this.lblDetailDesc.Name = "lblDetailDesc";

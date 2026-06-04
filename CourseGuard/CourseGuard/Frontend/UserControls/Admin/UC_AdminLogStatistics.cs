@@ -46,7 +46,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Dock = DockStyle.Top,
                 Height = 44,
                 Text = "Thống kê nhật ký Admin",
-                Font = new Font("Segoe UI", 18F, FontStyle.Bold),
+                Font = MetaTheme.Fonts.HeadingLg(),
                 ForeColor = AcademicTheme.TextPrimary
             };
 
@@ -132,7 +132,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Text = title,
                 Dock = DockStyle.Top,
                 Height = 26,
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Font = MetaTheme.Fonts.BodySmBold(),
                 ForeColor = AcademicTheme.TextSecondary
             };
 
@@ -140,7 +140,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             {
                 Text = "0",
                 Dock = DockStyle.Fill,
-                Font = new Font("Segoe UI", 19F, FontStyle.Bold),
+                Font = AppFonts.Semibold(19F),
                 ForeColor = AcademicTheme.TextPrimary,
                 TextAlign = ContentAlignment.MiddleLeft
             };
@@ -162,12 +162,12 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 ReadOnly = true,
                 RowHeadersVisible = false,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-                Font = new Font("Segoe UI", 9F, FontStyle.Regular),
+                Font = MetaTheme.Fonts.BodySm(),
                 EnableHeadersVisualStyles = false
             };
 
             AcademicTheme.StyleGrid(grid);
-            grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            grid.ColumnHeadersDefaultCellStyle.Font = MetaTheme.Fonts.BodySmBold();
             grid.ColumnHeadersHeight = 30;
             grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
             grid.RowTemplate.Height = 30;
@@ -282,7 +282,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Text = title,
                 Dock = DockStyle.Top,
                 Height = 32,
-                Font = new Font("Segoe UI", 11F, FontStyle.Bold),
+                Font = MetaTheme.Fonts.SubtitleLg(),
                 ForeColor = AcademicTheme.TextPrimary
             };
 

@@ -144,7 +144,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             c.Dock = DockStyle.Fill;
             c.BackColor = AppColors.BgInput;
             c.ForeColor = AppColors.TextPrimary;
-            c.Font = new Font("Segoe UI", 10F);
+            c.Font = MetaTheme.Fonts.BodyMd();
             if (c is TextBox tb) tb.BorderStyle = BorderStyle.FixedSingle;
             if (c is ComboBox cb) cb.FlatStyle = FlatStyle.Flat;
             return c;
@@ -158,7 +158,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             BackColor = AppColors.BgInput;
             ForeColor = AppColors.TextPrimary;
             BorderStyle = BorderStyle.FixedSingle;
-            Font = new Font("Segoe UI", 10F);
+            Font = MetaTheme.Fonts.BodyMd();
             Dock = DockStyle.Fill;
         }
 
@@ -204,7 +204,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _textBox.BorderStyle = BorderStyle.None;
             _textBox.BackColor = AppColors.BgInput;
             _textBox.ForeColor = AppColors.TextPrimary;
-            _textBox.Font = new Font("Segoe UI", 10F);
+            _textBox.Font = MetaTheme.Fonts.BodyMd();
             _textBox.Location = new Point(5, 4);
             _textBox.Width = 130;
             _textBox.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;

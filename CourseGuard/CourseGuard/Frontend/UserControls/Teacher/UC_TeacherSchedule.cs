@@ -101,7 +101,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             {
                 Text = "Chưa có lịch dạy.",
                 ForeColor = AppColors.TextSecondary,
-                Font = new Font("Segoe UI", 12),
+                Font = new Font(AppFonts.Body.FontFamily, 12F, FontStyle.Regular),
                 AutoSize = true,
                 Visible = false
             };
@@ -253,7 +253,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     var lblDate = new Label
                     {
                         Text = $"{GetVietnameseDayOfWeek(currentDate.DayOfWeek)} - {currentDate:dd/MM}",
-                        Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                        Font = MetaTheme.Fonts.BodySmBold(),
                         ForeColor = AppColors.TextPrimary,
                         AutoSize = true,
                         Dock = DockStyle.Top
@@ -265,7 +265,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                         var lblSession = new Label
                         {
                             Text = $"{s.StartTime:HH:mm} - {s.Title}",
-                            Font = new Font("Segoe UI", 8),
+                            Font = MetaTheme.Fonts.Caption(),
                             ForeColor = AppColors.TextSecondary,
                             AutoSize = false,
                             Height = 38,
