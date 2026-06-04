@@ -11,8 +11,8 @@ namespace CourseGuard.Frontend.Forms.Student
 {
     public partial class OnlineClassForm : Form
     {
-        private readonly AuthController _authController = new(new CourseGuardDbContext(""));
         private readonly CourseGuardDbContext _db = new("");
+        private readonly AuthController _authController;
         private bool _leaveActivityLogged;
         private int _sessionId;
         private int _attendanceLogId = 0;
@@ -46,6 +46,7 @@ namespace CourseGuard.Frontend.Forms.Student
         public OnlineClassForm(int sessionId = 0)
         {
             _sessionId = sessionId;
+            _authController = new AuthController(_db);
             InitializeComponent();
             SetupTooltips();
             SetupEventHandlers();

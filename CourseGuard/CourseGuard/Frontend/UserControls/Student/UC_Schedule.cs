@@ -15,7 +15,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 {
     public partial class UC_Schedule : UserControl
     {
-        private readonly AuthController _authController = new(new CourseGuardDbContext(""));
+        private readonly AuthController _authController;
         private readonly CourseController _controller;
         private List<StudentScheduleItemModel> _sessions = new();
         private RoundedPanel _scheduleBody = null!;
@@ -25,12 +25,15 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         public UC_Schedule()
         {
+            CourseGuardDbContext dbContext = new("");
+            _authController = new AuthController(dbContext);
+
             InitializeComponent();
             BuildCardLayout();
             ApplyMetaStyle();
             cboTimeFilter.SelectedIndex = 0;
 
-            _controller = new CourseController(new CourseGuardDbContext(""));
+            _controller = new CourseController(dbContext);
             RoundedButtonHelper.Apply(btnJoinOnline, 10);
             cboTimeFilter.SelectedIndexChanged += (_, _) => ApplyTimeFilter();
             btnJoinOnline.Click += (_, _) => JoinSelectedSession();

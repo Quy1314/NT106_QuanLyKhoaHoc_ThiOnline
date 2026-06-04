@@ -40,8 +40,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         public UC_TeacherSchedule(int teacherId)
         {
             _teacherId = teacherId;
-            _controller = new TeacherController(new CourseGuardDbContext(""));
             _db = new CourseGuardDbContext("");
+            _controller = new TeacherController(_db);
             BuildUI();
             
             // Khởi tạo TCP Server để broadcast tín hiệu mở lớp

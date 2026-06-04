@@ -21,7 +21,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         private readonly int _teacherId;
         private readonly CourseGuardDbContext _dbContext = new("");
-        private readonly TeacherController _teacherController = new(new CourseGuardDbContext(""));
+        private readonly TeacherController _teacherController;
         private readonly NotificationRepository _notificationRepository = new();
         private readonly AuthController _authController;
 
@@ -70,6 +70,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         public UC_TeacherProfile(int teacherId)
         {
             _teacherId = teacherId;
+            _teacherController = new TeacherController(_dbContext);
             _authController = new AuthController(_dbContext);
             BuildLayout();
             LoadDataAsync(showSkeleton: true).FireAndForgetSafe(this);

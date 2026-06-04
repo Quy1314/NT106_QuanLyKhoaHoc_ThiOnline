@@ -40,8 +40,9 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 btnAddCourse, btnUpdateCourse, btnDeleteCourse,
                 btnApproveStudent, btnRemoveStudent);
 
-            _userService = new CourseGuard.Backend.Controllers.UserController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
-            _courseService = new CourseGuard.Backend.Controllers.CourseController(new CourseGuard.Backend.Data.CourseGuardDbContext(""));
+            var dbContext = new CourseGuard.Backend.Data.CourseGuardDbContext("");
+            _userService = new CourseGuard.Backend.Controllers.UserController(dbContext);
+            _courseService = new CourseGuard.Backend.Controllers.CourseController(dbContext);
 
             // Set up cboRegStatus items
             cboRegStatus.Items.Clear();

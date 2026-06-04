@@ -315,7 +315,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 return;
 
             var authService = new CourseGuard.Backend.Controllers.AuthController(
-                new CourseGuard.Backend.Data.CourseGuardDbContext(""));
+                _dbContext);
             string ipAddress = GetLocalIpAddress();
             authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty, ipAddress);
             DialogResult = DialogResult.OK;

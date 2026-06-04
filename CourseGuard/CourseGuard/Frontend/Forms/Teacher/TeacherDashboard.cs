@@ -242,7 +242,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             if (!LogoutConfirmation.Confirm())
                 return;
 
-            var authService = new AuthController(new CourseGuardDbContext(""));
+            var authService = new AuthController(_dbContext);
             authService.Logout(_teacherId, _currentUser?.Username ?? _teacherName, GetLocalIpAddress());
             DialogResult = DialogResult.OK;
             Close();

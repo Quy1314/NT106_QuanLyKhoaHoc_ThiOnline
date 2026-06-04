@@ -15,8 +15,8 @@ namespace CourseGuard.Frontend.Forms.Student
 {
     public partial class DoExamForm : Form
     {
-        private readonly AuthController _authController = new(new CourseGuardDbContext(""));
         private readonly CourseGuardDbContext _dbContext = new("");
+        private readonly AuthController _authController;
         private readonly int _examId;
         private readonly System.Threading.CancellationTokenSource _monitoringCts = new();
         private readonly System.Windows.Forms.Timer _timer = new();
@@ -33,6 +33,7 @@ namespace CourseGuard.Frontend.Forms.Student
         public DoExamForm(int examId)
         {
             _examId = examId;
+            _authController = new AuthController(_dbContext);
             InitializeComponent();
             ApplyAcademicExamTheme();
             WireEvents();
