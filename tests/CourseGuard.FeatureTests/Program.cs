@@ -3,6 +3,8 @@ using CourseGuard.Backend.Services;
 using CourseGuard.Frontend.Forms.Student;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Frontend.UserControls.Student;
+using System.Data;
 using System.Drawing;
 using System.Reflection;
 using System.Windows.Forms;
@@ -630,6 +632,17 @@ Run("vietnam time formatter converts explicit utc timestamps", () =>
 });
 
 Run("student and teacher data cards wrap grids in rounded bodies", RunDashboardCardTests);
+Run("student grid page base builds layout and empty state without db access", RunStudentGridPageBaseTests);
+Run("student grid page base appends derived actions to header action strip", RunStudentGridPageHeaderActionTests);
+Run("student grid page base shows error empty state on initial failure", RunStudentGridPageInitialFailureTests);
+Run("student grid page base preserves initial error state across search rebind", RunStudentGridPageInitialFailureRebindTests);
+Run("student grid page base preserves bound rows across failed refresh and rebind", RunStudentGridPageRefreshFailureTests);
+Run("student grid concrete pages are sealed", () =>
+{
+    AssertTrue(typeof(UC_StudentLessons).IsSealed, "student lessons page should be sealed");
+    AssertTrue(typeof(UC_StudentAssignments).IsSealed, "student assignments page should be sealed");
+    AssertTrue(typeof(UC_Documents).IsSealed, "student documents page should be sealed");
+});
 Run("modern message dialog exposes requested buttons", RunMessageDialogButtonTests);
 
 Console.WriteLine("Feature tests passed.");
@@ -667,6 +680,202 @@ static void RunDashboardCardTests()
 
     studentCard.Dispose();
     teacherCard.Dispose();
+}
+
+static void RunStudentGridPageBaseTests()
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            using var page = new TestStudentGridPage();
+            TableLayoutPanel root = page.Controls.OfType<TableLayoutPanel>().Single();
+
+            AssertEqual(0, page.CreateTableCallCount);
+            AssertEqual(1, root.ColumnCount);
+            AssertEqual(2, root.RowCount);
+            AssertTrue(page.Controls.Contains(root), "base page should create the root layout");
+            AssertTrue(GetAllControls(page).Contains(page.ExposedGrid), "root layout should contain the grid");
+            AssertTrue(GetAllControls(page).Contains(page.ExposedRefreshButton), "header should contain the refresh button");
+            AssertTrue(page.ExposedSearchBox != null, "base page should create requested search input");
+            AssertTrue(page.ExposedCourseFilter != null, "base page should create requested course filter");
+            AssertTrue(page.ExposedSearchButton != null, "base page should create requested search button");
+            AssertTrue(GetAllControls(page).Contains(page.ExposedSearchBox!), "header should contain the search input");
+            AssertTrue(GetAllControls(page).Contains(page.ExposedCourseFilter!), "header should contain the course filter");
+            AssertTrue(GetAllControls(page).Contains(page.ExposedSearchButton!), "header should contain the search button");
+
+            AssertTrue(page.ExposedGrid.ReadOnly, "grid should be styled readonly");
+            AssertEqual(BorderStyle.None, page.ExposedGrid.BorderStyle);
+            AssertEqual(DataGridViewSelectionMode.FullRowSelect, page.ExposedGrid.SelectionMode);
+            AssertFalse(page.ExposedGrid.EnableHeadersVisualStyles, "grid should use theme header styles");
+
+            page.LoadForTestAsync().GetAwaiter().GetResult();
+
+            AssertEqual(1, page.CreateTableCallCount);
+            AssertTrue(page.ExposedBindingSource.DataSource is DataTable, "load should bind a DataTable");
+            AssertFalse(page.ExposedGrid.Visible, "empty table should hide the grid");
+            AssertTrue(page.ExposedGridBody.Controls.Contains(page.ExposedEmptyStateLabel), "table body should contain empty label");
+            AssertTrue(page.ExposedEmptyStateLabel.Visible, "empty table should show empty state label");
+            AssertEqual("No rows for this test.", page.ExposedEmptyStateLabel.Text);
+
+            page.RebindCachedRows();
+
+            AssertTrue(page.ExposedBindingSource.DataSource is DataTable, "successful empty load should allow local rebind");
+            AssertFalse(page.ExposedGrid.Visible, "empty rebind should keep the grid hidden");
+            AssertEqual("No rows for this test.", page.ExposedEmptyStateLabel.Text);
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw new InvalidOperationException(failure.Message, failure);
+}
+
+static void RunStudentGridPageHeaderActionTests()
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            using var page = new TestStudentGridPage();
+            TableLayoutPanel root = page.Controls.OfType<TableLayoutPanel>().Single();
+            Control header = root.GetControlFromPosition(0, 0)
+                ?? throw new InvalidOperationException("base page should create a header");
+            TableLayoutPanel headerLayout = header.Controls.OfType<TableLayoutPanel>().Single();
+            Control titleStack = headerLayout.GetControlFromPosition(0, 0)
+                ?? throw new InvalidOperationException("header should contain a title stack");
+            Control actionStrip = headerLayout.GetControlFromPosition(1, 0)
+                ?? throw new InvalidOperationException("header should contain an action strip");
+
+            AssertFalse(titleStack.Controls.Contains(page.ExposedExtraAction), "derived action must not be added to title stack");
+            AssertTrue(actionStrip.Controls.Contains(page.ExposedExtraAction), "derived action should be added to header action strip");
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw new InvalidOperationException(failure.Message, failure);
+}
+
+static void RunStudentGridPageRefreshFailureTests()
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            using var page = new TestStudentGridPage();
+            page.SetNextRows("Cached row");
+            page.LoadForTestAsync().GetAwaiter().GetResult();
+
+            DataTable boundBeforeFailure = page.ExposedBindingSource.DataSource as DataTable
+                ?? throw new InvalidOperationException("successful load should bind a DataTable");
+            AssertEqual(1, boundBeforeFailure.Rows.Count);
+            AssertTrue(page.ExposedGrid.Visible, "successful load should show the grid");
+
+            page.FailNextLoad();
+            RunWithAutoClosingThemedDialog(() => page.LoadForTestAsync());
+
+            AssertTrue(ReferenceEquals(boundBeforeFailure, page.ExposedBindingSource.DataSource), "failed refresh should preserve prior binding");
+            AssertTrue(page.ExposedGrid.Visible, "failed refresh should not hide previously bound rows");
+            AssertEqual(1, page.ExposedGrid.Rows.Count);
+
+            page.RebindCachedRows();
+
+            AssertTrue(page.ExposedGrid.Visible, "cache rebind should keep rows visible");
+            AssertEqual(1, page.ExposedGrid.Rows.Count);
+            AssertEqual("Cached row", page.ExposedGrid.Rows[0].Cells["Name"].Value?.ToString());
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw new InvalidOperationException(failure.Message, failure);
+}
+
+static void RunStudentGridPageInitialFailureRebindTests()
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            using var page = new TestStudentGridPage();
+            page.FailNextLoad();
+            RunWithAutoClosingThemedDialog(() => page.LoadForTestAsync());
+
+            page.RebindCachedRows();
+
+            AssertEqual<object?>(null, page.ExposedBindingSource.DataSource);
+            AssertFalse(page.ExposedGrid.Visible, "search rebind after initial failure should keep the grid hidden");
+            AssertTrue(page.ExposedEmptyStateLabel.Visible, "search rebind after initial failure should preserve error state");
+            AssertEqual("Không thể tải dữ liệu.", page.ExposedEmptyStateLabel.Text);
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw new InvalidOperationException(failure.Message, failure);
+}
+
+static void RunStudentGridPageInitialFailureTests()
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            using var page = new TestStudentGridPage();
+            page.FailNextLoad();
+            RunWithAutoClosingThemedDialog(() => page.LoadForTestAsync());
+
+            AssertEqual<object?>(null, page.ExposedBindingSource.DataSource);
+            AssertFalse(page.ExposedGrid.Visible, "initial failure should hide the grid");
+            AssertTrue(page.ExposedEmptyStateLabel.Visible, "initial failure should show the error empty state");
+            AssertEqual("Không thể tải dữ liệu.", page.ExposedEmptyStateLabel.Text);
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw new InvalidOperationException(failure.Message, failure);
 }
 
 static void RunMessageDialogButtonTests()
@@ -721,6 +930,32 @@ static object? TryCreateDialog(Type dialogType, object?[] args)
     catch (MissingMethodException)
     {
         return null;
+    }
+}
+
+static void RunWithAutoClosingThemedDialog(Func<Task> action)
+{
+    using var timer = new System.Windows.Forms.Timer { Interval = 20 };
+    timer.Tick += (_, _) =>
+    {
+        Form? dialog = Application.OpenForms
+            .Cast<Form>()
+            .FirstOrDefault(form => form.GetType().Name.Contains("ThemedMessageDialog", StringComparison.Ordinal));
+        if (dialog == null)
+            return;
+
+        dialog.DialogResult = DialogResult.OK;
+        dialog.Close();
+    };
+
+    timer.Start();
+    try
+    {
+        action().GetAwaiter().GetResult();
+    }
+    finally
+    {
+        timer.Stop();
     }
 }
 
@@ -845,5 +1080,81 @@ sealed class RecordingSynchronizationContext : SynchronizationContext
 
             callback(state);
         }
+    }
+}
+
+sealed class TestStudentGridPage : StudentGridPageBase
+{
+    private readonly List<string> _cachedRows = new();
+    private readonly List<string> _nextRows = new();
+    private bool _failNextLoad;
+
+    public TestStudentGridPage()
+        : base(
+            "Test page",
+            "Builds common grid chrome.",
+            "Rows",
+            "No rows for this test.",
+            hintText: "Only test rows are shown.",
+            showSearch: true,
+            searchPlaceholder: "Search rows",
+            showCourseFilter: true,
+            showSearchButton: true)
+    {
+        AddHeaderAction(ExposedExtraAction);
+    }
+
+    public int CreateTableCallCount { get; private set; }
+    public Button ExposedExtraAction { get; } = new() { Text = "Extra action" };
+    public DataGridView ExposedGrid => Grid;
+    public BindingSource ExposedBindingSource => BindingSource;
+    public Button ExposedRefreshButton => RefreshButton;
+    public TextBox? ExposedSearchBox => SearchBox;
+    public ComboBox? ExposedCourseFilter => CourseFilter;
+    public Button? ExposedSearchButton => SearchButton;
+    public RoundedPanel ExposedGridBody => GridBody;
+    public Label ExposedEmptyStateLabel => EmptyStateLabel;
+
+    public Task LoadForTestAsync() => LoadDataAsync();
+
+    public void SetNextRows(params string[] rows)
+    {
+        _nextRows.Clear();
+        _nextRows.AddRange(rows);
+    }
+
+    public void FailNextLoad()
+    {
+        _failNextLoad = true;
+    }
+
+    public void RebindCachedRows()
+    {
+        SetGridTable(CreateTable(_cachedRows));
+    }
+
+    protected override Task<DataTable> CreateTableAsync()
+    {
+        CreateTableCallCount++;
+        if (_failNextLoad)
+        {
+            _failNextLoad = false;
+            throw new InvalidOperationException("Simulated refresh failure");
+        }
+
+        _cachedRows.Clear();
+        _cachedRows.AddRange(_nextRows);
+        return Task.FromResult(CreateTable(_cachedRows));
+    }
+
+    private static DataTable CreateTable(IEnumerable<string> rows)
+    {
+        DataTable table = new();
+        table.Columns.Add("ID", typeof(int));
+        table.Columns.Add("Name", typeof(string));
+        int id = 1;
+        foreach (string row in rows)
+            table.Rows.Add(id++, row);
+        return table;
     }
 }
