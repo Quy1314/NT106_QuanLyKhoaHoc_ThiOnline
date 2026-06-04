@@ -20,6 +20,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private readonly int _teacherId;
         private readonly TeacherController _controller;
         private readonly CourseGuardDbContext _db;
+        private readonly ClassroomOpenSignalCoordinator _classroomSignal;
         
         private TableLayoutPanel _rootLayout = null!;
         private RoundedPanel _dataCard = null!;
@@ -35,6 +36,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private Button _btnRefresh = null!;
 
         private bool _isCalendarView = false;
+        private bool _isOpeningClass;
         private List<TeacherScheduleItemModel> _sessions = new();
 
         public UC_TeacherSchedule(int teacherId)
@@ -42,11 +44,9 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _teacherId = teacherId;
             _db = new CourseGuardDbContext("");
             _controller = new TeacherController(_db);
+            _classroomSignal = new ClassroomOpenSignalCoordinator(TcpClassroomService.Instance);
             BuildUI();
-            
-            // Khởi tạo TCP Server để broadcast tín hiệu mở lớp
-            TcpClassroomService.Instance.StartListening();
-            
+
             LoadDataAsync().FireAndForgetSafe(this);
         }
 
@@ -297,11 +297,18 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 MetaTheme.ShowModernDialog("Vui lòng chọn một lớp để mở.", "Thông báo");
                 return;
             }
-            
+
+            if (_isOpeningClass)
+                return;
+
+            _isOpeningClass = true;
+            bool wasOpenClassEnabled = _btnOpenClass.Enabled;
+            _btnOpenClass.Enabled = false;
             try
             {
+                _classroomSignal.EnsureListeningStarted();
                 await _db.UpdateSessionStatusAsync(sessionId, true, null);
-                await TcpClassroomService.Instance.BroadcastClassOpened(sessionId);
+                await _classroomSignal.BroadcastClassOpenedAsync(sessionId);
                 await LoadDataAsync();
 
                 using var onlineClassForm = new TeacherNativeClassroomForm(sessionId);
@@ -311,6 +318,11 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             catch (Exception ex)
             {
                 MetaTheme.ShowModernDialog("Lỗi khi mở lớp: " + ex.Message, "Lỗi");
+            }
+            finally
+            {
+                _isOpeningClass = false;
+                _btnOpenClass.Enabled = wasOpenClassEnabled;
             }
         }
         

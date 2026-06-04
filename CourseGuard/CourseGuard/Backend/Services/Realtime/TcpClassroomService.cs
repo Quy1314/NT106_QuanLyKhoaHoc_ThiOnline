@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace CourseGuard.Backend.Services.Realtime
 {
-    public sealed class TcpClassroomService : IDisposable
+    public sealed class TcpClassroomService : IClassroomSignalService, IDisposable
     {
         public static readonly TcpClassroomService Instance = new();
         public const int DefaultPort = 5056;
@@ -16,19 +16,35 @@ namespace CourseGuard.Backend.Services.Realtime
         private bool _isRunning;
         private CancellationTokenSource? _cts;
         private readonly ConcurrentBag<TcpClient> _clients = new();
+        private readonly object _startLock = new();
 
         private TcpClassroomService() { }
 
         public void StartListening()
         {
-            if (_isRunning) return;
-            _isRunning = true;
-            _cts = new CancellationTokenSource();
+            lock (_startLock)
+            {
+                if (_isRunning) return;
 
-            _listener = new TcpListener(IPAddress.Any, DefaultPort);
-            _listener.Start();
+                var cts = new CancellationTokenSource();
+                var listener = new TcpListener(IPAddress.Any, DefaultPort);
+                try
+                {
+                    listener.Start();
+                }
+                catch
+                {
+                    listener.Stop();
+                    cts.Dispose();
+                    throw;
+                }
 
-            _ = Task.Run(() => AcceptLoopAsync(_cts.Token));
+                _cts = cts;
+                _listener = listener;
+                _isRunning = true;
+
+                _ = Task.Run(() => AcceptLoopAsync(cts.Token));
+            }
         }
 
         private async Task AcceptLoopAsync(CancellationToken cancellationToken)

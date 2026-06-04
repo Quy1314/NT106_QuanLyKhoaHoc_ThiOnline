@@ -1,5 +1,6 @@
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services;
+using CourseGuard.Backend.Services.Realtime;
 using CourseGuard.Frontend.Forms.Student;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
@@ -8,6 +9,7 @@ using System.Data;
 using System.Drawing;
 using System.Reflection;
 using System.Windows.Forms;
+using static TestRunner;
 
 Run("student exam scoring sums matching answers", () =>
 {
@@ -292,6 +294,78 @@ Run("classroom screen share manager normalizes empty bounds to available screen 
 
     AssertEqual(fallback, normalized);
     AssertEqual(new Rectangle(1, 2, 3, 4), explicitBounds);
+});
+
+Run("classroom open signal coordinator starts lazily and broadcasts selected session", async () =>
+{
+    var signalService = new FakeClassroomSignalService();
+    var coordinator = new ClassroomOpenSignalCoordinator(signalService);
+
+    AssertEqual(0, signalService.StartCount);
+
+    await coordinator.BroadcastClassOpenedAsync(42);
+    await coordinator.BroadcastClassOpenedAsync(43);
+
+    AssertEqual(1, signalService.StartCount);
+    AssertEqual("42,43", string.Join(",", signalService.BroadcastSessionIds));
+});
+
+Run("classroom open signal coordinator retries start after failure without broadcasting", async () =>
+{
+    var signalService = new FakeClassroomSignalService { ThrowOnStartListening = true };
+    var coordinator = new ClassroomOpenSignalCoordinator(signalService);
+
+    bool threw = false;
+    try
+    {
+        await coordinator.BroadcastClassOpenedAsync(42);
+    }
+    catch (InvalidOperationException)
+    {
+        threw = true;
+    }
+
+    AssertTrue(threw, "first broadcast should fail when listener start fails");
+    AssertEqual(1, signalService.StartCount);
+    AssertEqual(string.Empty, string.Join(",", signalService.BroadcastSessionIds));
+
+    signalService.ThrowOnStartListening = false;
+    await coordinator.BroadcastClassOpenedAsync(43);
+
+    AssertEqual(2, signalService.StartCount);
+    AssertEqual("43", string.Join(",", signalService.BroadcastSessionIds));
+});
+
+Run("classroom open signal coordinator starts once for concurrent broadcasts", async () =>
+{
+    using var ready = new CountdownEvent(2);
+    using var releaseBroadcasts = new ManualResetEventSlim();
+    using var startEntered = new ManualResetEventSlim();
+    using var allowStartListening = new ManualResetEventSlim();
+
+    var signalService = new FakeClassroomSignalService
+    {
+        OnStartListening = () =>
+        {
+            startEntered.Set();
+            AssertTrue(allowStartListening.Wait(TimeSpan.FromSeconds(3)), "start listener delay was not released");
+        }
+    };
+    var coordinator = new ClassroomOpenSignalCoordinator(signalService);
+
+    Task first = StartConcurrentBroadcast(coordinator, 42, ready, releaseBroadcasts);
+    Task second = StartConcurrentBroadcast(coordinator, 43, ready, releaseBroadcasts);
+
+    AssertTrue(ready.Wait(TimeSpan.FromSeconds(3)), "broadcast tasks did not become ready");
+    releaseBroadcasts.Set();
+    AssertTrue(startEntered.Wait(TimeSpan.FromSeconds(3)), "listener start was not attempted");
+    allowStartListening.Set();
+
+    await Task.WhenAll(first, second);
+
+    int[] broadcastIds = signalService.BroadcastSessionIds.OrderBy(id => id).ToArray();
+    AssertEqual(1, signalService.StartCount);
+    AssertEqual("42,43", string.Join(",", broadcastIds));
 });
 
 Run("student exam form constructor does not invoke before handle exists", () =>
@@ -650,20 +724,6 @@ Run("student grid concrete pages are sealed", () =>
 Run("modern message dialog exposes requested buttons", RunMessageDialogButtonTests);
 
 Console.WriteLine("Feature tests passed.");
-
-static void Run(string name, Action test)
-{
-    try
-    {
-        test();
-        Console.WriteLine($"PASS {name}");
-    }
-    catch (Exception ex)
-    {
-        Console.Error.WriteLine($"FAIL {name}: {ex.Message}");
-        Environment.ExitCode = 1;
-    }
-}
 
 static void RunDashboardCardTests()
 {
@@ -1048,6 +1108,51 @@ static void AssertImageDisposed(Image image, string message)
     throw new InvalidOperationException(message);
 }
 
+static Task StartConcurrentBroadcast(
+    ClassroomOpenSignalCoordinator coordinator,
+    int sessionId,
+    CountdownEvent ready,
+    ManualResetEventSlim releaseBroadcasts)
+{
+    return Task.Factory.StartNew(async () =>
+    {
+        ready.Signal();
+        AssertTrue(releaseBroadcasts.Wait(TimeSpan.FromSeconds(3)), "broadcast release was not signaled");
+        await coordinator.BroadcastClassOpenedAsync(sessionId);
+    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
+}
+
+static class TestRunner
+{
+    public static void Run(string name, Action test)
+    {
+        try
+        {
+            test();
+            Console.WriteLine($"PASS {name}");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"FAIL {name}: {ex.Message}");
+            Environment.ExitCode = 1;
+        }
+    }
+
+    public static void Run(string name, Func<Task> test)
+    {
+        try
+        {
+            test().GetAwaiter().GetResult();
+            Console.WriteLine($"PASS {name}");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"FAIL {name}: {ex.Message}");
+            Environment.ExitCode = 1;
+        }
+    }
+}
+
 sealed class RecordingSynchronizationContext : SynchronizationContext
 {
     private readonly Queue<(SendOrPostCallback Callback, object? State)> _callbacks = new();
@@ -1084,6 +1189,35 @@ sealed class RecordingSynchronizationContext : SynchronizationContext
 
             callback(state);
         }
+    }
+}
+
+sealed class FakeClassroomSignalService : IClassroomSignalService
+{
+    private readonly object _broadcastLock = new();
+    private int _startCount;
+
+    public int StartCount => Volatile.Read(ref _startCount);
+    public List<int> BroadcastSessionIds { get; } = new();
+    public bool ThrowOnStartListening { get; set; }
+    public Action? OnStartListening { get; set; }
+
+    public void StartListening()
+    {
+        Interlocked.Increment(ref _startCount);
+        OnStartListening?.Invoke();
+        if (ThrowOnStartListening)
+            throw new InvalidOperationException("Start failed");
+    }
+
+    public Task BroadcastClassOpened(int sessionId)
+    {
+        lock (_broadcastLock)
+        {
+            BroadcastSessionIds.Add(sessionId);
+        }
+
+        return Task.CompletedTask;
     }
 }
 
