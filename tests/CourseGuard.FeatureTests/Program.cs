@@ -5,6 +5,7 @@ using CourseGuard.Backend.Services.Realtime;
 using CourseGuard.Frontend.Forms.Student;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Frontend.UserControls;
 using CourseGuard.Frontend.UserControls.Student;
 using CourseGuard.Frontend.UserControls.Teacher;
 using System.Data;
@@ -77,6 +78,94 @@ Run("teacher grid pages accept shared teacher controller", () =>
             pageType.GetConstructor(parameterTypes) != null,
             $"{pageType.Name} must expose public constructor (int, TeacherController)");
     }
+});
+
+Run("student and teacher profile pages share profile page base", () =>
+{
+    AssertTrue(typeof(ProfilePageBase).IsAssignableFrom(typeof(UC_Profile)), "student profile page must inherit ProfilePageBase");
+    AssertTrue(typeof(ProfilePageBase).IsAssignableFrom(typeof(UC_TeacherProfile)), "teacher profile page must inherit ProfilePageBase");
+
+    string[] helperNames =
+    {
+        "CreateInputGroup",
+        "CreateMultilineInputGroup",
+        "CreateComboGroup",
+        "CreateFieldWrapper",
+        "WireInputFocus"
+    };
+
+    foreach (string helperName in helperNames)
+    {
+        AssertTrue(
+            typeof(ProfilePageBase).GetMember(helperName, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).Length > 0,
+            $"ProfilePageBase must expose {helperName}");
+    }
+
+    TestProfilePage profileBase = new();
+
+    TextBox passwordInput = new() { Tag = "student-input" };
+    Panel passwordWrapper = AssertControl<Panel>(
+        profileBase.BuildInput("Password", passwordInput, password: true, inputWidth: 320),
+        "password input helper should return a wrapper panel");
+    RoundedPanel passwordPanel = SingleChild<RoundedPanel>(passwordWrapper);
+
+    AssertEqual('*', passwordInput.PasswordChar);
+    AssertFalse(passwordInput.Multiline, "single-line input must remain single-line");
+    AssertEqual(BorderStyle.None, passwordInput.BorderStyle);
+    AssertEqual(DockStyle.Fill, passwordInput.Dock);
+    AssertEqual(Padding.Empty, passwordInput.Margin);
+    AssertEqual<object?>(null, passwordInput.Tag);
+    AssertEqual(new Size(320, 42), passwordPanel.Size);
+    AssertEqual(new Size(240, 42), passwordPanel.MinimumSize);
+    AssertEqual(new Padding(12, 9, 12, 9), passwordPanel.Padding);
+    AssertEqual(MetaTheme.Colors.BorderSoft, passwordPanel.BorderColor);
+
+    RaiseFocusChanged(passwordInput, focused: true);
+    AssertEqual(MetaTheme.Colors.BorderFocus, passwordPanel.BorderColor);
+    RaiseFocusChanged(passwordInput, focused: false);
+    AssertEqual(MetaTheme.Colors.BorderSoft, passwordPanel.BorderColor);
+
+    TextBox teacherInput = new() { Tag = "teacher-input" };
+    profileBase.BuildInput("Teacher", teacherInput, clearInputTag: false);
+    AssertEqual("teacher-input", teacherInput.Tag);
+
+    TextBox studentMultiline = new() { Tag = "student-bio", Margin = new Padding(7) };
+    Panel studentMultilineWrapper = AssertControl<Panel>(
+        profileBase.BuildMultiline("Bio", studentMultiline),
+        "student multiline helper should return a wrapper panel");
+    RoundedPanel studentMultilinePanel = SingleChild<RoundedPanel>(studentMultilineWrapper);
+
+    AssertTrue(studentMultiline.Multiline, "multiline input should enable multiline mode");
+    AssertEqual(ScrollBars.Vertical, studentMultiline.ScrollBars);
+    AssertEqual(DockStyle.Fill, studentMultiline.Dock);
+    AssertEqual(new Padding(7), studentMultiline.Margin);
+    AssertEqual<object?>(null, studentMultiline.Tag);
+    AssertEqual(new Size(280, 86), studentMultilinePanel.Size);
+    AssertEqual(AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top, studentMultilinePanel.Anchor);
+
+    TextBox teacherMultiline = new() { Tag = "teacher-bio", Margin = new Padding(7) };
+    profileBase.BuildMultiline("Teacher bio", teacherMultiline, clearTextBoxMargin: true, clearInputTag: false);
+    AssertEqual(Padding.Empty, teacherMultiline.Margin);
+    AssertEqual("teacher-bio", teacherMultiline.Tag);
+
+    ComboBox comboBox = new() { Tag = "gender" };
+    Panel comboWrapper = AssertControl<Panel>(
+        profileBase.BuildCombo("Gender", comboBox),
+        "combo helper should return a wrapper panel");
+
+    AssertEqual<object?>(null, comboBox.Tag);
+    AssertEqual(new Point(0, 25), comboBox.Location);
+    AssertEqual(280, comboBox.Width);
+    AssertTrue(comboBox.Height >= 36, "styled combo height should preserve at least the theme minimum");
+    AssertEqual(240, comboBox.MinimumSize.Width);
+    AssertEqual(AnchorStyles.Left | AnchorStyles.Top, comboBox.Anchor);
+    AssertEqual(FlatStyle.Flat, comboBox.FlatStyle);
+    AssertEqual(DrawMode.OwnerDrawFixed, comboBox.DrawMode);
+    AssertEqual(ComboBoxStyle.DropDownList, comboBox.DropDownStyle);
+    AssertFalse(comboBox.IntegralHeight, "styled combo should disable integral height");
+    AssertEqual(34, comboBox.ItemHeight);
+    AssertEqual(1, comboBox.DropDownHeight);
+    AssertTrue(comboWrapper.Controls.Contains(comboBox), "combo wrapper should contain the styled combo");
 });
 
 Run("material file policy accepts common documents and rejects unsafe files", () =>
@@ -1115,6 +1204,29 @@ static void AssertFalse(bool value, string message)
         throw new InvalidOperationException(message);
 }
 
+static TControl AssertControl<TControl>(Control control, string message)
+    where TControl : Control
+{
+    AssertTrue(control is TControl, message);
+    return (TControl)control;
+}
+
+static TControl SingleChild<TControl>(Control parent)
+    where TControl : Control
+{
+    TControl[] matches = parent.Controls.OfType<TControl>().ToArray();
+    AssertEqual(1, matches.Length);
+    return matches[0];
+}
+
+static void RaiseFocusChanged(Control control, bool focused)
+{
+    string methodName = focused ? "OnGotFocus" : "OnLostFocus";
+    MethodInfo method = typeof(Control).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new MissingMethodException(nameof(Control), methodName);
+    method.Invoke(control, new object[] { EventArgs.Empty });
+}
+
 static void AssertImageDisposed(Image image, string message)
 {
     try
@@ -1243,6 +1355,35 @@ sealed class FakeClassroomSignalService : IClassroomSignalService
         }
 
         return Task.CompletedTask;
+    }
+}
+
+sealed class TestProfilePage : ProfilePageBase
+{
+    public Control BuildInput(
+        string labelText,
+        TextBox textBox,
+        bool password = false,
+        bool blendWithCard = true,
+        int inputWidth = 280,
+        bool clearInputTag = true)
+    {
+        return CreateInputGroup(labelText, textBox, password, blendWithCard, inputWidth, clearInputTag);
+    }
+
+    public Control BuildMultiline(
+        string labelText,
+        TextBox textBox,
+        bool blendWithCard = true,
+        bool clearTextBoxMargin = false,
+        bool clearInputTag = true)
+    {
+        return CreateMultilineInputGroup(labelText, textBox, blendWithCard, clearTextBoxMargin, clearInputTag);
+    }
+
+    public Control BuildCombo(string labelText, ComboBox comboBox, bool blendWithCard = true)
+    {
+        return CreateComboGroup(labelText, comboBox, blendWithCard);
     }
 }
 

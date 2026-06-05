@@ -12,10 +12,11 @@ using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Frontend.UserControls;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
 {
-    public partial class UC_TeacherProfile : UserControl
+    public partial class UC_TeacherProfile : ProfilePageBase
     {
         public event EventHandler<TeacherProfileChangedEventArgs>? ProfileChanged;
 
@@ -300,19 +301,19 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _personalEditGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
 
             AddInfoRow(_personalEditGrid, 0, "Mã giáo viên:", _lblEditTeacherCode);
-            _personalEditGrid.Controls.Add(CreateInputGroup("Họ và tên", _fullName), 0, 1);
-            _personalEditGrid.Controls.Add(CreateInputGroup("Email", _email), 1, 1);
-            _personalEditGrid.Controls.Add(CreateInputGroup("Số điện thoại", _phone), 0, 2);
+            _personalEditGrid.Controls.Add(CreateInputGroup("Họ và tên", _fullName, clearInputTag: false), 0, 1);
+            _personalEditGrid.Controls.Add(CreateInputGroup("Email", _email, clearInputTag: false), 1, 1);
+            _personalEditGrid.Controls.Add(CreateInputGroup("Số điện thoại", _phone, clearInputTag: false), 0, 2);
             _personalEditGrid.Controls.Add(CreateComboGroup("Giới tính", _gender), 1, 2);
-            _personalEditGrid.Controls.Add(CreateInputGroup("Ngày sinh (dd/MM/yyyy)", _birthDate), 0, 3);
-            _personalEditGrid.Controls.Add(CreateInputGroup("Địa chỉ", _address), 1, 3);
-            _personalEditGrid.Controls.Add(CreateInputGroup("Chuyên ngành", _major), 0, 4);
+            _personalEditGrid.Controls.Add(CreateInputGroup("Ngày sinh (dd/MM/yyyy)", _birthDate, clearInputTag: false), 0, 3);
+            _personalEditGrid.Controls.Add(CreateInputGroup("Địa chỉ", _address, clearInputTag: false), 1, 3);
+            _personalEditGrid.Controls.Add(CreateInputGroup("Chuyên ngành", _major, clearInputTag: false), 0, 4);
 
-            var degreesGroup = CreateMultilineInputGroup("Bằng cấp (mỗi dòng một bằng cấp)", _degrees);
+            var degreesGroup = CreateMultilineInputGroup("Bằng cấp (mỗi dòng một bằng cấp)", _degrees, clearTextBoxMargin: true, clearInputTag: false);
             _personalEditGrid.Controls.Add(degreesGroup, 0, 5);
             _personalEditGrid.SetColumnSpan(degreesGroup, 2);
 
-            var bioGroup = CreateMultilineInputGroup("Giới thiệu bản thân", _bio);
+            var bioGroup = CreateMultilineInputGroup("Giới thiệu bản thân", _bio, clearTextBoxMargin: true, clearInputTag: false);
             _personalEditGrid.Controls.Add(bioGroup, 0, 6);
             _personalEditGrid.SetColumnSpan(bioGroup, 2);
 
@@ -446,9 +447,9 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
 
-            Control oldPasswordGroup = CreateInputGroup("Mật khẩu cũ", _oldPassword, password: true, inputWidth: 320);
-            Control newPasswordGroup = CreateInputGroup("Mật khẩu mới", _newPassword, password: true, inputWidth: 320);
-            Control confirmGroup = CreateInputGroup("Xác nhận mật khẩu mới", _confirmPassword, password: true, inputWidth: 320);
+            Control oldPasswordGroup = CreateInputGroup("Mật khẩu cũ", _oldPassword, password: true, inputWidth: 320, clearInputTag: false);
+            Control newPasswordGroup = CreateInputGroup("Mật khẩu mới", _newPassword, password: true, inputWidth: 320, clearInputTag: false);
+            Control confirmGroup = CreateInputGroup("Xác nhận mật khẩu mới", _confirmPassword, password: true, inputWidth: 320, clearInputTag: false);
             grid.Controls.Add(oldPasswordGroup, 0, 0);
             grid.Controls.Add(newPasswordGroup, 0, 1);
             grid.Controls.Add(confirmGroup, 0, 2);
@@ -805,107 +806,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 BackColor = Color.Transparent,
                 UseCompatibleTextRendering = false
             };
-        }
-
-        private Control CreateInputGroup(string labelText, TextBox textBox, bool password = false, int inputWidth = 280)
-        {
-            var wrapper = CreateFieldWrapper(labelText, 74);
-            var panel = CreateInputPanel(42, inputWidth);
-            textBox.PasswordChar = password ? '*' : '\0';
-            textBox.Multiline = false;
-            textBox.Font = AppFonts.Body;
-            textBox.BorderStyle = BorderStyle.None;
-            textBox.BackColor = MetaTheme.Colors.InputBg;
-            textBox.ForeColor = MetaTheme.Colors.TextPrimary;
-            textBox.Dock = DockStyle.Fill;
-            textBox.Margin = Padding.Empty;
-            WireInputFocus(textBox, panel);
-            panel.Controls.Add(textBox);
-            wrapper.Controls.Add(panel);
-            return wrapper;
-        }
-
-        private Control CreateMultilineInputGroup(string labelText, TextBox textBox)
-        {
-            var wrapper = CreateFieldWrapper(labelText, 118);
-            var panel = CreateInputPanel(86, 280);
-            panel.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top;
-            wrapper.Resize += (_, _) =>
-            {
-                if (wrapper.ClientSize.Width > 0)
-                    panel.Width = Math.Max(280, wrapper.ClientSize.Width);
-            };
-
-            textBox.Multiline = true;
-            textBox.ScrollBars = ScrollBars.Vertical;
-            textBox.Font = AppFonts.Body;
-            textBox.BorderStyle = BorderStyle.None;
-            textBox.BackColor = MetaTheme.Colors.InputBg;
-            textBox.ForeColor = MetaTheme.Colors.TextPrimary;
-            textBox.Dock = DockStyle.Fill;
-            textBox.Margin = Padding.Empty;
-            WireInputFocus(textBox, panel);
-            panel.Controls.Add(textBox);
-            wrapper.Controls.Add(panel);
-            return wrapper;
-        }
-
-        private Control CreateComboGroup(string labelText, ComboBox comboBox)
-        {
-            var wrapper = CreateFieldWrapper(labelText, 74);
-            comboBox.Location = new Point(0, 25);
-            comboBox.Size = new Size(280, 42);
-            comboBox.MinimumSize = new Size(240, 42);
-            comboBox.Anchor = AnchorStyles.Left | AnchorStyles.Top;
-            comboBox.Tag = null;
-            StudentDropdownStyler.StyleComboBox(comboBox, true, false);
-            wrapper.Controls.Add(comboBox);
-            return wrapper;
-        }
-
-        private static Panel CreateFieldWrapper(string labelText, int height)
-        {
-            var wrapper = new Panel
-            {
-                Dock = DockStyle.Fill,
-                Height = height,
-                Margin = new Padding(0, 0, 15, 10),
-                BackColor = AppColors.BgCard,
-                Tag = "card"
-            };
-            wrapper.Controls.Add(new Label
-            {
-                Text = labelText,
-                ForeColor = AppColors.TextSecondary,
-                Font = AppFonts.Body,
-                AutoSize = true,
-                Location = new Point(0, 0),
-                BackColor = Color.Transparent,
-                UseCompatibleTextRendering = false
-            });
-            return wrapper;
-        }
-
-        private static RoundedPanel CreateInputPanel(int height, int width)
-        {
-            return new RoundedPanel
-            {
-                CornerRadius = 8,
-                BorderColor = MetaTheme.Colors.BorderSoft,
-                FillColor = MetaTheme.Colors.InputBg,
-                Size = new Size(width, height),
-                MinimumSize = new Size(Math.Min(width, 240), height),
-                Location = new Point(0, 25),
-                Padding = new Padding(12, 9, 12, 9),
-                Anchor = AnchorStyles.Left | AnchorStyles.Top,
-                BackColor = Color.Transparent
-            };
-        }
-
-        private static void WireInputFocus(Control input, RoundedPanel panel)
-        {
-            input.GotFocus += (_, _) => { panel.BorderColor = MetaTheme.Colors.BorderFocus; panel.Invalidate(); };
-            input.LostFocus += (_, _) => { panel.BorderColor = MetaTheme.Colors.BorderSoft; panel.Invalidate(); };
         }
 
         private void EnsureGenderItems()
