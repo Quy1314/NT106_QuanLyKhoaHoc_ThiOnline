@@ -413,7 +413,7 @@ Run("classroom screen share manager normalizes empty bounds to available screen 
 Run("classroom open signal coordinator starts lazily and broadcasts selected session", async () =>
 {
     var signalService = new FakeClassroomSignalService();
-    var coordinator = new ClassroomOpenSignalCoordinator(signalService);
+    var coordinator = new ClassroomOpenSignalCoordinator(signalService, replayCount: 0);
 
     AssertEqual(0, signalService.StartCount);
 
@@ -424,10 +424,23 @@ Run("classroom open signal coordinator starts lazily and broadcasts selected ses
     AssertEqual("42,43", string.Join(",", signalService.BroadcastSessionIds));
 });
 
+Run("classroom open signal coordinator replays open signal for reconnecting clients", async () =>
+{
+    var signalService = new FakeClassroomSignalService();
+    var coordinator = new ClassroomOpenSignalCoordinator(signalService, replayCount: 2, replayDelay: TimeSpan.FromMilliseconds(20));
+
+    await coordinator.BroadcastClassOpenedAsync(42);
+
+    AssertEqual(1, signalService.StartCount);
+    AssertEqual("42", string.Join(",", signalService.BroadcastSessionIds));
+    AssertTrue(signalService.WaitForBroadcastCount(3, TimeSpan.FromSeconds(2)), "open signal replay was not observed");
+    AssertEqual("42,42,42", string.Join(",", signalService.BroadcastSessionIds));
+});
+
 Run("classroom open signal coordinator retries start after failure without broadcasting", async () =>
 {
     var signalService = new FakeClassroomSignalService { ThrowOnStartListening = true };
-    var coordinator = new ClassroomOpenSignalCoordinator(signalService);
+    var coordinator = new ClassroomOpenSignalCoordinator(signalService, replayCount: 0);
 
     bool threw = false;
     try
@@ -465,7 +478,7 @@ Run("classroom open signal coordinator starts once for concurrent broadcasts", a
             AssertTrue(allowStartListening.Wait(TimeSpan.FromSeconds(3)), "start listener delay was not released");
         }
     };
-    var coordinator = new ClassroomOpenSignalCoordinator(signalService);
+    var coordinator = new ClassroomOpenSignalCoordinator(signalService, replayCount: 0);
 
     Task first = StartConcurrentBroadcast(coordinator, 42, ready, releaseBroadcasts);
     Task second = StartConcurrentBroadcast(coordinator, 43, ready, releaseBroadcasts);
@@ -1333,6 +1346,7 @@ sealed class FakeClassroomSignalService : IClassroomSignalService
 {
     private readonly object _broadcastLock = new();
     private int _startCount;
+    private readonly ManualResetEventSlim _broadcastCountChanged = new();
 
     public int StartCount => Volatile.Read(ref _startCount);
     public List<int> BroadcastSessionIds { get; } = new();
@@ -1352,9 +1366,30 @@ sealed class FakeClassroomSignalService : IClassroomSignalService
         lock (_broadcastLock)
         {
             BroadcastSessionIds.Add(sessionId);
+            _broadcastCountChanged.Set();
         }
 
         return Task.CompletedTask;
+    }
+
+    public bool WaitForBroadcastCount(int expectedCount, TimeSpan timeout)
+    {
+        DateTime deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline)
+        {
+            lock (_broadcastLock)
+            {
+                if (BroadcastSessionIds.Count >= expectedCount)
+                    return true;
+            }
+
+            TimeSpan remaining = deadline - DateTime.UtcNow;
+            _broadcastCountChanged.Wait(remaining > TimeSpan.FromMilliseconds(50) ? TimeSpan.FromMilliseconds(50) : remaining);
+            _broadcastCountChanged.Reset();
+        }
+
+        lock (_broadcastLock)
+            return BroadcastSessionIds.Count >= expectedCount;
     }
 }
 
