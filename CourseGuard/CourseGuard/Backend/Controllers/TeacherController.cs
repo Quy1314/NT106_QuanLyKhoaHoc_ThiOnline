@@ -144,6 +144,11 @@ namespace CourseGuard.Backend.Controllers
         public bool DeleteScheduleItem(int teacherId, int scheduleId) =>
             teacherId > 0 && _repository.DeleteScheduleItem(teacherId, scheduleId);
 
+        public System.Threading.Tasks.Task<bool> UpdateSessionStatusAsync(int teacherId, int sessionId, bool isOpened, string? meetingLink = null) =>
+            teacherId > 0 && sessionId > 0
+                ? _repository.UpdateSessionStatusAsync(teacherId, sessionId, isOpened, meetingLink)
+                : System.Threading.Tasks.Task.FromResult(false);
+
         public List<TeacherActiveExamSessionModel> GetActiveExamSessions(int teacherId) =>
             teacherId <= 0 ? new List<TeacherActiveExamSessionModel>() : _repository.GetActiveExamSessions(teacherId);
 

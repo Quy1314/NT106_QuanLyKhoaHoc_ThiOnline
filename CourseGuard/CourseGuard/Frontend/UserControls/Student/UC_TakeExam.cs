@@ -4,6 +4,7 @@ using System.Data;
 using System.Drawing;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
@@ -185,19 +186,18 @@ namespace CourseGuard.Frontend.UserControls.Student
             return duration;
         }
 
-        private void btnStartExam_Click(object sender, EventArgs e)
+        private async void btnStartExam_Click(object sender, EventArgs e)
         {
-            if (!dgvExams.Visible || dgvExams.CurrentRow == null || dgvExams.CurrentRow.IsNewRow)
+            StudentExamLaunchContext? launchContext = CreateExamLaunchContext(dgvExams.CurrentRow);
+            if (!dgvExams.Visible || launchContext == null)
             {
                 MetaTheme.ShowModernDialog(this.FindForm(), "Vui lòng chọn một bài kiểm tra.", "Thông báo");
                 return;
             }
 
-            int examId = Convert.ToInt32(dgvExams.CurrentRow.Cells["ExamId"].Value);
-            bool canStart = Convert.ToBoolean(dgvExams.CurrentRow.Cells["CanStart"].Value);
-            if (examId <= 0 || !canStart)
+            if (launchContext.ExamId <= 0 || !launchContext.CanStart)
             {
-                StudentExamListItemModel? exam = _exams.FirstOrDefault(item => item.Id == examId);
+                StudentExamListItemModel? exam = _exams.FirstOrDefault(item => item.Id == launchContext.ExamId);
                 string message = exam == null
                     ? "Bài kiểm tra này chưa thể làm ở thời điểm hiện tại."
                     : StudentExamAvailabilityService.GetStartBlockedMessage(exam);
@@ -205,14 +205,83 @@ namespace CourseGuard.Frontend.UserControls.Student
                 return;
             }
 
-            int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
-            string username = UserSessionContext.CurrentUsername ?? "unknown";
-            string examName = dgvExams.CurrentRow.Cells["Kỳ thi"].Value?.ToString() ?? "unknown-exam";
-            _authController.LogUserActivity(userId, "EXAM_JOIN", $"User {username} joined exam: {examName}", string.Empty);
+            int studentId = UserSessionContext.CurrentUserId ?? 0;
+            if (studentId <= 0)
+            {
+                MetaTheme.ShowModernDialog(this.FindForm(), "Không xác định được tài khoản học sinh.", "Thông báo");
+                return;
+            }
 
-            using var form = new DoExamForm(examId);
-            form.ShowDialog(this.FindForm());
-            LoadDataAsync().FireAndForgetSafe(this);
+            bool wasStartButtonEnabled = btnStartExam.Enabled;
+            bool wasGridEnabled = dgvExams.Enabled;
+            string previousStartButtonText = btnStartExam.Text;
+            btnStartExam.Enabled = false;
+            btnStartExam.Text = "Đang tải...";
+            dgvExams.Enabled = false;
+            this.ShowSkeleton(SkeletonType.ExamListWithToolbar);
+            bool preloadSkeletonVisible = true;
+
+            try
+            {
+                StudentExamTakingModel? session = await PreloadExamSessionAsync(studentId, launchContext.ExamId);
+                if (session == null || session.Questions.Count == 0)
+                {
+                    MetaTheme.ShowModernDialog(this.FindForm(), "Bài kiểm tra chưa thể làm ở thời điểm hiện tại.", "Thông báo");
+                    return;
+                }
+
+                int? userId = studentId > 0 ? studentId : null;
+                string username = UserSessionContext.CurrentUsername ?? "unknown";
+                _authController.LogUserActivity(userId, "EXAM_JOIN", $"User {username} joined exam: {launchContext.ExamName}", string.Empty);
+
+                this.HideSkeleton();
+                preloadSkeletonVisible = false;
+                using var form = new DoExamForm(launchContext.ExamId, session);
+                form.ShowDialog(this.FindForm());
+                LoadDataAsync().FireAndForgetSafe(this);
+            }
+            catch (Exception ex)
+            {
+                MetaTheme.ShowModernDialog(this.FindForm(), "Không thể tải bài kiểm tra: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                if (preloadSkeletonVisible)
+                    this.HideSkeleton();
+                btnStartExam.Text = previousStartButtonText;
+                btnStartExam.Enabled = wasStartButtonEnabled;
+                dgvExams.Enabled = wasGridEnabled;
+            }
+        }
+
+        private Task<StudentExamTakingModel?> PreloadExamSessionAsync(int studentId, int examId)
+        {
+            return Task.Run(() => _dbContext.StartOrResumeStudentExam(studentId, examId));
+        }
+
+        private static StudentExamLaunchContext? CreateExamLaunchContext(DataGridViewRow? row)
+        {
+            if (row == null || row.IsNewRow)
+                return null;
+
+            return new StudentExamLaunchContext(
+                Convert.ToInt32(row.Cells["ExamId"].Value),
+                Convert.ToBoolean(row.Cells["CanStart"].Value),
+                row.Cells["Kỳ thi"].Value?.ToString() ?? "unknown-exam");
+        }
+
+        private sealed class StudentExamLaunchContext
+        {
+            public StudentExamLaunchContext(int examId, bool canStart, string examName)
+            {
+                ExamId = examId;
+                CanStart = canStart;
+                ExamName = examName;
+            }
+
+            public int ExamId { get; }
+            public bool CanStart { get; }
+            public string ExamName { get; }
         }
     }
 }

@@ -20,6 +20,8 @@ namespace CourseGuard.Frontend.UserControls.Student
         private readonly List<ChatCourseModel> _courses = new();
         private int _selectedCourseId;
         private bool _isLoadingMessages;
+        private bool _hasPendingLocalSend;
+        private bool _isSending;
         private bool _uiAlive = true;
 
         public UC_Chat()
@@ -41,31 +43,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             RoundedButtonHelper.Apply(btnSend, 10);
             lstContacts.SelectedIndexChanged += async (_, _) => await OnCourseChangedAsync();
 
-            btnSend.Click += async (s, e) =>
-            {
-                string content = txtInput.Text.Trim();
-                if (string.IsNullOrWhiteSpace(content))
-                {
-                    return;
-                }
-
-                int userId = UserSessionContext.CurrentUserId ?? 0;
-                if (userId <= 0 || _selectedCourseId <= 0)
-                {
-                    MetaTheme.ShowModernDialog("Không tìm thấy phòng chat hợp lệ.", "Chat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                bool sent = await _chatController.SendMessageAsync(userId, _selectedCourseId, content);
-                if (!sent)
-                {
-                    MetaTheme.ShowModernDialog(_chatController.LastErrorMessage, "Gửi tin nhắn thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                txtInput.Clear();
-                await RefreshMessagesAsync();
-            };
+            btnSend.Click += async (_, _) => await SendTextAsync();
 
             var sendMenu = new ContextMenuStrip();
             var attachItem = new ToolStripMenuItem("Gửi file...");
@@ -259,7 +237,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 return;
             }
 
-            if (_isLoadingMessages || _selectedCourseId <= 0)
+            if (_isLoadingMessages || _selectedCourseId <= 0 || _hasPendingLocalSend)
             {
                 return;
             }
@@ -312,8 +290,49 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
         }
 
+        private async Task SendTextAsync()
+        {
+            if (_isSending)
+                return;
+
+            string content = txtInput.Text.Trim();
+            if (string.IsNullOrWhiteSpace(content))
+                return;
+
+            int userId = UserSessionContext.CurrentUserId ?? 0;
+            if (userId <= 0 || _selectedCourseId <= 0)
+            {
+                MetaTheme.ShowModernDialog("Không tìm thấy phòng chat hợp lệ.", "Chat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            SetComposerSending(true);
+            AppendLocalSendStatus("TEXT", "PENDING", content);
+            try
+            {
+                bool sent = await _chatController.SendMessageAsync(userId, _selectedCourseId, content);
+                if (!sent)
+                {
+                    AppendLocalSendStatus("TEXT", "FAILED", content, _chatController.LastErrorMessage);
+                    MetaTheme.ShowModernDialog(_chatController.LastErrorMessage, "Gửi tin nhắn thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                txtInput.Clear();
+                AppendLocalSendStatus("TEXT", "SENT", content);
+                await RefreshMessagesAsync();
+            }
+            finally
+            {
+                SetComposerSending(false);
+            }
+        }
+
         private async Task SendFileAsync()
         {
+            if (_isSending)
+                return;
+
             int userId = UserSessionContext.CurrentUserId ?? 0;
             if (userId <= 0 || _selectedCourseId <= 0)
             {
@@ -332,15 +351,62 @@ namespace CourseGuard.Frontend.UserControls.Student
                 return;
             }
 
-            string caption = $"Gửi file: {Path.GetFileName(dialog.FileName)}";
-            bool sent = await _chatController.SendFileMessageAsync(userId, _selectedCourseId, dialog.FileName, caption);
-            if (!sent)
+            string fileName = Path.GetFileName(dialog.FileName);
+            string caption = $"Gửi file: {fileName}";
+            SetComposerSending(true);
+            AppendLocalSendStatus("FILE", "PENDING", fileName);
+            try
             {
-                MetaTheme.ShowModernDialog(_chatController.LastErrorMessage, "Gửi file thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
+                bool sent = await _chatController.SendFileMessageAsync(userId, _selectedCourseId, dialog.FileName, caption);
+                if (!sent)
+                {
+                    AppendLocalSendStatus("FILE", "FAILED", fileName, _chatController.LastErrorMessage);
+                    MetaTheme.ShowModernDialog(_chatController.LastErrorMessage, "Gửi file thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
 
-            await RefreshMessagesAsync();
+                AppendLocalSendStatus("FILE", "SENT", fileName);
+                await RefreshMessagesAsync();
+            }
+            finally
+            {
+                SetComposerSending(false);
+            }
+        }
+
+        private void AppendLocalSendStatus(string messageType, string status, string preview, string? errorMessage = null)
+        {
+            if (!_uiAlive || IsDisposed || txtMessages.IsDisposed)
+                return;
+
+            _hasPendingLocalSend = string.Equals(status, "PENDING", StringComparison.OrdinalIgnoreCase);
+            if (ShouldClearBeforeLocalStatus(txtMessages.Text))
+                txtMessages.Clear();
+
+            txtMessages.AppendText(ChatSendStatusLineFormatter.Render("Bạn", preview, messageType, status, errorMessage) + Environment.NewLine);
+            txtMessages.SelectionStart = txtMessages.TextLength;
+            txtMessages.ScrollToCaret();
+        }
+
+        private void SetComposerSending(bool sending)
+        {
+            _isSending = sending;
+            btnSend.Enabled = !sending;
+            txtInput.Enabled = !sending;
+        }
+
+        private static bool ShouldClearBeforeLocalStatus(string currentText)
+        {
+            if (string.IsNullOrWhiteSpace(currentText))
+                return false;
+
+            string trimmed = currentText.TrimStart();
+            return trimmed.StartsWith("Đang tải", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("Chọn khóa", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("Chưa có", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("Bạn cần", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("Bạn chưa", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("Không tìm", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

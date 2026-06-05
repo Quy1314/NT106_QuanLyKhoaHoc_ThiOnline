@@ -19,7 +19,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
     {
         private readonly int _teacherId;
         private readonly TeacherController _controller;
-        private readonly CourseGuardDbContext _db;
         private readonly ClassroomOpenSignalCoordinator _classroomSignal;
         
         private TableLayoutPanel _rootLayout = null!;
@@ -40,10 +39,14 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private List<TeacherScheduleItemModel> _sessions = new();
 
         public UC_TeacherSchedule(int teacherId)
+            : this(teacherId, new TeacherController(new CourseGuardDbContext("")))
+        {
+        }
+
+        public UC_TeacherSchedule(int teacherId, TeacherController controller)
         {
             _teacherId = teacherId;
-            _db = new CourseGuardDbContext("");
-            _controller = new TeacherController(_db);
+            _controller = controller ?? throw new ArgumentNullException(nameof(controller));
             _classroomSignal = new ClassroomOpenSignalCoordinator(TcpClassroomService.Instance);
             BuildUI();
 
@@ -307,7 +310,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             try
             {
                 _classroomSignal.EnsureListeningStarted();
-                await _db.UpdateSessionStatusAsync(sessionId, true, null);
+                await _controller.UpdateSessionStatusAsync(_teacherId, sessionId, true);
                 await _classroomSignal.BroadcastClassOpenedAsync(sessionId);
                 await LoadDataAsync();
 

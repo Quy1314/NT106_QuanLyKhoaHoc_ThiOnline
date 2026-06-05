@@ -714,6 +714,29 @@ namespace CourseGuard.Backend.Data
               WHERE os.course_id = c.id AND c.teacher_id = @teacher_id AND os.id = @id",
             scheduleId);
 
+        public async Task<bool> UpdateSessionStatusAsync(int teacherId, int sessionId, bool isOpened, string? meetingLink = null)
+        {
+            using var connection = _dbContext.CreateConnection();
+            await connection.OpenAsync();
+
+            const string query = @"
+                UPDATE online_sessions os
+                SET is_opened = @is_opened,
+                    meeting_link = COALESCE(@meeting_link, os.meeting_link)
+                FROM courses c
+                WHERE os.course_id = c.id
+                  AND c.teacher_id = @teacher_id
+                  AND os.id = @session_id";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@teacher_id", teacherId);
+            command.Parameters.AddWithValue("@session_id", sessionId);
+            command.Parameters.AddWithValue("@is_opened", isOpened);
+            command.Parameters.AddWithValue("@meeting_link", string.IsNullOrWhiteSpace(meetingLink) ? DBNull.Value : meetingLink);
+
+            return await command.ExecuteNonQueryAsync() > 0;
+        }
+
         public List<TeacherActiveExamSessionModel> GetActiveExamSessions(int teacherId)
         {
             var rows = new List<TeacherActiveExamSessionModel>();

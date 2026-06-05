@@ -34,6 +34,10 @@ namespace CourseGuard.Frontend.UserControls.Student
         private readonly TextBox txtNewPassword = new();
         private readonly TextBox txtConfirmPassword = new();
         private readonly Button btnSavePassword = new();
+        private readonly ErrorProvider _validationErrors = new()
+        {
+            BlinkStyle = ErrorBlinkStyle.NeverBlink
+        };
 
         private readonly Label lblValName = new();
         private readonly Label lblValStudentCode = new();
@@ -70,6 +74,8 @@ namespace CourseGuard.Frontend.UserControls.Student
             _authController = new AuthController(_dbContext);
             InitializeComponent();
             BuildNewLayout();
+            _validationErrors.ContainerControl = this;
+            WireInlineValidation();
             LoadDataAsync(showSkeleton: true).FireAndForgetSafe(this);
 
             btnSavePassword.Click += BtnSavePassword_Click;
@@ -86,7 +92,11 @@ namespace CourseGuard.Frontend.UserControls.Student
             txtOldPassword.KeyDown += enterHandler;
             txtNewPassword.KeyDown += enterHandler;
             txtConfirmPassword.KeyDown += enterHandler;
-            Disposed += (_, _) => _avatarManager?.Dispose();
+            Disposed += (_, _) =>
+            {
+                _avatarManager?.Dispose();
+                _validationErrors.Dispose();
+            };
         }
 
         public void FocusSecuritySection()
@@ -525,20 +535,19 @@ namespace CourseGuard.Frontend.UserControls.Student
             btnCancel.Click += (s, e) =>
             {
                 LoadProfileData();
+                ClearInlineValidation();
                 _personalEditGrid.Visible = false;
                 _personalViewGrid.Visible = true;
             };
 
             btnSave.Click += (s, e) =>
             {
-                if (!ValidateProfileInputs())
-                    return;
-
-                if (!SaveProfile())
+                if (!SaveProfileIfValid())
                     return;
 
                 UpdateViewLabels();
                 lblHeaderName.Text = txtFullName.Text.Trim();
+                ClearInlineValidation();
                 MetaTheme.ShowModernDialog("Cập nhật thông tin thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 _personalEditGrid.Visible = false;
                 _personalViewGrid.Visible = true;
@@ -547,24 +556,75 @@ namespace CourseGuard.Frontend.UserControls.Student
             return card;
         }
 
+        private void WireInlineValidation()
+        {
+            txtFullName.TextChanged += (_, _) => ValidateFullNameInline();
+            txtEmail.TextChanged += (_, _) => ValidateEmailInline();
+            txtPhone.TextChanged += (_, _) => ValidatePhoneInline();
+            txtBirthDate.TextChanged += (_, _) => ValidateBirthDateInline();
+        }
+
+        private bool ValidateFullNameInline()
+        {
+            return SetInlineValidationError(txtFullName, ProfileInlineValidationHelper.ValidateFullName(txtFullName.Text));
+        }
+
+        private bool ValidateEmailInline()
+        {
+            return SetInlineValidationError(txtEmail, ProfileInlineValidationHelper.ValidateEmail(txtEmail.Text, required: false));
+        }
+
+        private bool ValidatePhoneInline()
+        {
+            return SetInlineValidationError(txtPhone, ProfileInlineValidationHelper.ValidatePhone(txtPhone.Text));
+        }
+
+        private bool ValidateBirthDateInline()
+        {
+            return SetInlineValidationError(txtBirthDate, ProfileInlineValidationHelper.ValidateBirthDate(txtBirthDate.Text));
+        }
+
+        private bool SetInlineValidationError(Control control, string message)
+        {
+            _validationErrors.SetError(control, message);
+            return string.IsNullOrEmpty(message);
+        }
+
+        private void ClearInlineValidation()
+        {
+            _validationErrors.Clear();
+        }
+
         private bool ValidateProfileInputs()
         {
-            if (string.IsNullOrWhiteSpace(txtFullName.Text))
-            {
-                MetaTheme.ShowModernDialog("Họ và tên không được để trống.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtFullName.Focus();
-                return false;
-            }
+            bool isValid = ValidateFullNameInline();
+            isValid = ValidateEmailInline() && isValid;
+            isValid = ValidatePhoneInline() && isValid;
+            isValid = ValidateBirthDateInline() && isValid;
 
-            if (!string.IsNullOrWhiteSpace(txtBirthDate.Text)
-                && !DateTime.TryParseExact(txtBirthDate.Text.Trim(), "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
-            {
-                MetaTheme.ShowModernDialog("Ngày sinh cần có định dạng dd/MM/yyyy.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtBirthDate.Focus();
-                return false;
-            }
+            if (!isValid)
+                ShowFirstProfileValidationError();
 
-            return true;
+            return isValid;
+        }
+
+        private void ShowFirstProfileValidationError()
+        {
+            Control[] controls = { txtFullName, txtEmail, txtPhone, txtBirthDate };
+            Control? firstInvalid = controls.FirstOrDefault(control => !string.IsNullOrEmpty(_validationErrors.GetError(control)));
+            if (firstInvalid == null)
+                return;
+
+            MetaTheme.ShowModernDialog(_validationErrors.GetError(firstInvalid), "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            firstInvalid.Focus();
+        }
+
+        private bool SaveProfileIfValid()
+        {
+            if (!ValidateProfileInputs())
+                return false;
+
+            return SaveProfile();
         }
 
         private bool SaveProfile()
@@ -624,7 +684,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
 
             if (UserSessionContext.CurrentUserId.HasValue && UserSessionContext.CurrentUserId.Value > 0)
-                SaveProfile();
+                SaveProfileIfValid();
         }
 
         private void LoadAvatarFromPath(string avatarPath)

@@ -1,6 +1,8 @@
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Models;
+using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Services;
+using CourseGuard.Backend.Services.Monitoring;
 using CourseGuard.Backend.Services.Realtime;
 using CourseGuard.Frontend.Forms.Student;
 using CourseGuard.Frontend.Helpers;
@@ -12,6 +14,9 @@ using System.Data;
 using System.Drawing;
 using System.Reflection;
 using System.Windows.Forms;
+using EmitOpCode = System.Reflection.Emit.OpCode;
+using EmitOpCodes = System.Reflection.Emit.OpCodes;
+using EmitOperandType = System.Reflection.Emit.OperandType;
 using static TestRunner;
 
 Run("student exam scoring sums matching answers", () =>
@@ -68,7 +73,8 @@ Run("teacher grid pages accept shared teacher controller", () =>
         typeof(UC_ExamMonitor),
         typeof(UC_TeacherResults),
         typeof(UC_TeacherStudents),
-        typeof(UC_TeacherMaterials)
+        typeof(UC_TeacherMaterials),
+        typeof(UC_TeacherSchedule)
     };
     Type[] parameterTypes = { typeof(int), typeof(TeacherController) };
 
@@ -78,6 +84,155 @@ Run("teacher grid pages accept shared teacher controller", () =>
             pageType.GetConstructor(parameterTypes) != null,
             $"{pageType.Name} must expose public constructor (int, TeacherController)");
     }
+});
+
+Run("student exam launch preloads session before opening form", () =>
+{
+    Type[] preloadedConstructorTypes = { typeof(int), typeof(StudentExamTakingModel) };
+    AssertTrue(
+        typeof(DoExamForm).GetConstructor(preloadedConstructorTypes) != null,
+        "DoExamForm must expose public constructor (int, StudentExamTakingModel)");
+
+    Type[] scopedSessionStatusTypes = { typeof(int), typeof(int), typeof(bool), typeof(string) };
+    AssertTrue(
+        typeof(TeacherController).GetMethod("UpdateSessionStatusAsync", scopedSessionStatusTypes) != null,
+        "TeacherController session status updates must be scoped by teacherId");
+    Type[] unscopedSessionStatusTypes = { typeof(int), typeof(bool), typeof(string) };
+    AssertTrue(
+        typeof(TeacherController).GetMethod("UpdateSessionStatusAsync", unscopedSessionStatusTypes) == null,
+        "TeacherController must not expose unscoped session status updates");
+
+    MethodInfo? preloadMethod = typeof(UC_TakeExam).GetMethod(
+        "PreloadExamSessionAsync",
+        BindingFlags.Instance | BindingFlags.NonPublic);
+    AssertTrue(preloadMethod != null, "UC_TakeExam must preload the exam session before opening DoExamForm");
+    AssertEqual(typeof(Task<StudentExamTakingModel?>), preloadMethod!.ReturnType);
+});
+
+Run("student exam launch context snapshots selected row before preload", () =>
+{
+    MethodInfo? createContext = typeof(UC_TakeExam).GetMethod(
+        "CreateExamLaunchContext",
+        BindingFlags.Static | BindingFlags.NonPublic);
+    AssertTrue(createContext != null, "UC_TakeExam must snapshot selected exam context before await");
+
+    using DataGridView grid = new();
+    grid.Columns.Add("ExamId", "ExamId");
+    grid.Columns.Add("CanStart", "CanStart");
+    grid.Columns.Add("Kỳ thi", "Kỳ thi");
+    grid.Rows.Add(7, true, "Giữa kỳ");
+
+    object context = createContext!.Invoke(null, new object?[] { grid.Rows[0] })
+        ?? throw new InvalidOperationException("launch context must not be null for a valid row");
+    grid.Rows[0].Cells["Kỳ thi"].Value = "Đã đổi";
+
+    AssertEqual(7, GetPropertyValue<int>(context, "ExamId"));
+    AssertTrue(GetPropertyValue<bool>(context, "CanStart"), "launch context should snapshot CanStart");
+    AssertEqual("Giữa kỳ", GetPropertyValue<string>(context, "ExamName"));
+});
+
+Run("screen monitor connection loss tracker reports after threshold once", () =>
+{
+    Type trackerType = typeof(StudentScreenStreamClient).Assembly.GetType("CourseGuard.Backend.Services.Monitoring.ScreenMonitorConnectionLossTracker")
+        ?? throw new InvalidOperationException("ScreenMonitorConnectionLossTracker must exist");
+    FieldInfo violationType = trackerType.GetField("ViolationType", BindingFlags.Public | BindingFlags.Static)
+        ?? throw new InvalidOperationException("ScreenMonitorConnectionLossTracker must expose ViolationType");
+    AssertEqual("CONNECTION_LOST", violationType.GetValue(null)?.ToString());
+
+    DateTimeOffset now = new(2026, 6, 5, 0, 0, 0, TimeSpan.Zero);
+    Func<DateTimeOffset> clock = () => now;
+    object tracker = Activator.CreateInstance(trackerType, TimeSpan.FromSeconds(30), clock)
+        ?? throw new InvalidOperationException("Cannot create connection loss tracker");
+    MethodInfo observeDisconnected = trackerType.GetMethod("ObserveDisconnected")
+        ?? throw new InvalidOperationException("Tracker must expose ObserveDisconnected");
+    MethodInfo observeConnected = trackerType.GetMethod("ObserveConnected")
+        ?? throw new InvalidOperationException("Tracker must expose ObserveConnected");
+
+    observeConnected.Invoke(tracker, Array.Empty<object>());
+    AssertFalse((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "initial disconnect should start the timer only");
+    now = now.AddSeconds(29);
+    AssertFalse((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "disconnect below threshold must not report");
+    now = now.AddSeconds(1);
+    AssertTrue((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "disconnect at threshold must report");
+    now = now.AddSeconds(10);
+    AssertFalse((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "same outage must report once");
+
+    observeConnected.Invoke(tracker, Array.Empty<object>());
+    AssertFalse((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "reconnect should reset the outage window");
+});
+
+Run("screen monitor connection loss tracker ignores initial unavailable monitor", () =>
+{
+    Type trackerType = typeof(StudentScreenStreamClient).Assembly.GetType("CourseGuard.Backend.Services.Monitoring.ScreenMonitorConnectionLossTracker")
+        ?? throw new InvalidOperationException("ScreenMonitorConnectionLossTracker must exist");
+    DateTimeOffset now = new(2026, 6, 5, 0, 0, 0, TimeSpan.Zero);
+    object tracker = Activator.CreateInstance(trackerType, TimeSpan.FromSeconds(30), () => now)
+        ?? throw new InvalidOperationException("Cannot create connection loss tracker");
+    MethodInfo observeDisconnected = trackerType.GetMethod("ObserveDisconnected")
+        ?? throw new InvalidOperationException("Tracker must expose ObserveDisconnected");
+    MethodInfo observeConnected = trackerType.GetMethod("ObserveConnected")
+        ?? throw new InvalidOperationException("Tracker must expose ObserveConnected");
+
+    AssertFalse((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "initial unavailable monitor should not start a violation window");
+    now = now.AddSeconds(60);
+    AssertFalse((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "initial unavailable monitor should not be reported as connection lost");
+
+    observeConnected.Invoke(tracker, Array.Empty<object>());
+    AssertFalse((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "disconnect after a connection should start the violation window");
+    now = now.AddSeconds(30);
+    AssertTrue((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "disconnect after established connection should report at threshold");
+});
+
+Run("student screen stream client exposes connection loss notification", () =>
+{
+    Type eventArgsType = typeof(StudentScreenStreamClient).Assembly.GetType("CourseGuard.Backend.Services.Monitoring.ScreenMonitorConnectionLostEventArgs")
+        ?? throw new InvalidOperationException("ScreenMonitorConnectionLostEventArgs must exist");
+    EventInfo connectionLostEvent = typeof(StudentScreenStreamClient).GetEvent("ConnectionLostThresholdReached")
+        ?? throw new InvalidOperationException("StudentScreenStreamClient must expose ConnectionLostThresholdReached");
+
+    AssertEqual(typeof(EventHandler<>).MakeGenericType(eventArgsType), connectionLostEvent.EventHandlerType);
+    AssertTrue(eventArgsType.GetProperty("ExamId") != null, "connection lost args must include ExamId");
+    AssertTrue(eventArgsType.GetProperty("StudentId") != null, "connection lost args must include StudentId");
+    AssertTrue(eventArgsType.GetProperty("AttemptId") != null, "connection lost args must include AttemptId");
+    AssertTrue(eventArgsType.GetProperty("DisconnectedFor") != null, "connection lost args must include DisconnectedFor");
+});
+
+Run("student exam form handles monitor connection lost violation", () =>
+{
+    MethodInfo? handler = typeof(DoExamForm).GetMethod("HandleMonitoringConnectionLost", BindingFlags.Instance | BindingFlags.NonPublic);
+    AssertTrue(handler != null, "DoExamForm must handle monitor connection lost events");
+
+    MethodInfo? recorder = typeof(DoExamForm).GetMethod("RecordConnectionLostViolationAsync", BindingFlags.Instance | BindingFlags.NonPublic);
+    AssertTrue(recorder != null, "DoExamForm must record connection lost violations");
+    AssertEqual(typeof(Task), recorder!.ReturnType);
+});
+
+Run("chat send status formatter labels pending sent and failed sends", () =>
+{
+    Type formatterType = typeof(UC_Chat).Assembly.GetType("CourseGuard.Frontend.Helpers.ChatSendStatusLineFormatter")
+        ?? throw new InvalidOperationException("ChatSendStatusLineFormatter must exist");
+    MethodInfo render = formatterType.GetMethod("Render", BindingFlags.Public | BindingFlags.Static)
+        ?? throw new InvalidOperationException("ChatSendStatusLineFormatter must expose Render");
+
+    AssertEqual(
+        "[Đang gửi] Bạn: Xin chào",
+        render.Invoke(null, new object?[] { "Bạn", "Xin chào", "TEXT", "PENDING", null })?.ToString());
+    AssertEqual(
+        "[Đã gửi] Bạn: [FILE] bai.pdf",
+        render.Invoke(null, new object?[] { "Bạn", "bai.pdf", "FILE", "SENT", null })?.ToString());
+    AssertEqual(
+        "[Lỗi] Bạn: Xin chào - Mất mạng",
+        render.Invoke(null, new object?[] { "Bạn", "Xin chào", "TEXT", "FAILED", "Mất mạng" })?.ToString());
+});
+
+Run("student and teacher chat pages can append local send statuses", () =>
+{
+    AssertTrue(
+        typeof(UC_Chat).GetMethod("AppendLocalSendStatus", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+        "student chat page must append local send statuses");
+    AssertTrue(
+        typeof(UC_TeacherMessages).GetMethod("AppendLocalSendStatus", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+        "teacher chat page must append local send statuses");
 });
 
 Run("student and teacher profile pages share profile page base", () =>
@@ -166,6 +321,142 @@ Run("student and teacher profile pages share profile page base", () =>
     AssertEqual(34, comboBox.ItemHeight);
     AssertEqual(1, comboBox.DropDownHeight);
     AssertTrue(comboWrapper.Controls.Contains(comboBox), "combo wrapper should contain the styled combo");
+});
+
+Run("profile inline validation helper returns field level messages", () =>
+{
+    Type helperType = typeof(UC_Profile).Assembly.GetType("CourseGuard.Frontend.Helpers.ProfileInlineValidationHelper")
+        ?? throw new InvalidOperationException("ProfileInlineValidationHelper must exist");
+    MethodInfo validateFullName = helperType.GetMethod("ValidateFullName", BindingFlags.Public | BindingFlags.Static)
+        ?? throw new InvalidOperationException("ProfileInlineValidationHelper must expose ValidateFullName");
+    MethodInfo validateEmail = helperType.GetMethod("ValidateEmail", BindingFlags.Public | BindingFlags.Static)
+        ?? throw new InvalidOperationException("ProfileInlineValidationHelper must expose ValidateEmail");
+    MethodInfo validatePhone = helperType.GetMethod("ValidatePhone", BindingFlags.Public | BindingFlags.Static)
+        ?? throw new InvalidOperationException("ProfileInlineValidationHelper must expose ValidatePhone");
+    MethodInfo validateBirthDate = helperType.GetMethod("ValidateBirthDate", BindingFlags.Public | BindingFlags.Static)
+        ?? throw new InvalidOperationException("ProfileInlineValidationHelper must expose ValidateBirthDate");
+
+    AssertEqual("Họ và tên không được để trống.", validateFullName.Invoke(null, new object?[] { "   " })?.ToString());
+    AssertEqual(string.Empty, validateFullName.Invoke(null, new object?[] { "Nguyễn Văn A" })?.ToString());
+
+    AssertEqual("Email không hợp lệ.", validateEmail.Invoke(null, new object?[] { string.Empty, true })?.ToString());
+    AssertEqual("Email không hợp lệ.", validateEmail.Invoke(null, new object?[] { "bad-email", true })?.ToString());
+    AssertEqual(string.Empty, validateEmail.Invoke(null, new object?[] { string.Empty, false })?.ToString());
+    AssertEqual(string.Empty, validateEmail.Invoke(null, new object?[] { "student@example.com", false })?.ToString());
+
+    AssertEqual("Số điện thoại không hợp lệ.", validatePhone.Invoke(null, new object?[] { "abc123" })?.ToString());
+    AssertEqual("Số điện thoại không hợp lệ.", validatePhone.Invoke(null, new object?[] { "٠٩٠١٢٣٤٥٦" })?.ToString());
+    AssertEqual(string.Empty, validatePhone.Invoke(null, new object?[] { "0901 234 567" })?.ToString());
+
+    AssertEqual("Ngày sinh cần có định dạng dd/MM/yyyy.", validateBirthDate.Invoke(null, new object?[] { "2026-06-05" })?.ToString());
+    AssertEqual(string.Empty, validateBirthDate.Invoke(null, new object?[] { "05/06/2026" })?.ToString());
+});
+
+Run("student and teacher profile pages wire inline validation", () =>
+{
+    AssertTrue(
+        typeof(UC_Profile).GetField("_validationErrors", BindingFlags.Instance | BindingFlags.NonPublic)?.FieldType == typeof(ErrorProvider),
+        "student profile page must own an ErrorProvider for inline validation");
+    AssertTrue(
+        typeof(UC_TeacherProfile).GetField("_validationErrors", BindingFlags.Instance | BindingFlags.NonPublic)?.FieldType == typeof(ErrorProvider),
+        "teacher profile page must own an ErrorProvider for inline validation");
+
+    string[] inlineMethods =
+    {
+        "WireInlineValidation",
+        "ValidateFullNameInline",
+        "ValidateEmailInline",
+        "ValidatePhoneInline",
+        "ValidateBirthDateInline"
+    };
+
+    foreach (string methodName in inlineMethods)
+    {
+        AssertTrue(
+            typeof(UC_Profile).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic) != null,
+            $"student profile page must expose {methodName}");
+        AssertTrue(
+            typeof(UC_TeacherProfile).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic) != null,
+            $"teacher profile page must expose {methodName}");
+    }
+});
+
+Run("profile avatar saves use validated save path", () =>
+{
+    AssertProfileUsesValidatedSave(typeof(UC_Profile), "student");
+    AssertProfileUsesValidatedSave(typeof(UC_TeacherProfile), "teacher");
+});
+
+Run("student profile validated save blocks invalid input behavior", () =>
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            UserSessionContext.Clear();
+            using ContainerControl validationContainer = new();
+            using ErrorProvider errors = new()
+            {
+                BlinkStyle = ErrorBlinkStyle.NeverBlink,
+                ContainerControl = validationContainer
+            };
+            UC_Profile page = (UC_Profile)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(UC_Profile));
+
+            TextBox fullName = new();
+            TextBox email = new();
+            TextBox phone = new();
+            TextBox birthDate = new();
+            SetStudentProfileTestFields(page, fullName, email, phone, birthDate, errors);
+            MethodInfo save = typeof(UC_Profile).GetMethod("SaveProfileIfValid", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("student profile must expose SaveProfileIfValid");
+
+            fullName.Text = "Nguyen Van A";
+            email.Text = "bad-email";
+            phone.Text = "0901234567";
+            birthDate.Text = "05/06/2026";
+
+            bool result = InvokeProfileSaveWithDialogClose(page, save);
+            AssertFalse(result, "invalid email must block student profile save");
+            AssertEqual("Email không hợp lệ.", errors.GetError(email));
+
+            email.Text = "student@example.com";
+            phone.Text = "abc123";
+            result = InvokeProfileSaveWithDialogClose(page, save);
+            AssertFalse(result, "invalid phone must block student profile save");
+            AssertEqual("Số điện thoại không hợp lệ.", errors.GetError(phone));
+
+            phone.Text = "0901234567";
+            birthDate.Text = "2026-06-05";
+            result = InvokeProfileSaveWithDialogClose(page, save);
+            AssertFalse(result, "invalid birth date must block student profile save");
+            AssertEqual("Ngày sinh cần có định dạng dd/MM/yyyy.", errors.GetError(birthDate));
+
+            birthDate.Text = "05/06/2026";
+            fullName.Text = " ";
+            result = InvokeProfileSaveWithDialogClose(page, save);
+            AssertFalse(result, "blank full name must block student profile save");
+            AssertEqual("Họ và tên không được để trống.", errors.GetError(fullName));
+
+            fullName.Text = "Nguyen Van A";
+            result = (bool)save.Invoke(page, Array.Empty<object>())!;
+            AssertTrue(result, "valid student profile fields should allow save when no DB user is active");
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+        finally
+        {
+            UserSessionContext.Clear();
+        }
+    });
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw failure;
 });
 
 Run("material file policy accepts common documents and rejects unsafe files", () =>
@@ -1205,6 +1496,70 @@ static void AssertEqual<T>(T expected, T actual)
         throw new InvalidOperationException($"Expected {expected}, got {actual}");
 }
 
+static T GetPropertyValue<T>(object instance, string propertyName)
+{
+    PropertyInfo property = instance.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException($"Cannot find property {propertyName}");
+    object? value = property.GetValue(instance);
+    return value is T typed
+        ? typed
+        : throw new InvalidOperationException($"Property {propertyName} was not a {typeof(T).Name}");
+}
+
+static void SetFieldValue(object instance, string fieldName, object? value)
+{
+    FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException($"Cannot find field {fieldName}");
+    field.SetValue(instance, value);
+}
+
+static void SetStudentProfileTestFields(
+    UC_Profile page,
+    TextBox fullName,
+    TextBox email,
+    TextBox phone,
+    TextBox birthDate,
+    ErrorProvider errors)
+{
+    SetFieldValue(page, "txtFullName", fullName);
+    SetFieldValue(page, "txtEmail", email);
+    SetFieldValue(page, "txtPhone", phone);
+    SetFieldValue(page, "txtBirthDate", birthDate);
+    SetFieldValue(page, "txtAddress", new TextBox());
+    SetFieldValue(page, "txtMajor", new TextBox());
+    SetFieldValue(page, "txtBio", new TextBox());
+    ComboBox gender = new();
+    gender.Items.Add("Nam");
+    gender.SelectedIndex = 0;
+    SetFieldValue(page, "cboGender", gender);
+
+    SetFieldValue(page, "lblValName", new Label());
+    SetFieldValue(page, "lblValStudentCode", new Label());
+    SetFieldValue(page, "lblEditStudentCode", new Label());
+    SetFieldValue(page, "lblValEmail", new Label());
+    SetFieldValue(page, "lblValPhone", new Label());
+    SetFieldValue(page, "lblValAddress", new Label());
+    SetFieldValue(page, "lblValMajor", new Label());
+    SetFieldValue(page, "lblValGender", new Label());
+    SetFieldValue(page, "lblValBirthDate", new Label());
+    SetFieldValue(page, "lblValBio", new Label());
+    SetFieldValue(page, "_lblHeaderName", new Label());
+    SetFieldValue(page, "_studentCode", "HS00000");
+    SetFieldValue(page, "_validationErrors", errors);
+}
+
+static bool InvokeProfileSaveWithDialogClose(Control owner, MethodInfo saveMethod)
+{
+    bool? result = null;
+    RunWithAutoClosingThemedDialog(() =>
+    {
+        result = (bool)saveMethod.Invoke(owner, Array.Empty<object>())!;
+        return Task.CompletedTask;
+    });
+
+    return result ?? throw new InvalidOperationException("Profile save did not return a result");
+}
+
 static void AssertTrue(bool value, string message)
 {
     if (!value)
@@ -1215,6 +1570,99 @@ static void AssertFalse(bool value, string message)
 {
     if (value)
         throw new InvalidOperationException(message);
+}
+
+static void AssertProfileUsesValidatedSave(Type pageType, string pageName)
+{
+    const BindingFlags privateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
+    MethodInfo validatedSave = pageType.GetMethod("SaveProfileIfValid", privateInstance)
+        ?? throw new InvalidOperationException($"{pageName} profile page must expose SaveProfileIfValid");
+    MethodInfo validateInputs = pageType.GetMethod("ValidateProfileInputs", privateInstance)
+        ?? throw new InvalidOperationException($"{pageName} profile page must expose ValidateProfileInputs");
+    MethodInfo saveProfile = pageType.GetMethod("SaveProfile", privateInstance)
+        ?? throw new InvalidOperationException($"{pageName} profile page must expose SaveProfile");
+    MethodInfo changeAvatar = pageType.GetMethod("ChangeAvatar", privateInstance)
+        ?? throw new InvalidOperationException($"{pageName} profile page must expose ChangeAvatar");
+
+    AssertTrue(
+        MethodCalls(validatedSave, validateInputs),
+        $"{pageName} validated save path must run profile validation first");
+    AssertTrue(
+        MethodCalls(validatedSave, saveProfile),
+        $"{pageName} validated save path must save only after validation");
+    AssertTrue(
+        MethodCalls(changeAvatar, validatedSave),
+        $"{pageName} avatar changes must use the validated save path");
+}
+
+static bool MethodCalls(MethodInfo caller, MethodInfo callee)
+{
+    byte[]? il = caller.GetMethodBody()?.GetILAsByteArray();
+    if (il == null)
+        return false;
+
+    Dictionary<ushort, EmitOpCode> opCodes = GetOpCodeMap();
+    int offset = 0;
+    while (offset < il.Length)
+    {
+        ushort opCodeValue = il[offset++];
+        if (opCodeValue == 0xFE)
+            opCodeValue = (ushort)(0xFE00 | il[offset++]);
+
+        if (!opCodes.TryGetValue(opCodeValue, out EmitOpCode opCode))
+            return false;
+
+        int operandStart = offset;
+        if (opCode.OperandType == EmitOperandType.InlineMethod)
+        {
+            int token = BitConverter.ToInt32(il, operandStart);
+            try
+            {
+                MethodBase? resolved = caller.Module.ResolveMethod(
+                    token,
+                    caller.DeclaringType?.GetGenericArguments(),
+                    caller.GetGenericArguments());
+                if (resolved != null && resolved.Module == callee.Module && resolved.MetadataToken == callee.MetadataToken)
+                    return true;
+            }
+            catch (ArgumentException)
+            {
+                // Keep scanning if this runtime cannot resolve a metadata token.
+            }
+        }
+
+        offset += GetOperandSize(opCode.OperandType, il, operandStart);
+    }
+
+    return false;
+}
+
+static Dictionary<ushort, EmitOpCode> GetOpCodeMap()
+{
+    Dictionary<ushort, EmitOpCode> opCodes = new();
+    foreach (FieldInfo field in typeof(EmitOpCodes).GetFields(BindingFlags.Public | BindingFlags.Static))
+    {
+        if (field.GetValue(null) is EmitOpCode opCode)
+            opCodes[(ushort)opCode.Value] = opCode;
+    }
+
+    return opCodes;
+}
+
+static int GetOperandSize(EmitOperandType operandType, byte[] il, int operandStart)
+{
+    return operandType switch
+    {
+        EmitOperandType.InlineNone => 0,
+        EmitOperandType.ShortInlineBrTarget or EmitOperandType.ShortInlineI or EmitOperandType.ShortInlineVar => 1,
+        EmitOperandType.InlineVar => 2,
+        EmitOperandType.InlineI or EmitOperandType.InlineBrTarget or EmitOperandType.InlineField or EmitOperandType.InlineMethod
+            or EmitOperandType.InlineSig or EmitOperandType.InlineString or EmitOperandType.InlineTok or EmitOperandType.InlineType
+            or EmitOperandType.ShortInlineR => 4,
+        EmitOperandType.InlineI8 or EmitOperandType.InlineR => 8,
+        EmitOperandType.InlineSwitch => 4 + (4 * BitConverter.ToInt32(il, operandStart)),
+        _ => 0
+    };
 }
 
 static TControl AssertControl<TControl>(Control control, string message)
