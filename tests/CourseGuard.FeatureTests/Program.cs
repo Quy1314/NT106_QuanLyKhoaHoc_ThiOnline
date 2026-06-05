@@ -203,6 +203,34 @@ Run("student exam form handles monitor connection lost violation", () =>
     AssertEqual(typeof(Task), recorder!.ReturnType);
 });
 
+Run("chat send status formatter labels pending sent and failed sends", () =>
+{
+    Type formatterType = typeof(UC_Chat).Assembly.GetType("CourseGuard.Frontend.Helpers.ChatSendStatusLineFormatter")
+        ?? throw new InvalidOperationException("ChatSendStatusLineFormatter must exist");
+    MethodInfo render = formatterType.GetMethod("Render", BindingFlags.Public | BindingFlags.Static)
+        ?? throw new InvalidOperationException("ChatSendStatusLineFormatter must expose Render");
+
+    AssertEqual(
+        "[Đang gửi] Bạn: Xin chào",
+        render.Invoke(null, new object?[] { "Bạn", "Xin chào", "TEXT", "PENDING", null })?.ToString());
+    AssertEqual(
+        "[Đã gửi] Bạn: [FILE] bai.pdf",
+        render.Invoke(null, new object?[] { "Bạn", "bai.pdf", "FILE", "SENT", null })?.ToString());
+    AssertEqual(
+        "[Lỗi] Bạn: Xin chào - Mất mạng",
+        render.Invoke(null, new object?[] { "Bạn", "Xin chào", "TEXT", "FAILED", "Mất mạng" })?.ToString());
+});
+
+Run("student and teacher chat pages can append local send statuses", () =>
+{
+    AssertTrue(
+        typeof(UC_Chat).GetMethod("AppendLocalSendStatus", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+        "student chat page must append local send statuses");
+    AssertTrue(
+        typeof(UC_TeacherMessages).GetMethod("AppendLocalSendStatus", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+        "teacher chat page must append local send statuses");
+});
+
 Run("student and teacher profile pages share profile page base", () =>
 {
     AssertTrue(typeof(ProfilePageBase).IsAssignableFrom(typeof(UC_Profile)), "student profile page must inherit ProfilePageBase");
