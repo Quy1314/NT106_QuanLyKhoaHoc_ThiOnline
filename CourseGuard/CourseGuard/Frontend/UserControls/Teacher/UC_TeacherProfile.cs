@@ -40,6 +40,10 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private readonly TextBox _newPassword = new();
         private readonly TextBox _confirmPassword = new();
         private readonly Button _savePasswordButton = new();
+        private readonly ErrorProvider _validationErrors = new()
+        {
+            BlinkStyle = ErrorBlinkStyle.NeverBlink
+        };
 
         private readonly Label _lblHeaderName = new();
         private readonly Label _lblTeacherCode = new();
@@ -74,9 +78,15 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _teacherController = new TeacherController(_dbContext);
             _authController = new AuthController(_dbContext);
             BuildLayout();
+            _validationErrors.ContainerControl = this;
+            WireInlineValidation();
             LoadDataAsync(showSkeleton: true).FireAndForgetSafe(this);
             _savePasswordButton.Click += SavePasswordButton_Click;
-            Disposed += (_, _) => _avatarManager?.Dispose();
+            Disposed += (_, _) =>
+            {
+                _avatarManager?.Dispose();
+                _validationErrors.Dispose();
+            };
         }
 
         private async Task LoadDataAsync(bool showSkeleton)
@@ -346,19 +356,18 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             btnCancel.Click += (_, _) =>
             {
                 LoadDataAsync(showSkeleton: false).FireAndForgetSafe(this);
+                ClearInlineValidation();
                 _personalEditGrid.Visible = false;
                 _personalViewGrid.Visible = true;
             };
 
             btnSave.Click += (_, _) =>
             {
-                if (!ValidateProfileInputs())
-                    return;
-
-                if (!SaveProfile())
+                if (!SaveProfileIfValid())
                     return;
 
                 UpdateViewLabels();
+                ClearInlineValidation();
                 MetaTheme.ShowModernDialog("Cập nhật thông tin thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 _personalEditGrid.Visible = false;
                 _personalViewGrid.Visible = true;
@@ -565,31 +574,75 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _lblHeaderName.Text = string.IsNullOrWhiteSpace(_fullName.Text) ? "Giảng viên" : _fullName.Text.Trim();
         }
 
+        private void WireInlineValidation()
+        {
+            _fullName.TextChanged += (_, _) => ValidateFullNameInline();
+            _email.TextChanged += (_, _) => ValidateEmailInline();
+            _phone.TextChanged += (_, _) => ValidatePhoneInline();
+            _birthDate.TextChanged += (_, _) => ValidateBirthDateInline();
+        }
+
+        private bool ValidateFullNameInline()
+        {
+            return SetInlineValidationError(_fullName, ProfileInlineValidationHelper.ValidateFullName(_fullName.Text));
+        }
+
+        private bool ValidateEmailInline()
+        {
+            return SetInlineValidationError(_email, ProfileInlineValidationHelper.ValidateEmail(_email.Text, required: true));
+        }
+
+        private bool ValidatePhoneInline()
+        {
+            return SetInlineValidationError(_phone, ProfileInlineValidationHelper.ValidatePhone(_phone.Text));
+        }
+
+        private bool ValidateBirthDateInline()
+        {
+            return SetInlineValidationError(_birthDate, ProfileInlineValidationHelper.ValidateBirthDate(_birthDate.Text));
+        }
+
+        private bool SetInlineValidationError(Control control, string message)
+        {
+            _validationErrors.SetError(control, message);
+            return string.IsNullOrEmpty(message);
+        }
+
+        private void ClearInlineValidation()
+        {
+            _validationErrors.Clear();
+        }
+
         private bool ValidateProfileInputs()
         {
-            if (string.IsNullOrWhiteSpace(_fullName.Text))
-            {
-                MetaTheme.ShowModernDialog("Vui lòng nhập họ và tên.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                _fullName.Focus();
-                return false;
-            }
+            bool isValid = ValidateFullNameInline();
+            isValid = ValidateEmailInline() && isValid;
+            isValid = ValidatePhoneInline() && isValid;
+            isValid = ValidateBirthDateInline() && isValid;
 
-            if (string.IsNullOrWhiteSpace(_email.Text) || !_email.Text.Contains('@'))
-            {
-                MetaTheme.ShowModernDialog("Email không hợp lệ.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                _email.Focus();
-                return false;
-            }
+            if (!isValid)
+                ShowFirstProfileValidationError();
 
-            if (!string.IsNullOrWhiteSpace(_birthDate.Text)
-                && !DateTime.TryParseExact(_birthDate.Text.Trim(), "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
-            {
-                MetaTheme.ShowModernDialog("Ngày sinh phải có định dạng dd/MM/yyyy.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                _birthDate.Focus();
-                return false;
-            }
+            return isValid;
+        }
 
-            return true;
+        private void ShowFirstProfileValidationError()
+        {
+            Control[] controls = { _fullName, _email, _phone, _birthDate };
+            Control? firstInvalid = controls.FirstOrDefault(control => !string.IsNullOrEmpty(_validationErrors.GetError(control)));
+            if (firstInvalid == null)
+                return;
+
+            MetaTheme.ShowModernDialog(_validationErrors.GetError(firstInvalid), "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            firstInvalid.Focus();
+        }
+
+        private bool SaveProfileIfValid()
+        {
+            if (!ValidateProfileInputs())
+                return false;
+
+            return SaveProfile();
         }
 
         private bool SaveProfile()
@@ -659,7 +712,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 return;
             }
 
-            if (SaveProfile())
+            if (SaveProfileIfValid())
             {
                 UpdateViewLabels();
                 _avatarPanel.Invalidate();
