@@ -1,12 +1,13 @@
 using System.Data;
 using System.Threading.Tasks;
+using CourseGuard.Backend.Controllers;
 using CourseGuard.Frontend.Forms.Teacher;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
 {
     public partial class UC_ExamMonitor : TeacherGridPageBase
     {
-        public UC_ExamMonitor(int teacherId) : base(teacherId, "Giám sát thi", "Chỉ hiển thị kỳ thi đang diễn ra thuộc khóa học của giảng viên.", "Phiên thi đang hoạt động")
+        public UC_ExamMonitor(int teacherId, TeacherController controller) : base(teacherId, controller, "Giám sát thi", "Chỉ hiển thị kỳ thi đang diễn ra thuộc khóa học của giảng viên.", "Phiên thi đang hoạt động")
         {
             AddButton.Text = "Giám sát cá nhân";
             TeacherTabChrome.FitButtonToText(AddButton);

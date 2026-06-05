@@ -2,6 +2,7 @@ using System.Data;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Models;
 using CourseGuard.Frontend.Forms.Teacher;
 
@@ -11,8 +12,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
     {
         private readonly System.Windows.Forms.Button _btnDownloadFile;
 
-        public UC_TeacherLessons(int teacherId) : base(teacherId, "Bài học", "Quản lý bài học theo khóa học thuộc quyền.", "Danh sách bài học") 
-        { 
+        public UC_TeacherLessons(int teacherId, TeacherController controller) : base(teacherId, controller, "Bài học", "Quản lý bài học theo khóa học thuộc quyền.", "Danh sách bài học")
+        {
             _btnDownloadFile = TeacherTabChrome.SecondaryButton("Tải giáo trình");
             _btnDownloadFile.Click += async (s, e) => await DownloadFileAsync();
             AddHeaderAction(_btnDownloadFile);

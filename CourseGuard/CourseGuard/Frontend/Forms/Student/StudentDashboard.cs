@@ -20,6 +20,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.UserControls.Student;
 using CourseGuard.Frontend.Theme;
 
@@ -53,7 +54,7 @@ namespace CourseGuard.Frontend.Forms.Student
             UserSessionContext.UpdateProfile(displayName, avatarPath);
             List<NotificationModel> notifications = LoadCurrentNotifications();
             int notificationCount = CountUnreadNotifications(notifications);
-            int openExamCount = SafeCount(() => _dbContext.CountOpenExamsForStudent(user.Id));
+            int openExamCount = ActivityDisplayHelper.SafeMetricCount(() => _dbContext.CountOpenExamsForStudent(user.Id));
 
             // ── 1. Build layout skeleton (Skill 01) ──────────────────
             // Sidebar docks Left on Form
@@ -133,18 +134,6 @@ namespace CourseGuard.Frontend.Forms.Student
             return "student";
         }
 
-        private static int SafeCount(Func<int> getter)
-        {
-            try
-            {
-                return Math.Max(0, getter());
-            }
-            catch
-            {
-                return 0;
-            }
-        }
-
         public void RefreshNotificationSummary()
         {
             List<NotificationModel> notifications = LoadCurrentNotifications();
@@ -156,14 +145,14 @@ namespace CourseGuard.Frontend.Forms.Student
         private List<NotificationModel> LoadCurrentNotifications()
         {
             int userId = currentUser?.Id ?? UserSessionContext.CurrentUserId ?? 0;
-            return SafeList(() => new NotificationRepository().LoadByUserId(userId));
+            return ActivityDisplayHelper.SafeList(() => new NotificationRepository().LoadByUserId(userId));
         }
 
         private int CountUnreadNotifications(List<NotificationModel> notifications)
         {
             return notifications.Count > 0
                 ? notifications.Count(n => !n.IsRead)
-                : SafeCount(() => _dbContext.CountUnreadNotifications(currentUser?.Id ?? UserSessionContext.CurrentUserId ?? 0));
+                : ActivityDisplayHelper.SafeMetricCount(() => _dbContext.CountUnreadNotifications(currentUser?.Id ?? UserSessionContext.CurrentUserId ?? 0));
         }
 
         private static IEnumerable<string> BuildNotificationPreviewItems(IEnumerable<NotificationModel> notifications)
@@ -177,18 +166,6 @@ namespace CourseGuard.Frontend.Forms.Student
                     string time = SystemTimeFormatter.FormatVietnamTime(n.CreatedAt);
                     return string.IsNullOrWhiteSpace(time) ? text : $"{time} - {text}";
                 });
-        }
-
-        private static List<T> SafeList<T>(Func<List<T>> getter)
-        {
-            try
-            {
-                return getter() ?? new List<T>();
-            }
-            catch
-            {
-                return new List<T>();
-            }
         }
 
         private void InitializeNavigation()

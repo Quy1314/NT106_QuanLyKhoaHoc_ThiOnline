@@ -1,13 +1,14 @@
 using System;
 using System.Data;
 using System.Threading.Tasks;
+using CourseGuard.Backend.Controllers;
 using Microsoft.VisualBasic;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
 {
     public partial class UC_TeacherResults : TeacherGridPageBase
     {
-        public UC_TeacherResults(int teacherId) : base(teacherId, "Kết quả", "Xem và cập nhật điểm cho bài thi thuộc khóa học của mình.", "Bảng điểm") 
+        public UC_TeacherResults(int teacherId, TeacherController controller) : base(teacherId, controller, "Kết quả", "Xem và cập nhật điểm cho bài thi thuộc khóa học của mình.", "Bảng điểm")
         {
             AddButton.Visible = false;
             EditButton.Text = "Cập nhật điểm";

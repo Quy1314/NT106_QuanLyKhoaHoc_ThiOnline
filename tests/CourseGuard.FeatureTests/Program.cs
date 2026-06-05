@@ -1,13 +1,18 @@
+using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services;
+using CourseGuard.Backend.Services.Realtime;
 using CourseGuard.Frontend.Forms.Student;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Frontend.UserControls;
 using CourseGuard.Frontend.UserControls.Student;
+using CourseGuard.Frontend.UserControls.Teacher;
 using System.Data;
 using System.Drawing;
 using System.Reflection;
 using System.Windows.Forms;
+using static TestRunner;
 
 Run("student exam scoring sums matching answers", () =>
 {
@@ -50,6 +55,117 @@ Run("teacher exam scoring sums only correct selected options", () =>
     decimal score = ExamScoringService.CalculateScore(questions, selected);
 
     AssertEqual(7.5m, score);
+});
+
+Run("teacher grid pages accept shared teacher controller", () =>
+{
+    Type[] pageTypes =
+    {
+        typeof(UC_TeacherCourses),
+        typeof(UC_TeacherLessons),
+        typeof(UC_TeacherAssignments),
+        typeof(UC_TeacherExams),
+        typeof(UC_ExamMonitor),
+        typeof(UC_TeacherResults),
+        typeof(UC_TeacherStudents),
+        typeof(UC_TeacherMaterials)
+    };
+    Type[] parameterTypes = { typeof(int), typeof(TeacherController) };
+
+    foreach (Type pageType in pageTypes)
+    {
+        AssertTrue(
+            pageType.GetConstructor(parameterTypes) != null,
+            $"{pageType.Name} must expose public constructor (int, TeacherController)");
+    }
+});
+
+Run("student and teacher profile pages share profile page base", () =>
+{
+    AssertTrue(typeof(ProfilePageBase).IsAssignableFrom(typeof(UC_Profile)), "student profile page must inherit ProfilePageBase");
+    AssertTrue(typeof(ProfilePageBase).IsAssignableFrom(typeof(UC_TeacherProfile)), "teacher profile page must inherit ProfilePageBase");
+
+    string[] helperNames =
+    {
+        "CreateInputGroup",
+        "CreateMultilineInputGroup",
+        "CreateComboGroup",
+        "CreateFieldWrapper",
+        "WireInputFocus"
+    };
+
+    foreach (string helperName in helperNames)
+    {
+        AssertTrue(
+            typeof(ProfilePageBase).GetMember(helperName, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).Length > 0,
+            $"ProfilePageBase must expose {helperName}");
+    }
+
+    TestProfilePage profileBase = new();
+
+    TextBox passwordInput = new() { Tag = "student-input" };
+    Panel passwordWrapper = AssertControl<Panel>(
+        profileBase.BuildInput("Password", passwordInput, password: true, inputWidth: 320),
+        "password input helper should return a wrapper panel");
+    RoundedPanel passwordPanel = SingleChild<RoundedPanel>(passwordWrapper);
+
+    AssertEqual('*', passwordInput.PasswordChar);
+    AssertFalse(passwordInput.Multiline, "single-line input must remain single-line");
+    AssertEqual(BorderStyle.None, passwordInput.BorderStyle);
+    AssertEqual(DockStyle.Fill, passwordInput.Dock);
+    AssertEqual(Padding.Empty, passwordInput.Margin);
+    AssertEqual<object?>(null, passwordInput.Tag);
+    AssertEqual(new Size(320, 42), passwordPanel.Size);
+    AssertEqual(new Size(240, 42), passwordPanel.MinimumSize);
+    AssertEqual(new Padding(12, 9, 12, 9), passwordPanel.Padding);
+    AssertEqual(MetaTheme.Colors.BorderSoft, passwordPanel.BorderColor);
+
+    RaiseFocusChanged(passwordInput, focused: true);
+    AssertEqual(MetaTheme.Colors.BorderFocus, passwordPanel.BorderColor);
+    RaiseFocusChanged(passwordInput, focused: false);
+    AssertEqual(MetaTheme.Colors.BorderSoft, passwordPanel.BorderColor);
+
+    TextBox teacherInput = new() { Tag = "teacher-input" };
+    profileBase.BuildInput("Teacher", teacherInput, clearInputTag: false);
+    AssertEqual("teacher-input", teacherInput.Tag);
+
+    TextBox studentMultiline = new() { Tag = "student-bio", Margin = new Padding(7) };
+    Panel studentMultilineWrapper = AssertControl<Panel>(
+        profileBase.BuildMultiline("Bio", studentMultiline),
+        "student multiline helper should return a wrapper panel");
+    RoundedPanel studentMultilinePanel = SingleChild<RoundedPanel>(studentMultilineWrapper);
+
+    AssertTrue(studentMultiline.Multiline, "multiline input should enable multiline mode");
+    AssertEqual(ScrollBars.Vertical, studentMultiline.ScrollBars);
+    AssertEqual(DockStyle.Fill, studentMultiline.Dock);
+    AssertEqual(new Padding(7), studentMultiline.Margin);
+    AssertEqual<object?>(null, studentMultiline.Tag);
+    AssertEqual(new Size(280, 86), studentMultilinePanel.Size);
+    AssertEqual(AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top, studentMultilinePanel.Anchor);
+
+    TextBox teacherMultiline = new() { Tag = "teacher-bio", Margin = new Padding(7) };
+    profileBase.BuildMultiline("Teacher bio", teacherMultiline, clearTextBoxMargin: true, clearInputTag: false);
+    AssertEqual(Padding.Empty, teacherMultiline.Margin);
+    AssertEqual("teacher-bio", teacherMultiline.Tag);
+
+    ComboBox comboBox = new() { Tag = "gender" };
+    Panel comboWrapper = AssertControl<Panel>(
+        profileBase.BuildCombo("Gender", comboBox),
+        "combo helper should return a wrapper panel");
+
+    AssertEqual<object?>(null, comboBox.Tag);
+    AssertEqual(new Point(0, 25), comboBox.Location);
+    AssertEqual(280, comboBox.Width);
+    AssertTrue(comboBox.Height >= 36, "styled combo height should preserve at least the theme minimum");
+    AssertEqual(240, comboBox.MinimumSize.Width);
+    AssertEqual(AnchorStyles.Left | AnchorStyles.Top, comboBox.Anchor);
+    AssertEqual(FlatStyle.Flat, comboBox.FlatStyle);
+    AssertEqual(DrawMode.OwnerDrawFixed, comboBox.DrawMode);
+    AssertEqual(ComboBoxStyle.DropDownList, comboBox.DropDownStyle);
+    AssertFalse(comboBox.IntegralHeight, "styled combo should disable integral height");
+    AssertEqual(34, comboBox.ItemHeight);
+    AssertEqual(1, comboBox.DropDownHeight);
+    AssertTrue(comboWrapper.Controls.Contains(comboBox), "combo wrapper should contain the styled combo");
 });
 
 Run("material file policy accepts common documents and rejects unsafe files", () =>
@@ -292,6 +408,91 @@ Run("classroom screen share manager normalizes empty bounds to available screen 
 
     AssertEqual(fallback, normalized);
     AssertEqual(new Rectangle(1, 2, 3, 4), explicitBounds);
+});
+
+Run("classroom open signal coordinator starts lazily and broadcasts selected session", async () =>
+{
+    var signalService = new FakeClassroomSignalService();
+    var coordinator = new ClassroomOpenSignalCoordinator(signalService, replayCount: 0);
+
+    AssertEqual(0, signalService.StartCount);
+
+    await coordinator.BroadcastClassOpenedAsync(42);
+    await coordinator.BroadcastClassOpenedAsync(43);
+
+    AssertEqual(1, signalService.StartCount);
+    AssertEqual("42,43", string.Join(",", signalService.BroadcastSessionIds));
+});
+
+Run("classroom open signal coordinator replays open signal for reconnecting clients", async () =>
+{
+    var signalService = new FakeClassroomSignalService();
+    var coordinator = new ClassroomOpenSignalCoordinator(signalService, replayCount: 2, replayDelay: TimeSpan.FromMilliseconds(20));
+
+    await coordinator.BroadcastClassOpenedAsync(42);
+
+    AssertEqual(1, signalService.StartCount);
+    AssertEqual("42", string.Join(",", signalService.BroadcastSessionIds));
+    AssertTrue(signalService.WaitForBroadcastCount(3, TimeSpan.FromSeconds(2)), "open signal replay was not observed");
+    AssertEqual("42,42,42", string.Join(",", signalService.BroadcastSessionIds));
+});
+
+Run("classroom open signal coordinator retries start after failure without broadcasting", async () =>
+{
+    var signalService = new FakeClassroomSignalService { ThrowOnStartListening = true };
+    var coordinator = new ClassroomOpenSignalCoordinator(signalService, replayCount: 0);
+
+    bool threw = false;
+    try
+    {
+        await coordinator.BroadcastClassOpenedAsync(42);
+    }
+    catch (InvalidOperationException)
+    {
+        threw = true;
+    }
+
+    AssertTrue(threw, "first broadcast should fail when listener start fails");
+    AssertEqual(1, signalService.StartCount);
+    AssertEqual(string.Empty, string.Join(",", signalService.BroadcastSessionIds));
+
+    signalService.ThrowOnStartListening = false;
+    await coordinator.BroadcastClassOpenedAsync(43);
+
+    AssertEqual(2, signalService.StartCount);
+    AssertEqual("43", string.Join(",", signalService.BroadcastSessionIds));
+});
+
+Run("classroom open signal coordinator starts once for concurrent broadcasts", async () =>
+{
+    using var ready = new CountdownEvent(2);
+    using var releaseBroadcasts = new ManualResetEventSlim();
+    using var startEntered = new ManualResetEventSlim();
+    using var allowStartListening = new ManualResetEventSlim();
+
+    var signalService = new FakeClassroomSignalService
+    {
+        OnStartListening = () =>
+        {
+            startEntered.Set();
+            AssertTrue(allowStartListening.Wait(TimeSpan.FromSeconds(3)), "start listener delay was not released");
+        }
+    };
+    var coordinator = new ClassroomOpenSignalCoordinator(signalService, replayCount: 0);
+
+    Task first = StartConcurrentBroadcast(coordinator, 42, ready, releaseBroadcasts);
+    Task second = StartConcurrentBroadcast(coordinator, 43, ready, releaseBroadcasts);
+
+    AssertTrue(ready.Wait(TimeSpan.FromSeconds(3)), "broadcast tasks did not become ready");
+    releaseBroadcasts.Set();
+    AssertTrue(startEntered.Wait(TimeSpan.FromSeconds(3)), "listener start was not attempted");
+    allowStartListening.Set();
+
+    await Task.WhenAll(first, second);
+
+    int[] broadcastIds = signalService.BroadcastSessionIds.OrderBy(id => id).ToArray();
+    AssertEqual(1, signalService.StartCount);
+    AssertEqual("42,43", string.Join(",", broadcastIds));
 });
 
 Run("student exam form constructor does not invoke before handle exists", () =>
@@ -650,20 +851,6 @@ Run("student grid concrete pages are sealed", () =>
 Run("modern message dialog exposes requested buttons", RunMessageDialogButtonTests);
 
 Console.WriteLine("Feature tests passed.");
-
-static void Run(string name, Action test)
-{
-    try
-    {
-        test();
-        Console.WriteLine($"PASS {name}");
-    }
-    catch (Exception ex)
-    {
-        Console.Error.WriteLine($"FAIL {name}: {ex.Message}");
-        Environment.ExitCode = 1;
-    }
-}
 
 static void RunDashboardCardTests()
 {
@@ -1030,6 +1217,29 @@ static void AssertFalse(bool value, string message)
         throw new InvalidOperationException(message);
 }
 
+static TControl AssertControl<TControl>(Control control, string message)
+    where TControl : Control
+{
+    AssertTrue(control is TControl, message);
+    return (TControl)control;
+}
+
+static TControl SingleChild<TControl>(Control parent)
+    where TControl : Control
+{
+    TControl[] matches = parent.Controls.OfType<TControl>().ToArray();
+    AssertEqual(1, matches.Length);
+    return matches[0];
+}
+
+static void RaiseFocusChanged(Control control, bool focused)
+{
+    string methodName = focused ? "OnGotFocus" : "OnLostFocus";
+    MethodInfo method = typeof(Control).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new MissingMethodException(nameof(Control), methodName);
+    method.Invoke(control, new object[] { EventArgs.Empty });
+}
+
 static void AssertImageDisposed(Image image, string message)
 {
     try
@@ -1046,6 +1256,51 @@ static void AssertImageDisposed(Image image, string message)
     }
 
     throw new InvalidOperationException(message);
+}
+
+static Task StartConcurrentBroadcast(
+    ClassroomOpenSignalCoordinator coordinator,
+    int sessionId,
+    CountdownEvent ready,
+    ManualResetEventSlim releaseBroadcasts)
+{
+    return Task.Factory.StartNew(async () =>
+    {
+        ready.Signal();
+        AssertTrue(releaseBroadcasts.Wait(TimeSpan.FromSeconds(3)), "broadcast release was not signaled");
+        await coordinator.BroadcastClassOpenedAsync(sessionId);
+    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
+}
+
+static class TestRunner
+{
+    public static void Run(string name, Action test)
+    {
+        try
+        {
+            test();
+            Console.WriteLine($"PASS {name}");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"FAIL {name}: {ex.Message}");
+            Environment.ExitCode = 1;
+        }
+    }
+
+    public static void Run(string name, Func<Task> test)
+    {
+        try
+        {
+            test().GetAwaiter().GetResult();
+            Console.WriteLine($"PASS {name}");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"FAIL {name}: {ex.Message}");
+            Environment.ExitCode = 1;
+        }
+    }
 }
 
 sealed class RecordingSynchronizationContext : SynchronizationContext
@@ -1084,6 +1339,86 @@ sealed class RecordingSynchronizationContext : SynchronizationContext
 
             callback(state);
         }
+    }
+}
+
+sealed class FakeClassroomSignalService : IClassroomSignalService
+{
+    private readonly object _broadcastLock = new();
+    private int _startCount;
+    private readonly ManualResetEventSlim _broadcastCountChanged = new();
+
+    public int StartCount => Volatile.Read(ref _startCount);
+    public List<int> BroadcastSessionIds { get; } = new();
+    public bool ThrowOnStartListening { get; set; }
+    public Action? OnStartListening { get; set; }
+
+    public void StartListening()
+    {
+        Interlocked.Increment(ref _startCount);
+        OnStartListening?.Invoke();
+        if (ThrowOnStartListening)
+            throw new InvalidOperationException("Start failed");
+    }
+
+    public Task BroadcastClassOpened(int sessionId)
+    {
+        lock (_broadcastLock)
+        {
+            BroadcastSessionIds.Add(sessionId);
+            _broadcastCountChanged.Set();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public bool WaitForBroadcastCount(int expectedCount, TimeSpan timeout)
+    {
+        DateTime deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline)
+        {
+            lock (_broadcastLock)
+            {
+                if (BroadcastSessionIds.Count >= expectedCount)
+                    return true;
+            }
+
+            TimeSpan remaining = deadline - DateTime.UtcNow;
+            _broadcastCountChanged.Wait(remaining > TimeSpan.FromMilliseconds(50) ? TimeSpan.FromMilliseconds(50) : remaining);
+            _broadcastCountChanged.Reset();
+        }
+
+        lock (_broadcastLock)
+            return BroadcastSessionIds.Count >= expectedCount;
+    }
+}
+
+sealed class TestProfilePage : ProfilePageBase
+{
+    public Control BuildInput(
+        string labelText,
+        TextBox textBox,
+        bool password = false,
+        bool blendWithCard = true,
+        int inputWidth = 280,
+        bool clearInputTag = true)
+    {
+        return CreateInputGroup(labelText, textBox, password, blendWithCard, inputWidth, clearInputTag);
+    }
+
+    public Control BuildMultiline(
+        string labelText,
+        TextBox textBox,
+        bool blendWithCard = true,
+        bool clearTextBoxMargin = false,
+        bool clearInputTag = true)
+    {
+        return CreateMultilineInputGroup(labelText, textBox, blendWithCard, clearTextBoxMargin, clearInputTag);
+    }
+
+    public Control BuildCombo(string labelText, ComboBox comboBox, bool blendWithCard = true)
+    {
+        return CreateComboGroup(labelText, comboBox, blendWithCard);
     }
 }
 

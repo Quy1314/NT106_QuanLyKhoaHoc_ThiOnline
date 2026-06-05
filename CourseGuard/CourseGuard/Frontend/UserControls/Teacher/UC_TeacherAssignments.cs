@@ -2,6 +2,7 @@ using System.Data;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services;
 using CourseGuard.Frontend.Forms.Teacher;
@@ -12,8 +13,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
     {
         private readonly System.Windows.Forms.Button _btnViewSubmissions;
 
-        public UC_TeacherAssignments(int teacherId) : base(teacherId, "Bài tập", "Quản lý bài tập và hạn nộp theo khóa học.", "Danh sách bài tập") 
-        { 
+        public UC_TeacherAssignments(int teacherId, TeacherController controller) : base(teacherId, controller, "Bài tập", "Quản lý bài tập và hạn nộp theo khóa học.", "Danh sách bài tập")
+        {
             _btnViewSubmissions = TeacherTabChrome.SecondaryButton("Xem bài nộp");
             _btnViewSubmissions.Click += (s, e) => {
                 using var dialog = new TeacherSubmissionsDialog(TeacherId, Controller, Controller.GetCourses(TeacherId));
