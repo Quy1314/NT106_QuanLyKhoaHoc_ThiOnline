@@ -26,6 +26,7 @@ namespace CourseGuard.Frontend.Forms.Student
         private int _currentIndex;
         private bool _loadingQuestion;
         private bool _submitted;
+        private bool _connectionLostViolationRecorded;
 
         public DoExamForm() : this(0)
         {
@@ -137,7 +138,71 @@ namespace CourseGuard.Frontend.Forms.Student
 
             _screenStreamClient = new StudentScreenStreamClient(_examId, studentId, _session.AttemptId);
             StudentScreenStreamClient client = _screenStreamClient;
+            client.ConnectionLostThresholdReached += HandleMonitoringConnectionLost;
             System.Threading.Tasks.Task.Run(() => client.StartAsync(_monitoringCts.Token)).FireAndForgetSafe(this);
+        }
+
+        private void HandleMonitoringConnectionLost(object? sender, ScreenMonitorConnectionLostEventArgs e)
+        {
+            if (_submitted || _connectionLostViolationRecorded)
+                return;
+
+            _connectionLostViolationRecorded = true;
+            RecordConnectionLostViolationAsync(e).FireAndForgetSafe(this);
+            ShowConnectionLostWarning(e.DisconnectedFor);
+        }
+
+        private async System.Threading.Tasks.Task RecordConnectionLostViolationAsync(ScreenMonitorConnectionLostEventArgs e)
+        {
+            try
+            {
+                var violationRepository = new ViolationRepository();
+                await violationRepository.InsertViolationAsync(new ViolationModel
+                {
+                    UserId = e.StudentId,
+                    ExamAttemptId = e.AttemptId > 0 ? e.AttemptId : null,
+                    Type = ScreenMonitorConnectionLossTracker.ViolationType
+                });
+
+                string username = UserSessionContext.CurrentUsername ?? "không xác định";
+                await _authController.LogUserActivityAsync(
+                    e.StudentId,
+                    "EXAM_MONITOR_CONNECTION_LOST",
+                    $"Người dùng {username} mất kết nối giám sát màn hình trong bài thi ID={e.ExamId}, attempt={e.AttemptId}, thời lượng={e.DisconnectedFor.TotalSeconds:0}s.",
+                    string.Empty);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Cannot record connection lost violation: {ex.Message}");
+            }
+        }
+
+        private void ShowConnectionLostWarning(TimeSpan disconnectedFor)
+        {
+            void ShowWarning()
+            {
+                if (IsDisposed)
+                    return;
+
+                string seconds = Math.Ceiling(disconnectedFor.TotalSeconds).ToString("0");
+                MetaTheme.ShowModernDialog(
+                    this,
+                    $"Giám sát màn hình bị mất kết nối quá {seconds} giây. Hệ thống đã ghi nhận CONNECTION_LOST, vui lòng kiểm tra mạng và tiếp tục làm bài trong màn hình thi.",
+                    "Cảnh báo giám sát",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+
+            try
+            {
+                if (InvokeRequired)
+                    BeginInvoke(new MethodInvoker(ShowWarning));
+                else
+                    ShowWarning();
+            }
+            catch (InvalidOperationException)
+            {
+            }
         }
 
         private void ApplyAcademicExamTheme()
@@ -367,6 +432,8 @@ namespace CourseGuard.Frontend.Forms.Student
             
             _timer.Stop();
             _monitoringCts.Cancel();
+            if (_screenStreamClient != null)
+                _screenStreamClient.ConnectionLostThresholdReached -= HandleMonitoringConnectionLost;
             _screenStreamClient?.Dispose();
             int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
             string username = UserSessionContext.CurrentUsername ?? "không xác định";

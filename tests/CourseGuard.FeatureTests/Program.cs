@@ -1,6 +1,7 @@
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services;
+using CourseGuard.Backend.Services.Monitoring;
 using CourseGuard.Backend.Services.Realtime;
 using CourseGuard.Frontend.Forms.Student;
 using CourseGuard.Frontend.Helpers;
@@ -124,6 +125,82 @@ Run("student exam launch context snapshots selected row before preload", () =>
     AssertEqual(7, GetPropertyValue<int>(context, "ExamId"));
     AssertTrue(GetPropertyValue<bool>(context, "CanStart"), "launch context should snapshot CanStart");
     AssertEqual("Giữa kỳ", GetPropertyValue<string>(context, "ExamName"));
+});
+
+Run("screen monitor connection loss tracker reports after threshold once", () =>
+{
+    Type trackerType = typeof(StudentScreenStreamClient).Assembly.GetType("CourseGuard.Backend.Services.Monitoring.ScreenMonitorConnectionLossTracker")
+        ?? throw new InvalidOperationException("ScreenMonitorConnectionLossTracker must exist");
+    FieldInfo violationType = trackerType.GetField("ViolationType", BindingFlags.Public | BindingFlags.Static)
+        ?? throw new InvalidOperationException("ScreenMonitorConnectionLossTracker must expose ViolationType");
+    AssertEqual("CONNECTION_LOST", violationType.GetValue(null)?.ToString());
+
+    DateTimeOffset now = new(2026, 6, 5, 0, 0, 0, TimeSpan.Zero);
+    Func<DateTimeOffset> clock = () => now;
+    object tracker = Activator.CreateInstance(trackerType, TimeSpan.FromSeconds(30), clock)
+        ?? throw new InvalidOperationException("Cannot create connection loss tracker");
+    MethodInfo observeDisconnected = trackerType.GetMethod("ObserveDisconnected")
+        ?? throw new InvalidOperationException("Tracker must expose ObserveDisconnected");
+    MethodInfo observeConnected = trackerType.GetMethod("ObserveConnected")
+        ?? throw new InvalidOperationException("Tracker must expose ObserveConnected");
+
+    observeConnected.Invoke(tracker, Array.Empty<object>());
+    AssertFalse((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "initial disconnect should start the timer only");
+    now = now.AddSeconds(29);
+    AssertFalse((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "disconnect below threshold must not report");
+    now = now.AddSeconds(1);
+    AssertTrue((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "disconnect at threshold must report");
+    now = now.AddSeconds(10);
+    AssertFalse((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "same outage must report once");
+
+    observeConnected.Invoke(tracker, Array.Empty<object>());
+    AssertFalse((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "reconnect should reset the outage window");
+});
+
+Run("screen monitor connection loss tracker ignores initial unavailable monitor", () =>
+{
+    Type trackerType = typeof(StudentScreenStreamClient).Assembly.GetType("CourseGuard.Backend.Services.Monitoring.ScreenMonitorConnectionLossTracker")
+        ?? throw new InvalidOperationException("ScreenMonitorConnectionLossTracker must exist");
+    DateTimeOffset now = new(2026, 6, 5, 0, 0, 0, TimeSpan.Zero);
+    object tracker = Activator.CreateInstance(trackerType, TimeSpan.FromSeconds(30), () => now)
+        ?? throw new InvalidOperationException("Cannot create connection loss tracker");
+    MethodInfo observeDisconnected = trackerType.GetMethod("ObserveDisconnected")
+        ?? throw new InvalidOperationException("Tracker must expose ObserveDisconnected");
+    MethodInfo observeConnected = trackerType.GetMethod("ObserveConnected")
+        ?? throw new InvalidOperationException("Tracker must expose ObserveConnected");
+
+    AssertFalse((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "initial unavailable monitor should not start a violation window");
+    now = now.AddSeconds(60);
+    AssertFalse((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "initial unavailable monitor should not be reported as connection lost");
+
+    observeConnected.Invoke(tracker, Array.Empty<object>());
+    AssertFalse((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "disconnect after a connection should start the violation window");
+    now = now.AddSeconds(30);
+    AssertTrue((bool)observeDisconnected.Invoke(tracker, Array.Empty<object>())!, "disconnect after established connection should report at threshold");
+});
+
+Run("student screen stream client exposes connection loss notification", () =>
+{
+    Type eventArgsType = typeof(StudentScreenStreamClient).Assembly.GetType("CourseGuard.Backend.Services.Monitoring.ScreenMonitorConnectionLostEventArgs")
+        ?? throw new InvalidOperationException("ScreenMonitorConnectionLostEventArgs must exist");
+    EventInfo connectionLostEvent = typeof(StudentScreenStreamClient).GetEvent("ConnectionLostThresholdReached")
+        ?? throw new InvalidOperationException("StudentScreenStreamClient must expose ConnectionLostThresholdReached");
+
+    AssertEqual(typeof(EventHandler<>).MakeGenericType(eventArgsType), connectionLostEvent.EventHandlerType);
+    AssertTrue(eventArgsType.GetProperty("ExamId") != null, "connection lost args must include ExamId");
+    AssertTrue(eventArgsType.GetProperty("StudentId") != null, "connection lost args must include StudentId");
+    AssertTrue(eventArgsType.GetProperty("AttemptId") != null, "connection lost args must include AttemptId");
+    AssertTrue(eventArgsType.GetProperty("DisconnectedFor") != null, "connection lost args must include DisconnectedFor");
+});
+
+Run("student exam form handles monitor connection lost violation", () =>
+{
+    MethodInfo? handler = typeof(DoExamForm).GetMethod("HandleMonitoringConnectionLost", BindingFlags.Instance | BindingFlags.NonPublic);
+    AssertTrue(handler != null, "DoExamForm must handle monitor connection lost events");
+
+    MethodInfo? recorder = typeof(DoExamForm).GetMethod("RecordConnectionLostViolationAsync", BindingFlags.Instance | BindingFlags.NonPublic);
+    AssertTrue(recorder != null, "DoExamForm must record connection lost violations");
+    AssertEqual(typeof(Task), recorder!.ReturnType);
 });
 
 Run("student and teacher profile pages share profile page base", () =>

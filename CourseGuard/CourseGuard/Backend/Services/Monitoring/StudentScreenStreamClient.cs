@@ -15,16 +15,27 @@ namespace CourseGuard.Backend.Services.Monitoring
         private readonly int _studentId;
         private readonly int _attemptId;
         private readonly string _host;
+        private readonly ScreenMonitorConnectionLossTracker _connectionLossTracker;
         private TcpClient? _client;
 
         private volatile bool _pendingWarning;
 
-        public StudentScreenStreamClient(int examId, int studentId, int attemptId = 0, string host = "127.0.0.1")
+        public event EventHandler<ScreenMonitorConnectionLostEventArgs>? ConnectionLostThresholdReached;
+
+        public StudentScreenStreamClient(
+            int examId,
+            int studentId,
+            int attemptId = 0,
+            string host = "127.0.0.1",
+            TimeSpan? connectionLossThreshold = null)
         {
             _examId = examId;
             _studentId = studentId;
             _attemptId = attemptId;
             _host = host;
+            _connectionLossTracker = new ScreenMonitorConnectionLossTracker(
+                connectionLossThreshold ?? ScreenMonitorConnectionLossTracker.DefaultThreshold,
+                () => DateTimeOffset.UtcNow);
         }
 
         public void SendWarning()
@@ -41,6 +52,7 @@ namespace CourseGuard.Backend.Services.Monitoring
                     _client?.Dispose();
                     _client = new TcpClient();
                     await _client.ConnectAsync(_host, ScreenStreamProtocol.DefaultPort, cancellationToken);
+                    _connectionLossTracker.ObserveConnected();
                     await using NetworkStream stream = _client.GetStream();
                     while (!cancellationToken.IsCancellationRequested)
                     {
@@ -63,6 +75,16 @@ namespace CourseGuard.Backend.Services.Monitoring
                 {
                     // Monitoring must never interrupt the student's exam flow.
                     if (cancellationToken.IsCancellationRequested) break;
+                    if (_connectionLossTracker.ObserveDisconnected())
+                    {
+                        ConnectionLostThresholdReached?.Invoke(
+                            this,
+                            new ScreenMonitorConnectionLostEventArgs(
+                                _examId,
+                                _studentId,
+                                _attemptId,
+                                _connectionLossTracker.CurrentDisconnectedFor));
+                    }
                     try { await Task.Delay(2000, cancellationToken); } catch { }
                 }
             }
