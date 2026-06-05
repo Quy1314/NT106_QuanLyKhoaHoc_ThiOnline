@@ -68,7 +68,8 @@ Run("teacher grid pages accept shared teacher controller", () =>
         typeof(UC_ExamMonitor),
         typeof(UC_TeacherResults),
         typeof(UC_TeacherStudents),
-        typeof(UC_TeacherMaterials)
+        typeof(UC_TeacherMaterials),
+        typeof(UC_TeacherSchedule)
     };
     Type[] parameterTypes = { typeof(int), typeof(TeacherController) };
 
@@ -78,6 +79,51 @@ Run("teacher grid pages accept shared teacher controller", () =>
             pageType.GetConstructor(parameterTypes) != null,
             $"{pageType.Name} must expose public constructor (int, TeacherController)");
     }
+});
+
+Run("student exam launch preloads session before opening form", () =>
+{
+    Type[] preloadedConstructorTypes = { typeof(int), typeof(StudentExamTakingModel) };
+    AssertTrue(
+        typeof(DoExamForm).GetConstructor(preloadedConstructorTypes) != null,
+        "DoExamForm must expose public constructor (int, StudentExamTakingModel)");
+
+    Type[] scopedSessionStatusTypes = { typeof(int), typeof(int), typeof(bool), typeof(string) };
+    AssertTrue(
+        typeof(TeacherController).GetMethod("UpdateSessionStatusAsync", scopedSessionStatusTypes) != null,
+        "TeacherController session status updates must be scoped by teacherId");
+    Type[] unscopedSessionStatusTypes = { typeof(int), typeof(bool), typeof(string) };
+    AssertTrue(
+        typeof(TeacherController).GetMethod("UpdateSessionStatusAsync", unscopedSessionStatusTypes) == null,
+        "TeacherController must not expose unscoped session status updates");
+
+    MethodInfo? preloadMethod = typeof(UC_TakeExam).GetMethod(
+        "PreloadExamSessionAsync",
+        BindingFlags.Instance | BindingFlags.NonPublic);
+    AssertTrue(preloadMethod != null, "UC_TakeExam must preload the exam session before opening DoExamForm");
+    AssertEqual(typeof(Task<StudentExamTakingModel?>), preloadMethod!.ReturnType);
+});
+
+Run("student exam launch context snapshots selected row before preload", () =>
+{
+    MethodInfo? createContext = typeof(UC_TakeExam).GetMethod(
+        "CreateExamLaunchContext",
+        BindingFlags.Static | BindingFlags.NonPublic);
+    AssertTrue(createContext != null, "UC_TakeExam must snapshot selected exam context before await");
+
+    using DataGridView grid = new();
+    grid.Columns.Add("ExamId", "ExamId");
+    grid.Columns.Add("CanStart", "CanStart");
+    grid.Columns.Add("Kỳ thi", "Kỳ thi");
+    grid.Rows.Add(7, true, "Giữa kỳ");
+
+    object context = createContext!.Invoke(null, new object?[] { grid.Rows[0] })
+        ?? throw new InvalidOperationException("launch context must not be null for a valid row");
+    grid.Rows[0].Cells["Kỳ thi"].Value = "Đã đổi";
+
+    AssertEqual(7, GetPropertyValue<int>(context, "ExamId"));
+    AssertTrue(GetPropertyValue<bool>(context, "CanStart"), "launch context should snapshot CanStart");
+    AssertEqual("Giữa kỳ", GetPropertyValue<string>(context, "ExamName"));
 });
 
 Run("student and teacher profile pages share profile page base", () =>
@@ -1203,6 +1249,16 @@ static void AssertEqual<T>(T expected, T actual)
 {
     if (!EqualityComparer<T>.Default.Equals(expected, actual))
         throw new InvalidOperationException($"Expected {expected}, got {actual}");
+}
+
+static T GetPropertyValue<T>(object instance, string propertyName)
+{
+    PropertyInfo property = instance.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException($"Cannot find property {propertyName}");
+    object? value = property.GetValue(instance);
+    return value is T typed
+        ? typed
+        : throw new InvalidOperationException($"Property {propertyName} was not a {typeof(T).Name}");
 }
 
 static void AssertTrue(bool value, string message)

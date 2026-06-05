@@ -22,6 +22,7 @@ namespace CourseGuard.Frontend.Forms.Student
         private readonly System.Windows.Forms.Timer _timer = new();
         private StudentScreenStreamClient? _screenStreamClient;
         private StudentExamTakingModel? _session;
+        private StudentExamTakingModel? _preloadedSession;
         private int _currentIndex;
         private bool _loadingQuestion;
         private bool _submitted;
@@ -47,6 +48,11 @@ namespace CourseGuard.Frontend.Forms.Student
 
             LowLevelKeyboardHook.OnCheatKeyPressed += LowLevelKeyboardHook_OnCheatKeyPressed;
             LowLevelKeyboardHook.SetHook();
+        }
+
+        public DoExamForm(int examId, StudentExamTakingModel preloadedSession) : this(examId)
+        {
+            _preloadedSession = preloadedSession ?? throw new ArgumentNullException(nameof(preloadedSession));
         }
 
         private void LowLevelKeyboardHook_OnCheatKeyPressed(object? sender, EventArgs e)
@@ -96,7 +102,12 @@ namespace CourseGuard.Frontend.Forms.Student
                 return;
             }
 
-            _session = _dbContext.StartOrResumeStudentExam(studentId, _examId);
+            StudentExamTakingModel? session = _preloadedSession;
+            _preloadedSession = null;
+            if (session == null)
+                session = _dbContext.StartOrResumeStudentExam(studentId, _examId);
+
+            _session = session;
             if (_session == null || _session.Questions.Count == 0)
             {
                 ShowErrorAndClose("Bài kiểm tra chưa thể làm ở thời điểm hiện tại.");

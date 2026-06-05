@@ -133,7 +133,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 { "Kết quả", () => new UC_TeacherResults(_teacherId, _teacherController) },
                 { "Sinh viên", () => new UC_TeacherStudents(_teacherId, _teacherController) },
                 { "Tài liệu", () => new UC_TeacherMaterials(_teacherId, _teacherController) },
-                { "Lịch dạy", () => new UC_TeacherSchedule(_teacherId) },
+                { "Lịch dạy", () => new UC_TeacherSchedule(_teacherId, _teacherController) },
                 { "Tin nhắn", () => new UC_TeacherMessages(_teacherId) },
                 { "Thông báo", () => new UC_TeacherNotifications(_teacherId) },
                 { "Hồ sơ", CreateTeacherProfilePage }
