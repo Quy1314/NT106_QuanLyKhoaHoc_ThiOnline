@@ -101,6 +101,11 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
         }
 
+        public System.Threading.Tasks.Task RefreshAsync()
+        {
+            return LoadDataAsync();
+        }
+
         private DataTable LoadNotificationTable()
         {
             int userId = UserSessionContext.CurrentUserId ?? 0;

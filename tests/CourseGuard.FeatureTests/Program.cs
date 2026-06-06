@@ -1,4 +1,5 @@
 using CourseGuard.Backend.Controllers;
+using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Services;
@@ -1140,6 +1141,11 @@ Run("student grid concrete pages are sealed", () =>
     AssertTrue(typeof(UC_Documents).IsSealed, "student documents page should be sealed");
 });
 Run("modern message dialog exposes requested buttons", RunMessageDialogButtonTests);
+Run("deadline reminder service sends one action notification", RunDeadlineReminderServiceSendsOneNotification);
+Run("deadline reminder service can send 1h reminder after 24h reminder", RunDeadlineReminderServiceSendsOneHourAfterTwentyFourHour);
+Run("deadline reminder service retries after notification create failure", RunDeadlineReminderServiceRetriesAfterCreateFailure);
+Run("deadline reminder service avoids duplicate concurrent claims", RunDeadlineReminderServiceAvoidsDuplicateConcurrentClaims);
+Run("deadline reminder source wiring matches current notification architecture", RunDeadlineReminderSourceTests);
 Run("native classroom records attendance in and out", RunNativeClassroomAttendanceSourceTests);
 Run("teacher attendance summary is exposed through repository and controller", RunTeacherAttendanceSummarySourceTests);
 Run("teacher students page opens attendance dialog", RunTeacherAttendanceUiSourceTests);
@@ -1170,6 +1176,173 @@ static string RepoRoot()
     }
 
     throw new InvalidOperationException("Cannot locate repository root.");
+}
+
+static async Task RunDeadlineReminderServiceSendsOneNotification()
+{
+    DateTime now = new DateTime(2026, 6, 6, 10, 0, 0, DateTimeKind.Unspecified);
+    var store = new FakeDeadlineReminderStore();
+    store.Deadlines.Add(new DeadlineReminderItem
+    {
+        SourceType = DeadlineReminderItem.SourceTypeAssignment,
+        SourceId = 10,
+        Title = "Final report",
+        CourseName = "Network Programming",
+        DueAt = now.AddHours(20)
+    });
+    int eventCount = 0;
+
+    using var service = new DeadlineReminderService(
+        userId: 42,
+        store: store,
+        clock: () => now,
+        pollInterval: TimeSpan.FromMinutes(1),
+        initialDelay: TimeSpan.Zero);
+    service.NotificationCreated += (_, _) => eventCount++;
+
+    await service.CheckNowAsync().ConfigureAwait(false);
+    await service.CheckNowAsync().ConfigureAwait(false);
+
+    AssertEqual(1, store.Created.Count);
+    AssertEqual(1, store.Sent.Count);
+    AssertEqual(1, eventCount);
+    AssertEqual(WorkflowConstants.NotificationCategory.Assignment, store.Created[0].Category);
+    AssertEqual(WorkflowConstants.NotificationType.ActionRequired, store.Created[0].NotificationType);
+    AssertEqual(DeadlineReminderItem.SourceTypeAssignment, store.Created[0].SourceType);
+    AssertEqual(10, store.Created[0].SourceId);
+}
+
+static async Task RunDeadlineReminderServiceSendsOneHourAfterTwentyFourHour()
+{
+    DateTime now = new DateTime(2026, 6, 6, 10, 0, 0, DateTimeKind.Unspecified);
+    var store = new FakeDeadlineReminderStore();
+    store.Deadlines.Add(new DeadlineReminderItem
+    {
+        SourceType = DeadlineReminderItem.SourceTypeExam,
+        SourceId = 99,
+        Title = "Midterm",
+        CourseName = "Network Programming",
+        DueAt = now.AddMinutes(45)
+    });
+    store.AlreadySent.Add(FakeDeadlineReminderStore.Key(7, DeadlineReminderItem.SourceTypeExam, 99, DeadlineReminderItem.ReminderType24H));
+
+    using var service = new DeadlineReminderService(
+        userId: 7,
+        store: store,
+        clock: () => now,
+        pollInterval: TimeSpan.FromMinutes(1),
+        initialDelay: TimeSpan.Zero);
+
+    await service.CheckNowAsync().ConfigureAwait(false);
+
+    AssertEqual(1, store.Created.Count);
+    AssertEqual(1, store.Sent.Count);
+    AssertTrue(store.Sent.Contains(FakeDeadlineReminderStore.Key(7, DeadlineReminderItem.SourceTypeExam, 99, DeadlineReminderItem.ReminderType1H)), "1h reminder must use a separate sent key");
+    AssertEqual(WorkflowConstants.NotificationCategory.Exam, store.Created[0].Category);
+}
+
+static async Task RunDeadlineReminderServiceRetriesAfterCreateFailure()
+{
+    DateTime now = new DateTime(2026, 6, 6, 10, 0, 0, DateTimeKind.Unspecified);
+    var store = new FakeDeadlineReminderStore();
+    store.Deadlines.Add(new DeadlineReminderItem
+    {
+        SourceType = DeadlineReminderItem.SourceTypeAssignment,
+        SourceId = 10,
+        Title = "Final report",
+        CourseName = "Network Programming",
+        DueAt = now.AddHours(20)
+    });
+    store.FailNextCreate = true;
+
+    using var service = new DeadlineReminderService(
+        userId: 42,
+        store: store,
+        clock: () => now,
+        pollInterval: TimeSpan.FromMinutes(1),
+        initialDelay: TimeSpan.Zero);
+
+    try
+    {
+        await service.CheckNowAsync().ConfigureAwait(false);
+    }
+    catch (InvalidOperationException)
+    {
+    }
+
+    await service.CheckNowAsync().ConfigureAwait(false);
+
+    AssertEqual(1, store.Created.Count);
+    AssertEqual(1, store.Sent.Count);
+}
+
+static async Task RunDeadlineReminderServiceAvoidsDuplicateConcurrentClaims()
+{
+    DateTime now = new DateTime(2026, 6, 6, 10, 0, 0, DateTimeKind.Unspecified);
+    var store = new FakeDeadlineReminderStore
+    {
+        CoordinateConcurrentClaims = true
+    };
+    store.Deadlines.Add(new DeadlineReminderItem
+    {
+        SourceType = DeadlineReminderItem.SourceTypeAssignment,
+        SourceId = 10,
+        Title = "Final report",
+        CourseName = "Network Programming",
+        DueAt = now.AddHours(20)
+    });
+
+    using var first = new DeadlineReminderService(
+        userId: 42,
+        store: store,
+        clock: () => now,
+        pollInterval: TimeSpan.FromMinutes(1),
+        initialDelay: TimeSpan.Zero);
+    using var second = new DeadlineReminderService(
+        userId: 42,
+        store: store,
+        clock: () => now,
+        pollInterval: TimeSpan.FromMinutes(1),
+        initialDelay: TimeSpan.Zero);
+
+    await Task.WhenAll(first.CheckNowAsync(), second.CheckNowAsync()).ConfigureAwait(false);
+
+    AssertEqual(1, store.Created.Count);
+    AssertEqual(1, store.Sent.Distinct().Count());
+}
+
+static void RunDeadlineReminderSourceTests()
+{
+    string repoRoot = RepoRoot();
+    string servicePath = Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Backend", "Services", "DeadlineReminderService.cs");
+    string dashboardPath = Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Student", "StudentDashboard.cs");
+    string notificationPagePath = Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_Notification.cs");
+    string dbPath = Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Backend", "Data", "CourseGuardDbContext.cs");
+    string notificationRepoPath = Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Backend", "Data", "NotificationRepository.cs");
+
+    AssertTrue(File.Exists(servicePath), "deadline reminder service must exist");
+    string service = File.ReadAllText(servicePath);
+    string dashboard = File.ReadAllText(dashboardPath);
+    string notificationPage = File.ReadAllText(notificationPagePath);
+    string db = File.ReadAllText(dbPath);
+    string notificationRepo = File.ReadAllText(notificationRepoPath);
+
+    AssertFalse(service.Contains("CourseGuard.Frontend.Helpers"), "backend reminder service must not depend on frontend helpers");
+    AssertFalse(service.Contains("InsertNotification"), "service must not use legacy notification helpers");
+    AssertTrue(service.Contains("SemaphoreSlim"), "service must guard overlapping timer callbacks");
+    AssertTrue(service.Contains("CreateDeadlineReminderNotification"), "service must delegate reminder notification creation to the atomic store operation");
+    AssertFalse(service.Contains("TryClaimReminder"), "service must not claim reminders separately from creating notifications");
+    AssertTrue(service.Contains("NotificationCreated"), "service must notify dashboard after creating a notification");
+    AssertTrue(notificationRepo.Contains(": INotificationWriter"), "NotificationRepository must implement notification writer abstraction");
+    AssertTrue(db.Contains("GetUpcomingDeadlines"), "db context must expose deadline query");
+    AssertTrue(db.Contains("deadline_reminders_sent"), "db context must create/use deadline reminder tracking table");
+    AssertTrue(db.Contains("WITH claimed"), "db context must insert the reminder marker and notification in one SQL operation");
+    AssertTrue(db.Contains("BeginTransaction"), "db context must wrap deadline reminder notification creation in a transaction");
+    AssertTrue(db.Contains("s.id IS NULL"), "assignment reminders must skip submitted assignments");
+    AssertTrue(db.Contains("exam_questions"), "exam reminders must require questions");
+    AssertTrue(dashboard.Contains("DeadlineReminderService"), "student dashboard must own the deadline reminder service");
+    AssertTrue(dashboard.Contains("RefreshVisibleNotificationPage"), "dashboard must refresh the notification page explicitly");
+    AssertTrue(notificationPage.Contains("RefreshAsync"), "notification user control must expose refresh for dashboard events");
 }
 
 static void RunNativeClassroomAttendanceSourceTests()
@@ -1973,6 +2146,86 @@ sealed class RecordingSynchronizationContext : SynchronizationContext
         }
     }
 }
+
+sealed class FakeDeadlineReminderStore : IDeadlineReminderStore
+{
+    private readonly object _claimLock = new();
+    public List<DeadlineReminderItem> Deadlines { get; } = new();
+    public HashSet<string> AlreadySent { get; } = new();
+    public List<string> Sent { get; } = new();
+    public List<CreatedNotification> Created { get; } = new();
+    public bool FailNextCreate { get; set; }
+    public bool CoordinateConcurrentClaims { get; set; }
+    private readonly CountdownEvent _concurrentClaims = new(2);
+    private readonly ManualResetEventSlim _releaseConcurrentClaims = new();
+
+    public void EnsureDeadlineReminderSchema()
+    {
+    }
+
+    public List<DeadlineReminderItem> GetUpcomingDeadlines(int userId, DateTime from, DateTime to)
+    {
+        return Deadlines
+            .Where(item => item.DueAt >= from && item.DueAt <= to)
+            .ToList();
+    }
+
+    public int CreateDeadlineReminderNotification(
+        int userId,
+        DeadlineReminderItem item,
+        string remindType,
+        string title,
+        string content)
+    {
+        if (CoordinateConcurrentClaims)
+        {
+            _concurrentClaims.Signal();
+            if (!_concurrentClaims.Wait(TimeSpan.FromSeconds(3)))
+                throw new InvalidOperationException("concurrent reminder claims did not align");
+            _releaseConcurrentClaims.Set();
+            if (!_releaseConcurrentClaims.Wait(TimeSpan.FromSeconds(3)))
+                throw new InvalidOperationException("concurrent reminder claims were not released");
+        }
+
+        string key = Key(userId, item.SourceType, item.SourceId, remindType);
+        lock (_claimLock)
+        {
+            if (AlreadySent.Contains(key) || Sent.Contains(key))
+                return 0;
+
+            if (FailNextCreate)
+            {
+                FailNextCreate = false;
+                throw new InvalidOperationException("notification create failed");
+            }
+
+            Sent.Add(key);
+            Created.Add(new CreatedNotification(
+                userId,
+                title,
+                content,
+                item.NotificationCategory,
+                WorkflowConstants.NotificationType.ActionRequired,
+                item.SourceType,
+                item.SourceId));
+            return Created.Count;
+        }
+    }
+
+    public static string Key(int userId, string sourceType, int sourceId, string remindType)
+    {
+        return $"{userId}:{sourceType}:{sourceId}:{remindType}";
+    }
+}
+
+sealed record CreatedNotification(
+    int UserId,
+    string Title,
+    string Content,
+    string Category,
+    string NotificationType,
+    string? SourceType,
+    int? SourceId);
 
 sealed class FakeClassroomSignalService : IClassroomSignalService
 {

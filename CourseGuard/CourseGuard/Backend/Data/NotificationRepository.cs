@@ -5,7 +5,7 @@ using CourseGuard.Backend.Models;
 
 namespace CourseGuard.Backend.Data
 {
-    public class NotificationRepository
+    public class NotificationRepository : INotificationWriter
     {
         public NotificationRepository()
         {
