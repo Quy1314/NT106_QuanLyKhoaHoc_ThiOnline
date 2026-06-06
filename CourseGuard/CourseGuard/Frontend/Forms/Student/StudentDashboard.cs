@@ -22,6 +22,7 @@ using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Backend.Services;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.UserControls.Student;
 using CourseGuard.Frontend.Theme;
@@ -33,6 +34,7 @@ namespace CourseGuard.Frontend.Forms.Student
         private const string OverviewPage = "T\u1ed5ng quan";
         private const string ProfilePage = "H\u1ed3 s\u01a1";
         private const string ChatPage = "Tin nh\u1eafn";
+        private const string NotificationPage = "Th\u00f4ng b\u00e1o";
         private const string ProfileTitle = "H\u1ed3 s\u01a1 c\u00e1 nh\u00e2n";
 
         private Dictionary<string, Func<UserControl>> _nav = new();
@@ -42,6 +44,7 @@ namespace CourseGuard.Frontend.Forms.Student
         private SidebarPanel _sidebar;
         private TopbarPanel _topbar;
         private Panel _rightPanel;   // container: topbar + mainboard
+        private DeadlineReminderService? _reminderService;
         private string _currentPageName = OverviewPage;
         private string _pendingGlobalSearchKeyword = string.Empty;
         private int _chatUnreadLoadVersion;
@@ -66,7 +69,7 @@ namespace CourseGuard.Frontend.Forms.Student
             // Sidebar docks Left on Form
             _sidebar = new SidebarPanel { Dock = DockStyle.Left };
             _sidebar.SetNavItems(
-                new[] { "Tổng quan", "Tìm khóa học", "Khóa học của tôi", "Bài kiểm tra", "Bài tập", "Kết quả", "Tài liệu", "Lịch học", ChatPage, "Thông báo", "Hồ sơ" },
+                new[] { "Tổng quan", "Tìm khóa học", "Khóa học của tôi", "Bài kiểm tra", "Bài tập", "Kết quả", "Tài liệu", "Lịch học", ChatPage, NotificationPage, "Hồ sơ" },
                 new[] { "home", "search", "folder-check", "clipboard-check", "document-text", "chart", "document", "calendar", "message", "bell", "user" }
             );
             _sidebar.NavItemClicked += Sidebar_NavItemClicked;
@@ -112,6 +115,10 @@ namespace CourseGuard.Frontend.Forms.Student
             // ── 3. Navigation logic ──────────────────────────────────
             InitializeNavigation();
 
+            _reminderService = new DeadlineReminderService(currentUser.Id, _dbContext);
+            _reminderService.NotificationCreated += DeadlineReminderService_NotificationCreated;
+            _reminderService.Start();
+
             NavigateToPage(OverviewPage);
         }
 
@@ -147,6 +154,57 @@ namespace CourseGuard.Frontend.Forms.Student
             _topbar.NotificationCount = CountUnreadNotifications(notifications);
             _topbar.NotificationPreviewItems = BuildNotificationPreviewItems(notifications);
             _topbar.Invalidate();
+        }
+
+        private void DeadlineReminderService_NotificationCreated(object? sender, EventArgs e)
+        {
+            RefreshNotificationSummarySafe();
+        }
+
+        private void RefreshNotificationSummarySafe()
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            if (InvokeRequired)
+            {
+                if (!IsHandleCreated)
+                {
+                    return;
+                }
+
+                try
+                {
+                    BeginInvoke(new MethodInvoker(RefreshNotificationSummarySafe));
+                }
+                catch (InvalidOperationException)
+                {
+                }
+
+                return;
+            }
+
+            RefreshNotificationSummary();
+            RefreshVisibleNotificationPage();
+        }
+
+        private void RefreshVisibleNotificationPage()
+        {
+            if (_currentPageName != NotificationPage)
+            {
+                return;
+            }
+
+            foreach (Control ctrl in mainboard.Controls)
+            {
+                if (ctrl is UC_Notification notifications)
+                {
+                    notifications.RefreshAsync().FireAndForgetSafe(notifications);
+                    return;
+                }
+            }
         }
 
         private List<NotificationModel> LoadCurrentNotifications()
@@ -188,7 +246,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 { "Tài liệu",     () => new UC_StudentLessons() },
                 { "Lịch học",     () => new UC_Schedule() },
                 { ChatPage,     () => new UC_Chat() },
-                { "Thông báo",    () => new UC_Notification() },
+                { NotificationPage,    () => new UC_Notification() },
                 { "Hồ sơ",        () => new UC_Profile() }
             };
         }
@@ -401,6 +459,12 @@ namespace CourseGuard.Frontend.Forms.Student
             {
                 _pendingGlobalSearchKeyword = string.Empty;
             }
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            _reminderService?.Dispose();
+            base.OnFormClosing(e);
         }
 
         private static string GetLocalIpAddress()

@@ -13,7 +13,7 @@ namespace CourseGuard.Backend.Data
     /// Core Data Context for CourseGuard.
     /// Simplified access replacing Repositories.
     /// </summary>
-    public class CourseGuardDbContext
+    public class CourseGuardDbContext : IDeadlineReminderStore
     {
         private readonly string _connectionString;
 
@@ -3382,6 +3382,234 @@ namespace CourseGuard.Backend.Data
             
             var result = await command.ExecuteScalarAsync(cancellationToken);
             return result == null || result == DBNull.Value ? null : (byte[])result;
+        }
+
+        public void EnsureDeadlineReminderSchema()
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureDeadlineReminderSchema(connection);
+        }
+
+        private static void EnsureDeadlineReminderSchema(NpgsqlConnection connection)
+        {
+            const string sql = @"
+                CREATE TABLE IF NOT EXISTS deadline_reminders_sent (
+                    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    source_type VARCHAR(32) NOT NULL,
+                    source_id INT NOT NULL,
+                    remind_type VARCHAR(10) NOT NULL,
+                    sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, source_type, source_id, remind_type)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_deadline_reminders_sent_at
+                    ON deadline_reminders_sent(sent_at);
+
+                ALTER TABLE notifications
+                    ADD COLUMN IF NOT EXISTS category VARCHAR(32) NOT NULL DEFAULT 'SystemAdmin',
+                    ADD COLUMN IF NOT EXISTS notification_type VARCHAR(32) NOT NULL DEFAULT 'Informational',
+                    ADD COLUMN IF NOT EXISTS source_type VARCHAR(64),
+                    ADD COLUMN IF NOT EXISTS source_id INT;
+
+                DELETE FROM deadline_reminders_sent
+                WHERE sent_at < CURRENT_TIMESTAMP - INTERVAL '7 days';";
+
+            using var command = new NpgsqlCommand(sql, connection);
+            command.ExecuteNonQuery();
+        }
+
+        public int CreateDeadlineReminderNotification(
+            int userId,
+            DeadlineReminderItem item,
+            string remindType,
+            string title,
+            string content)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureDeadlineReminderSchema(connection);
+
+            using var transaction = connection.BeginTransaction();
+
+            const string sql = @"
+                WITH claimed AS (
+                    INSERT INTO deadline_reminders_sent (user_id, source_type, source_id, remind_type, sent_at)
+                    VALUES (@user_id, @source_type, @source_id, @remind_type, CURRENT_TIMESTAMP)
+                    ON CONFLICT (user_id, source_type, source_id, remind_type) DO NOTHING
+                    RETURNING 1
+                ),
+                created AS (
+                    INSERT INTO notifications (
+                        user_id,
+                        title,
+                        content,
+                        is_read,
+                        created_at,
+                        category,
+                        notification_type,
+                        source_type,
+                        source_id)
+                    SELECT
+                        @user_id,
+                        @title,
+                        @content,
+                        false,
+                        CURRENT_TIMESTAMP,
+                        @category,
+                        @notification_type,
+                        @source_type,
+                        @source_id
+                    FROM claimed
+                    RETURNING id
+                )
+                SELECT id FROM created;";
+
+            try
+            {
+                using var command = new NpgsqlCommand(sql, connection, transaction);
+                command.Parameters.AddWithValue("@user_id", userId);
+                command.Parameters.AddWithValue("@source_type", item.SourceType);
+                command.Parameters.AddWithValue("@source_id", item.SourceId);
+                command.Parameters.AddWithValue("@remind_type", remindType);
+                command.Parameters.AddWithValue("@title", title);
+                command.Parameters.AddWithValue("@content", content);
+                command.Parameters.AddWithValue("@category", item.NotificationCategory);
+                command.Parameters.AddWithValue("@notification_type", WorkflowConstants.NotificationType.ActionRequired);
+
+                object? result = command.ExecuteScalar();
+                transaction.Commit();
+                return result == null || result == DBNull.Value ? 0 : System.Convert.ToInt32(result);
+            }
+            catch
+            {
+                try
+                {
+                    transaction.Rollback();
+                }
+                catch
+                {
+                }
+
+                throw;
+            }
+        }
+
+        public List<DeadlineReminderItem> GetUpcomingDeadlines(int userId, DateTime from, DateTime to)
+        {
+            var result = new List<DeadlineReminderItem>();
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureDeadlineReminderSchema(connection);
+
+            if (!TableExists(connection, "courses") || !TableExists(connection, "enrollments"))
+                return result;
+
+            var queryParts = new List<string>();
+
+            if (TableExists(connection, "exams"))
+            {
+                bool hasAttempts = TableExists(connection, "exam_attempts");
+                bool hasQuestions = TableExists(connection, "exam_questions");
+                string attemptsExpression = hasAttempts
+                    ? @"(
+                        SELECT COUNT(*)
+                        FROM exam_attempts ea
+                        WHERE ea.exam_id = ex.id
+                          AND ea.student_id = @student_id
+                      )"
+                    : "0";
+                string questionExpression = hasQuestions
+                    ? @"(
+                        SELECT COUNT(*)
+                        FROM exam_questions eq
+                        WHERE eq.exam_id = ex.id
+                      )"
+                    : "0";
+                string inProgressAttemptsExpression = hasAttempts
+                    ? @"(
+                        SELECT COUNT(*)
+                        FROM exam_attempts ea
+                        WHERE ea.exam_id = ex.id
+                          AND ea.student_id = @student_id
+                          AND UPPER(COALESCE(ea.status, '')) = 'IN_PROGRESS'
+                      )"
+                    : "0";
+
+                queryParts.Add($@"
+                    SELECT '{DeadlineReminderItem.SourceTypeExam}' AS source_type,
+                           ex.id AS source_id,
+                           COALESCE(ex.title, '') AS title,
+                           COALESCE(c.name, '') AS course_name,
+                           ex.close_time AS due_at
+                    FROM exams ex
+                    JOIN courses c ON c.id = ex.course_id
+                    JOIN enrollments e ON e.course_id = c.id AND e.student_id = @student_id
+                    WHERE ex.close_time IS NOT NULL
+                      AND ex.close_time BETWEEN @from AND @to
+                      AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                      AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
+                      AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'ACTIVE'
+                      AND ({questionExpression}) > 0
+                      AND (
+                          ({inProgressAttemptsExpression}) > 0
+                          OR COALESCE(ex.max_attempts, 1) <= 0
+                          OR {attemptsExpression} < COALESCE(ex.max_attempts, 1)
+                      )");
+            }
+
+            if (TableExists(connection, "teacher_assignments"))
+            {
+                bool hasSubmissions = TableExists(connection, "assignment_submissions");
+                string submissionJoin = hasSubmissions
+                    ? "LEFT JOIN assignment_submissions s ON s.assignment_id = a.id AND s.student_id = e.student_id"
+                    : string.Empty;
+                string unsubmittedFilter = hasSubmissions ? "AND s.id IS NULL" : string.Empty;
+
+                queryParts.Add($@"
+                    SELECT '{DeadlineReminderItem.SourceTypeAssignment}' AS source_type,
+                           a.id AS source_id,
+                           COALESCE(a.title, '') AS title,
+                           COALESCE(c.name, '') AS course_name,
+                           a.due_at AS due_at
+                    FROM teacher_assignments a
+                    JOIN courses c ON c.id = a.course_id
+                    JOIN enrollments e ON e.course_id = c.id AND e.student_id = @student_id
+                    {submissionJoin}
+                    WHERE a.due_at IS NOT NULL
+                      AND a.due_at BETWEEN @from AND @to
+                      AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                      AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'
+                      AND UPPER(COALESCE(a.status, 'OPEN')) = 'OPEN'
+                      {unsubmittedFilter}");
+            }
+
+            if (queryParts.Count == 0)
+                return result;
+
+            string query = string.Join(Environment.NewLine + "UNION ALL" + Environment.NewLine, queryParts)
+                + Environment.NewLine
+                + "ORDER BY due_at ASC, source_id ASC;";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@student_id", userId);
+            command.Parameters.AddWithValue("@from", from);
+            command.Parameters.AddWithValue("@to", to);
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(new DeadlineReminderItem
+                {
+                    SourceType = reader.GetString(0),
+                    SourceId = reader.GetInt32(1),
+                    Title = reader.GetString(2),
+                    CourseName = reader.GetString(3),
+                    DueAt = reader.GetDateTime(4)
+                });
+            }
+
+            return result;
         }
 
         public async Task<List<StudentAssignmentRow>> GetStudentAssignmentsAsync(int studentId, CancellationToken cancellationToken = default)
