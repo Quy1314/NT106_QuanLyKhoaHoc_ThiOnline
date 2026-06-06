@@ -2406,6 +2406,8 @@ namespace CourseGuard.Backend.Data
                 ALTER TABLE MESSAGES ADD COLUMN IF NOT EXISTS IS_DELETED BOOLEAN NOT NULL DEFAULT FALSE;
                 CREATE INDEX IF NOT EXISTS IDX_MESSAGES_COURSE_SENT_AT ON MESSAGES(COURSE_ID, SENT_AT DESC);
                 CREATE INDEX IF NOT EXISTS IDX_MESSAGES_SENDER_ID ON MESSAGES(SENDER_ID);
+                CREATE INDEX IF NOT EXISTS IDX_MESSAGES_COURSE_ID_ID ON MESSAGES(COURSE_ID, ID);
+                CREATE INDEX IF NOT EXISTS IDX_MESSAGES_COURSE_SENDER_ID ON MESSAGES(COURSE_ID, SENDER_ID, ID) WHERE IS_DELETED = FALSE;
                 CREATE TABLE IF NOT EXISTS CHAT_READS (
                     USER_ID INT NOT NULL,
                     COURSE_ID INT NOT NULL,
@@ -2489,6 +2491,129 @@ namespace CourseGuard.Backend.Data
             }
 
             return result;
+        }
+
+        public int GetUnreadChatCount(int userId)
+        {
+            if (userId <= 0)
+            {
+                return 0;
+            }
+
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureChatSchema(connection);
+
+            const string query = @"
+                SELECT COUNT(*)
+                FROM MESSAGES m
+                JOIN COURSES c ON c.ID = m.COURSE_ID
+                LEFT JOIN CHAT_READS cr ON cr.USER_ID = @user_id AND cr.COURSE_ID = m.COURSE_ID
+                WHERE COALESCE(m.IS_DELETED, FALSE) = FALSE
+                  AND m.SENDER_ID <> @user_id
+                  AND (
+                      c.TEACHER_ID = @user_id
+                      OR EXISTS (
+                          SELECT 1
+                          FROM ENROLLMENTS e
+                          WHERE e.COURSE_ID = c.ID
+                            AND e.STUDENT_ID = @user_id
+                            AND UPPER(COALESCE(e.STATUS, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
+                      )
+                  )
+                  AND (cr.LAST_READ_MESSAGE_ID IS NULL OR m.ID > cr.LAST_READ_MESSAGE_ID)";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            object? result = command.ExecuteScalar();
+            return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+        }
+
+        public void MarkAllChatRead(int userId)
+        {
+            if (userId <= 0)
+            {
+                return;
+            }
+
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureChatSchema(connection);
+
+            const string query = @"
+                INSERT INTO CHAT_READS (USER_ID, COURSE_ID, LAST_READ_MESSAGE_ID, UPDATED_AT)
+                SELECT @user_id,
+                       c.ID,
+                       MAX(m.ID) AS LAST_READ_MESSAGE_ID,
+                       CURRENT_TIMESTAMP
+                FROM COURSES c
+                JOIN MESSAGES m ON m.COURSE_ID = c.ID
+                WHERE COALESCE(m.IS_DELETED, FALSE) = FALSE
+                  AND (
+                      c.TEACHER_ID = @user_id
+                      OR EXISTS (
+                          SELECT 1
+                          FROM ENROLLMENTS e
+                          WHERE e.COURSE_ID = c.ID
+                            AND e.STUDENT_ID = @user_id
+                            AND UPPER(COALESCE(e.STATUS, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
+                      )
+                  )
+                GROUP BY c.ID
+                ON CONFLICT (USER_ID, COURSE_ID) DO UPDATE
+                SET LAST_READ_MESSAGE_ID = EXCLUDED.LAST_READ_MESSAGE_ID,
+                    UPDATED_AT = CURRENT_TIMESTAMP
+                WHERE CHAT_READS.LAST_READ_MESSAGE_ID IS NULL
+                   OR EXCLUDED.LAST_READ_MESSAGE_ID > CHAT_READS.LAST_READ_MESSAGE_ID";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            command.ExecuteNonQuery();
+        }
+
+        public void MarkCourseChatRead(int userId, int courseId)
+        {
+            if (userId <= 0 || courseId <= 0)
+            {
+                return;
+            }
+
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureChatSchema(connection);
+
+            const string query = @"
+                INSERT INTO CHAT_READS (USER_ID, COURSE_ID, LAST_READ_MESSAGE_ID, UPDATED_AT)
+                SELECT @user_id,
+                       @course_id,
+                       MAX(m.ID) AS LAST_READ_MESSAGE_ID,
+                       CURRENT_TIMESTAMP
+                FROM MESSAGES m
+                JOIN COURSES c ON c.ID = m.COURSE_ID
+                WHERE m.COURSE_ID = @course_id
+                  AND COALESCE(m.IS_DELETED, FALSE) = FALSE
+                  AND (
+                      c.TEACHER_ID = @user_id
+                      OR EXISTS (
+                          SELECT 1
+                          FROM ENROLLMENTS e
+                          WHERE e.COURSE_ID = c.ID
+                            AND e.STUDENT_ID = @user_id
+                            AND UPPER(COALESCE(e.STATUS, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')
+                      )
+                  )
+                GROUP BY c.ID
+                HAVING MAX(m.ID) IS NOT NULL
+                ON CONFLICT (USER_ID, COURSE_ID) DO UPDATE
+                SET LAST_READ_MESSAGE_ID = EXCLUDED.LAST_READ_MESSAGE_ID,
+                    UPDATED_AT = CURRENT_TIMESTAMP
+                WHERE CHAT_READS.LAST_READ_MESSAGE_ID IS NULL
+                   OR EXCLUDED.LAST_READ_MESSAGE_ID > CHAT_READS.LAST_READ_MESSAGE_ID";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            command.ExecuteNonQuery();
         }
 
         public bool CanAccessCourseChat(int userId, int courseId)

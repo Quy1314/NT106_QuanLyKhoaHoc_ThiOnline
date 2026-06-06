@@ -1,3 +1,4 @@
+using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Services.Classroom;
@@ -11,6 +12,9 @@ namespace CourseGuard.Frontend.Forms.Student
         private readonly int _sessionId;
         private readonly string _sessionName;
         private readonly TcpClassroomClient _client = new();
+        private readonly CourseGuardDbContext _dbContext = new("");
+        private int _attendanceLogId;
+        private Task? _attendanceInTask;
         private Label _statusLabel = null!;
         private ListBox _eventsList = null!;
         private PictureBox _teacherVideo = null!;
@@ -28,6 +32,8 @@ namespace CourseGuard.Frontend.Forms.Student
         private ClassroomCameraManager _cameraManager = null!;
         private ClassroomScreenShareManager _screenShareManager = null!;
         private bool _isMicOn = true;
+        private bool _isClosing;
+        private bool _cleanupComplete;
 
         public StudentNativeClassroomForm(int sessionId, string sessionName)
         {
@@ -50,18 +56,81 @@ namespace CourseGuard.Frontend.Forms.Student
             base.OnShown(e);
             try
             {
+                if (_isClosing)
+                    return;
+
                 await _client.ConnectAsync("127.0.0.1", ClassroomProtocol.DefaultPort);
+                if (_isClosing)
+                    return;
+
                 await _client.JoinRoomAsync(
                     _sessionId,
                     UserSessionContext.CurrentUserId ?? 0,
                     UserSessionContext.CurrentUsername ?? "Student",
                     "STUDENT");
+                if (_isClosing)
+                    return;
+
+                _attendanceInTask = LogAttendanceInIfPossibleAsync();
+                await _attendanceInTask;
+                if (_isClosing)
+                    return;
+
                 _statusLabel.Text = $"Đã vào lớp native: {_sessionName}. Đang chờ video từ giáo viên...";
             }
             catch (Exception ex)
             {
                 _statusLabel.Text = "Không kết nối được classroom socket.";
                 MetaTheme.ShowModernDialog("Không kết nối được lớp học native: " + ex.Message, "Thông báo");
+            }
+        }
+
+        private async Task LogAttendanceInIfPossibleAsync()
+        {
+            int userId = UserSessionContext.CurrentUserId ?? 0;
+            if (userId <= 0 || _sessionId <= 0 || _attendanceLogId > 0)
+                return;
+
+            try
+            {
+                _attendanceLogId = await _dbContext.LogAttendanceInAsync(userId, _sessionId);
+                if (_attendanceLogId <= 0)
+                    SafeAddEvent("Không ghi nhận điểm danh vì lớp chưa mở hoặc bạn chưa ghi danh.");
+            }
+            catch (Exception ex)
+            {
+                SafeAddEvent("Lỗi ghi nhận điểm danh vào: " + ex.Message);
+            }
+        }
+
+        private async Task LogAttendanceOutIfPossibleAsync()
+        {
+            if (_attendanceLogId <= 0)
+                return;
+
+            int logId = _attendanceLogId;
+            _attendanceLogId = 0;
+
+            try
+            {
+                await _dbContext.LogAttendanceOutAsync(logId);
+            }
+            catch
+            {
+            }
+        }
+
+        private async Task WaitForAttendanceInIfPossibleAsync()
+        {
+            if (_attendanceInTask == null)
+                return;
+
+            try
+            {
+                await _attendanceInTask;
+            }
+            catch
+            {
             }
         }
 
@@ -686,23 +755,60 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private async void StudentNativeClassroomForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
+            if (_cleanupComplete)
+                return;
+
+            e.Cancel = true;
+            if (_isClosing)
+                return;
+
+            _isClosing = true;
+
+            try
+            {
+                await CloseClassroomAsync();
+            }
+            finally
+            {
+                _cleanupComplete = true;
+                Close();
+            }
+        }
+
+        private async Task CloseClassroomAsync()
+        {
             StopScreenShare();
             StopCamera();
-            if (_client.IsConnected)
+            try
             {
-                await _client.LeaveRoomAsync(
-                    _sessionId,
-                    UserSessionContext.CurrentUserId ?? 0,
-                    UserSessionContext.CurrentUsername ?? "Student",
-                    "STUDENT");
+                if (_client.IsConnected)
+                {
+                    await _client.LeaveRoomAsync(
+                        _sessionId,
+                        UserSessionContext.CurrentUserId ?? 0,
+                        UserSessionContext.CurrentUsername ?? "Student",
+                        "STUDENT");
+                }
             }
+            catch
+            {
+            }
+
+            await WaitForAttendanceInIfPossibleAsync();
+            await LogAttendanceOutIfPossibleAsync();
 
             Image? oldTeacher = _teacherVideo.Image;
             _teacherVideo.Image = null;
             oldTeacher?.Dispose();
             _screenShareManager.Dispose();
             _cameraManager.Dispose();
-            await _client.DisconnectAsync();
+            try
+            {
+                await _client.DisconnectAsync();
+            }
+            catch
+            {
+            }
         }
         private sealed class ScreenSharePickerDialog : Form
         {

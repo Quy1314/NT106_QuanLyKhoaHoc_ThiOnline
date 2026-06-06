@@ -1140,8 +1140,192 @@ Run("student grid concrete pages are sealed", () =>
     AssertTrue(typeof(UC_Documents).IsSealed, "student documents page should be sealed");
 });
 Run("modern message dialog exposes requested buttons", RunMessageDialogButtonTests);
+Run("native classroom records attendance in and out", RunNativeClassroomAttendanceSourceTests);
+Run("teacher attendance summary is exposed through repository and controller", RunTeacherAttendanceSummarySourceTests);
+Run("teacher students page opens attendance dialog", RunTeacherAttendanceUiSourceTests);
+Run("attendance close cleanup and teacher schema are guarded", RunAttendanceCleanupAndSchemaSourceTests);
+Run("chat unread API uses chat reads", RunChatUnreadSourceTests);
+Run("student sidebar exposes chat unread badge", RunSidebarChatBadgeSourceTests);
+Run("student dashboard loads and clears chat unread badge", RunStudentDashboardChatBadgeSourceTests);
+Run("student chat page advances read watermark after refresh", RunStudentChatPageReadWatermarkSourceTests);
 
 Console.WriteLine("Feature tests passed.");
+
+static string RepoRoot()
+{
+    string current = AppContext.BaseDirectory;
+    while (!string.IsNullOrWhiteSpace(current))
+    {
+        if (Directory.Exists(Path.Combine(current, "CourseGuard"))
+            && Directory.Exists(Path.Combine(current, "tests")))
+        {
+            return current;
+        }
+
+        DirectoryInfo? parent = Directory.GetParent(current);
+        if (parent == null)
+            break;
+
+        current = parent.FullName;
+    }
+
+    throw new InvalidOperationException("Cannot locate repository root.");
+}
+
+static void RunNativeClassroomAttendanceSourceTests()
+{
+    string path = Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Student", "StudentNativeClassroomForm.cs");
+    string source = File.ReadAllText(path);
+    AssertTrue(source.Contains("CourseGuardDbContext"), "student native classroom must depend on db context for attendance logging");
+    AssertTrue(source.Contains("_attendanceLogId"), "student native classroom must retain the attendance log id");
+    AssertTrue(source.Contains("LogAttendanceInAsync"), "student native classroom must log attendance in after joining");
+    AssertTrue(source.Contains("LogAttendanceOutAsync"), "student native classroom must log attendance out on close");
+    int joinIndex = source.IndexOf("JoinRoomAsync", StringComparison.Ordinal);
+    int attendanceInIndex = source.IndexOf("LogAttendanceInAsync", StringComparison.Ordinal);
+    AssertTrue(joinIndex >= 0, "student native classroom must join the room before attendance logging");
+    AssertTrue(attendanceInIndex >= 0, "student native classroom must log attendance in after joining");
+    AssertTrue(joinIndex < attendanceInIndex, "attendance in should be recorded only after the classroom join succeeds");
+}
+
+static void RunTeacherAttendanceSummarySourceTests()
+{
+    string repoPath = Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Data", "TeacherRepository.cs");
+    string controllerPath = Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Controllers", "TeacherController.cs");
+    string modelPath = Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Models", "AttendanceLogModel.cs");
+    string repo = File.ReadAllText(repoPath);
+    string controller = File.ReadAllText(controllerPath);
+    string model = File.ReadAllText(modelPath);
+    AssertTrue(model.Contains("StudentName"), "attendance model must expose student name for grid display");
+    AssertTrue(repo.Contains("GetAttendanceSummary"), "teacher repository must query attendance summary");
+    AssertTrue(repo.Contains("attendance_logs"), "attendance summary must read from attendance_logs");
+    AssertTrue(repo.Contains("c.teacher_id = @teacher_id"), "attendance summary must be scoped to the teacher's courses");
+    AssertTrue(controller.Contains("GetAttendanceSummary"), "teacher controller must expose attendance summary");
+}
+
+static void RunTeacherAttendanceUiSourceTests()
+{
+    string pagePath = Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherStudents.cs");
+    string dialogPath = Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherAttendanceDialog.cs");
+    string page = File.ReadAllText(pagePath);
+    string dialog = File.ReadAllText(dialogPath);
+    AssertTrue(File.Exists(dialogPath), "teacher attendance dialog must exist");
+    AssertTrue(page.Contains("TeacherAttendanceDialog"), "teacher students page must open attendance dialog");
+    AssertTrue(page.Contains("AddHeaderAction"), "attendance action should be added to the existing grid page header");
+    AssertTrue(dialog.Contains("_isBindingSessions"), "attendance dialog must guard initial session binding from duplicate attendance loads");
+    AssertTrue(dialog.Contains("if (_isBindingSessions)"), "attendance dialog session changed handler must skip initial binding");
+}
+
+static void RunAttendanceCleanupAndSchemaSourceTests()
+{
+    string classroomPath = Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Student", "StudentNativeClassroomForm.cs");
+    string repoPath = Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Data", "TeacherRepository.cs");
+    string classroom = File.ReadAllText(classroomPath);
+    string repo = File.ReadAllText(repoPath);
+
+    AssertTrue(classroom.Contains("_isClosing"), "native classroom close handler must guard re-entrant close");
+    AssertTrue(classroom.Contains("_cleanupComplete"), "native classroom must track when async close cleanup is complete");
+    AssertTrue(classroom.Contains("_attendanceInTask"), "native classroom must retain in-flight attendance-in task during close");
+    AssertTrue(classroom.Contains("await _attendanceInTask"), "native classroom close cleanup must await in-flight attendance-in");
+    AssertTrue(classroom.Contains("if (_isClosing)"), "native classroom OnShown path must guard close state");
+    AssertTrue(classroom.Contains("e.Cancel = true"), "native classroom close handler must cancel the first close while async cleanup runs");
+    AssertTrue(classroom.Contains("if (_cleanupComplete)"), "native classroom final programmatic close must be allowed after cleanup");
+    AssertTrue(classroom.Contains("_cleanupComplete = true"), "native classroom must mark cleanup complete before final programmatic close");
+    int closeHandlerIndex = classroom.IndexOf("private async void StudentNativeClassroomForm_FormClosing", StringComparison.Ordinal);
+    int cleanupGuardIndex = classroom.IndexOf("if (_cleanupComplete)", closeHandlerIndex, StringComparison.Ordinal);
+    int cancelIndex = classroom.IndexOf("e.Cancel = true", closeHandlerIndex, StringComparison.Ordinal);
+    int inProgressGuardIndex = classroom.IndexOf("if (_isClosing)", closeHandlerIndex, StringComparison.Ordinal);
+    AssertTrue(cleanupGuardIndex >= 0 && cancelIndex >= 0 && cleanupGuardIndex < cancelIndex, "native classroom must allow completed cleanup close before canceling active cleanup closes");
+    AssertTrue(cancelIndex >= 0 && inProgressGuardIndex > cancelIndex, "native classroom re-entrant close must be canceled before returning while cleanup is in progress");
+    AssertTrue(classroom.Contains("CloseClassroomAsync"), "native classroom close cleanup should be moved to an async helper");
+    AssertTrue(classroom.Contains("await LogAttendanceOutIfPossibleAsync()"), "native classroom close cleanup must await attendance out");
+    AssertTrue(repo.Contains("CREATE TABLE IF NOT EXISTS attendance_logs"), "teacher repository schema must create attendance_logs on clean databases");
+    AssertTrue(repo.Contains("idx_attendance_logs_session_student"), "teacher repository schema must create session/student attendance index");
+    AssertTrue(repo.Contains("idx_attendance_logs_open_session_student"), "teacher repository schema must create open attendance index");
+}
+
+static void RunChatUnreadSourceTests()
+{
+    string dbPath = Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Data", "CourseGuardDbContext.cs");
+    string controllerPath = Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Controllers", "ChatController.cs");
+    string db = File.ReadAllText(dbPath);
+    string controller = File.ReadAllText(controllerPath);
+    AssertTrue(db.Contains("GetUnreadChatCount"), "db context must expose unread chat count");
+    AssertTrue(db.Contains("MarkAllChatRead"), "db context must expose mark all read");
+    AssertTrue(db.Contains("MarkCourseChatRead"), "db context must expose course-scoped mark read");
+    AssertTrue(db.Contains("CHAT_READS"), "unread logic must use CHAT_READS");
+    AssertTrue(db.Contains("LAST_READ_MESSAGE_ID"), "unread logic must compare against last read message id");
+    AssertTrue(db.Contains("m.SENDER_ID <> @user_id"), "unread count must exclude messages sent by the current user");
+    AssertTrue(db.Contains("COALESCE(m.IS_DELETED, FALSE) = FALSE"), "unread count must exclude deleted messages");
+    AssertTrue(db.Contains("c.TEACHER_ID = @user_id"), "unread visibility must include teacher-owned courses");
+    AssertTrue(db.Contains("FROM ENROLLMENTS e"), "unread visibility must include enrolled student courses");
+    AssertTrue(db.Contains("UPPER(COALESCE(e.STATUS, 'ACTIVE')) IN ('ACTIVE', 'APPROVED')"), "unread visibility must require active or approved enrollment");
+    AssertTrue(db.Contains("LEFT JOIN CHAT_READS cr"), "unread count must join chat read watermarks");
+    AssertTrue(db.Contains("cr.LAST_READ_MESSAGE_ID IS NULL OR m.ID > cr.LAST_READ_MESSAGE_ID"), "unread count must compare message id to last read watermark");
+    AssertTrue(db.Contains("ON CONFLICT (USER_ID, COURSE_ID) DO UPDATE"), "mark read must upsert one read watermark per course");
+    AssertTrue(db.Contains("WHERE m.COURSE_ID = @course_id"), "course-scoped mark read must only advance one selected course");
+    AssertTrue(db.Contains("WHERE CHAT_READS.LAST_READ_MESSAGE_ID IS NULL"), "mark read must guard null existing watermarks");
+    AssertTrue(db.Contains("EXCLUDED.LAST_READ_MESSAGE_ID > CHAT_READS.LAST_READ_MESSAGE_ID"), "mark read must not move the watermark backwards");
+    AssertTrue(controller.Contains("GetUnreadCount"), "chat controller must expose unread count");
+    AssertTrue(controller.Contains("MarkAllRead"), "chat controller must expose mark all read");
+    AssertTrue(controller.Contains("MarkCourseRead"), "chat controller must expose course-scoped mark read");
+}
+
+static void RunSidebarChatBadgeSourceTests()
+{
+    string sidebarPath = Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Theme", "SidebarPanel.cs");
+    string badgePath = Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Theme", "CountBadgePainter.cs");
+    string sidebar = File.ReadAllText(sidebarPath);
+    string badge = File.ReadAllText(badgePath);
+    AssertTrue(File.Exists(badgePath), "count badge painter helper must exist");
+    AssertTrue(sidebar.Contains("ChatUnreadCount"), "sidebar must expose chat unread count");
+    AssertTrue(sidebar.Contains("IsChatNavItem(iconKey)"), "sidebar badge must target the stable nav icon key");
+    AssertTrue(sidebar.Contains("\"message\""), "sidebar badge must target the message nav icon key");
+    AssertFalse(sidebar.Contains("Tin nhÃ¡ÂºÂ¯n"), "sidebar badge should not depend on mojibake label fallbacks");
+    AssertTrue(sidebar.Contains("CountBadgePainter.Draw"), "sidebar must draw the badge through the helper");
+    AssertTrue(sidebar.Contains("_chatUnreadCount > 99 ? 26 : badgeSize"), "sidebar must reserve pill width for capped counts");
+    AssertTrue(badge.Contains("99+"), "count badge painter must cap large counts");
+    AssertTrue(badge.Contains("text.Length >= 3"), "count badge painter must widen three-character labels");
+    AssertTrue(badge.Contains("AddArc"), "count badge painter must draw pill badges for wider labels");
+}
+
+static void RunStudentDashboardChatBadgeSourceTests()
+{
+    string path = Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Student", "StudentDashboard.cs");
+    string source = File.ReadAllText(path);
+    AssertTrue(source.Contains("ChatController"), "student dashboard must use chat controller for unread count");
+    AssertTrue(source.Contains("GetUnreadCount"), "student dashboard must load unread count");
+    AssertTrue(source.Contains("ChatUnreadCount"), "student dashboard must update sidebar chat badge");
+    AssertTrue(source.Contains("MarkAllRead"), "student dashboard must mark chat read when user opens chat");
+    AssertTrue(source.Contains("LoadChatUnreadCountAsync().FireAndForgetSafe(this)"), "student dashboard must load chat unread count without blocking construction");
+    AssertTrue(source.Contains("Task.Run"), "student dashboard must move chat unread database work off the UI thread");
+    AssertTrue(source.Contains("SetChatUnreadCountSafe"), "student dashboard must marshal unread badge UI updates safely");
+    AssertTrue(source.Contains("BeginInvoke"), "student dashboard must use BeginInvoke for cross-thread unread badge updates");
+    AssertTrue(source.Contains("MarkAllChatReadAsync().FireAndForgetSafe(this)"), "student dashboard must mark chat read in the background");
+    AssertTrue(source.Contains("private const string ChatPage"), "student dashboard should use one chat page key for navigation and unread guards");
+    AssertTrue(source.Contains("_chatUnreadLoadVersion"), "student dashboard must version unread badge loads");
+    AssertTrue(source.Contains("int loadVersion = _chatUnreadLoadVersion"), "student dashboard must capture unread badge load version before background work");
+    AssertTrue(source.Contains("_chatUnreadLoadVersion++"), "student dashboard must invalidate pending unread badge loads when chat opens");
+    AssertTrue(source.Contains("SetChatUnreadCountSafe(unreadCount, loadVersion)"), "student dashboard must pass unread load version into UI update");
+    AssertTrue(source.Contains("loadVersion != _chatUnreadLoadVersion || _currentPageName == ChatPage"), "student dashboard must suppress stale unread badge updates while chat is open");
+    int loadUiIndex = source.IndexOf("LoadUI(factory())", StringComparison.Ordinal);
+    int markReadIndex = source.IndexOf("MarkAllChatReadAsync().FireAndForgetSafe(this)", StringComparison.Ordinal);
+    AssertTrue(loadUiIndex >= 0 && markReadIndex > loadUiIndex, "student dashboard must not block chat navigation on mark-read database work");
+}
+
+static void RunStudentChatPageReadWatermarkSourceTests()
+{
+    string path = Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_Chat.cs");
+    string source = File.ReadAllText(path);
+    AssertTrue(source.Contains("MarkDisplayedMessagesReadAsync"), "student chat page must own a read watermark advancement helper");
+    AssertTrue(source.Contains("int courseId = _selectedCourseId"), "student chat page must capture selected course before background mark-read");
+    AssertTrue(source.Contains("_selectedCourseId != courseId"), "student chat page must ignore stale refreshes after selected course changes");
+    AssertTrue(source.Contains("_chatController.MarkCourseRead(userId, courseId)"), "student chat page must advance only the selected course read watermark through ChatController");
+    AssertFalse(source.Contains("MarkAllRead"), "student chat page must not mark every course read during selected-course refresh");
+    AssertTrue(source.Contains("MarkDisplayedMessagesReadAsync(courseId).FireAndForgetSafe(this)"), "student chat page must advance read watermark in the background after refresh");
+    int emptyStateIndex = source.IndexOf("if (messages.Count == 0)", StringComparison.Ordinal);
+    int markReadIndex = source.IndexOf("MarkDisplayedMessagesReadAsync(courseId).FireAndForgetSafe(this)", StringComparison.Ordinal);
+    AssertTrue(emptyStateIndex >= 0 && markReadIndex > emptyStateIndex, "student chat page must mark read only after successful message rendering");
+}
 
 static void RunDashboardCardTests()
 {
