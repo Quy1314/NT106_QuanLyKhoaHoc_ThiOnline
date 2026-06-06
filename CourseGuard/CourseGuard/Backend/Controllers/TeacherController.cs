@@ -132,6 +132,9 @@ namespace CourseGuard.Backend.Controllers
         public List<TeacherScheduleItemModel> GetSchedule(int teacherId) =>
             teacherId <= 0 ? new List<TeacherScheduleItemModel>() : _repository.GetSchedule(teacherId);
 
+        public List<AttendanceLogModel> GetAttendanceSummary(int teacherId, int sessionId) =>
+            teacherId <= 0 || sessionId <= 0 ? new List<AttendanceLogModel>() : _repository.GetAttendanceSummary(teacherId, sessionId);
+
         public List<TeacherTeachingTaskModel> GetTeachingTasks(int teacherId) =>
             teacherId <= 0 ? new List<TeacherTeachingTaskModel>() : _repository.GetTeachingTasks(teacherId);
 

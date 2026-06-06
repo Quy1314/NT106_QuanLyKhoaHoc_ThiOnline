@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
+using CourseGuard.Frontend.Forms.Teacher;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
 {
@@ -16,6 +17,14 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             TeacherTabChrome.FitButtonToText(AddButton);
             TeacherTabChrome.FitButtonToText(EditButton);
             DeleteButton.Visible = false;
+
+            var attendanceButton = TeacherTabChrome.SecondaryButton("Điểm danh");
+            attendanceButton.Click += (_, _) =>
+            {
+                using var dialog = new TeacherAttendanceDialog(TeacherId, Controller);
+                dialog.ShowDialog(FindForm());
+            };
+            AddHeaderAction(attendanceButton);
         }
 
         protected override Task<DataTable> CreateTableAsync() => Task.Run(() =>

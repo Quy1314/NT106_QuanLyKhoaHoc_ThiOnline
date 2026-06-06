@@ -16,7 +16,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
+using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
@@ -30,22 +32,26 @@ namespace CourseGuard.Frontend.Forms.Student
     {
         private const string OverviewPage = "T\u1ed5ng quan";
         private const string ProfilePage = "H\u1ed3 s\u01a1";
+        private const string ChatPage = "Tin nh\u1eafn";
         private const string ProfileTitle = "H\u1ed3 s\u01a1 c\u00e1 nh\u00e2n";
 
         private Dictionary<string, Func<UserControl>> _nav = new();
         private CourseGuard.Backend.Models.UserModel currentUser;
         private readonly CourseGuardDbContext _dbContext = new("");
+        private readonly ChatController _chatController;
         private SidebarPanel _sidebar;
         private TopbarPanel _topbar;
         private Panel _rightPanel;   // container: topbar + mainboard
         private string _currentPageName = OverviewPage;
         private string _pendingGlobalSearchKeyword = string.Empty;
+        private int _chatUnreadLoadVersion;
 
         public StudentDashboard(CourseGuard.Backend.Models.UserModel user)
         {
             currentUser = user;
             AppColors.IsDarkMode = false;
             InitializeComponent();
+            _chatController = new ChatController(_dbContext);
             SearchFocusManager.Install(this);
 
             StudentProfileModel? profile = SafeGetProfile(user.Id);
@@ -60,10 +66,11 @@ namespace CourseGuard.Frontend.Forms.Student
             // Sidebar docks Left on Form
             _sidebar = new SidebarPanel { Dock = DockStyle.Left };
             _sidebar.SetNavItems(
-                new[] { "Tổng quan", "Tìm khóa học", "Khóa học của tôi", "Bài kiểm tra", "Bài tập", "Kết quả", "Tài liệu", "Lịch học", "Tin nhắn", "Thông báo", "Hồ sơ" },
+                new[] { "Tổng quan", "Tìm khóa học", "Khóa học của tôi", "Bài kiểm tra", "Bài tập", "Kết quả", "Tài liệu", "Lịch học", ChatPage, "Thông báo", "Hồ sơ" },
                 new[] { "home", "search", "folder-check", "clipboard-check", "document-text", "chart", "document", "calendar", "message", "bell", "user" }
             );
             _sidebar.NavItemClicked += Sidebar_NavItemClicked;
+            LoadChatUnreadCountAsync().FireAndForgetSafe(this);
 
             // Right container holds Topbar(Top) + mainboard(Fill)
             _rightPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 8, 12, 0) };
@@ -180,7 +187,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 { "Kết quả",      () => new UC_Result() },
                 { "Tài liệu",     () => new UC_StudentLessons() },
                 { "Lịch học",     () => new UC_Schedule() },
-                { "Tin nhắn",     () => new UC_Chat() },
+                { ChatPage,     () => new UC_Chat() },
                 { "Thông báo",    () => new UC_Notification() },
                 { "Hồ sơ",        () => new UC_Profile() }
             };
@@ -247,10 +254,80 @@ namespace CourseGuard.Frontend.Forms.Student
             _currentPageName = pageName;
             _sidebar.SetActiveByName(pageName);
             _topbar.PageTitle = GetPageTitle(pageName);
+
+            bool isChatPage = pageName == ChatPage;
+            if (isChatPage)
+            {
+                _chatUnreadLoadVersion++;
+                _sidebar.ChatUnreadCount = 0;
+            }
+
             LoadUI(factory());
+
+            if (isChatPage)
+            {
+                MarkAllChatReadAsync().FireAndForgetSafe(this);
+            }
 
             if (focusSecurity)
                 FocusProfileSecuritySection();
+        }
+
+        private async Task LoadChatUnreadCountAsync()
+        {
+            int loadVersion = _chatUnreadLoadVersion;
+            int userId = currentUser?.Id ?? UserSessionContext.CurrentUserId ?? 0;
+            int unreadCount = await Task.Run(
+                () => ActivityDisplayHelper.SafeMetricCount(() => _chatController.GetUnreadCount(userId)));
+            SetChatUnreadCountSafe(unreadCount, loadVersion);
+        }
+
+        private async Task MarkAllChatReadAsync()
+        {
+            int userId = currentUser?.Id ?? UserSessionContext.CurrentUserId ?? 0;
+            await Task.Run(() =>
+            {
+                try
+                {
+                    _chatController.MarkAllRead(userId);
+                }
+                catch
+                {
+                }
+            });
+        }
+
+        private void SetChatUnreadCountSafe(int count, int loadVersion)
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            if (InvokeRequired)
+            {
+                if (!IsHandleCreated)
+                {
+                    return;
+                }
+
+                try
+                {
+                    BeginInvoke(new MethodInvoker(() => SetChatUnreadCountSafe(count, loadVersion)));
+                }
+                catch (InvalidOperationException)
+                {
+                }
+
+                return;
+            }
+
+            if (loadVersion != _chatUnreadLoadVersion || _currentPageName == ChatPage)
+            {
+                return;
+            }
+
+            _sidebar.ChatUnreadCount = count;
         }
 
         private static string GetPageTitle(string pageName)

@@ -272,6 +272,58 @@ namespace CourseGuard.Backend.Data
         public List<TeacherMaterialModel> GetMaterials(int teacherId, int? courseId = null) => QueryMaterials(teacherId, courseId);
         public List<TeacherScheduleItemModel> GetSchedule(int teacherId) => QuerySchedule(teacherId);
 
+        public List<AttendanceLogModel> GetAttendanceSummary(int teacherId, int sessionId)
+        {
+            var rows = new List<AttendanceLogModel>();
+            if (teacherId <= 0 || sessionId <= 0)
+                return rows;
+
+            using var connection = _dbContext.CreateConnection();
+            connection.Open();
+            using var command = new NpgsqlCommand(@"
+                SELECT al.id,
+                       al.student_id,
+                       al.session_id,
+                       COALESCE(u.full_name, u.username, ''),
+                       COALESCE(c.name, ''),
+                       COALESCE(os.title, ''),
+                       al.joined_at,
+                       al.left_at,
+                       COALESCE(al.duration_minutes, 0),
+                       COALESCE(al.is_valid, FALSE),
+                       COALESCE(al.created_at, al.joined_at)
+                FROM attendance_logs al
+                JOIN users u ON u.id = al.student_id
+                JOIN online_sessions os ON os.id = al.session_id
+                JOIN courses c ON c.id = os.course_id
+                WHERE al.session_id = @session_id
+                  AND c.teacher_id = @teacher_id
+                ORDER BY al.joined_at DESC, al.id DESC", connection);
+            command.Parameters.AddWithValue("@teacher_id", teacherId);
+            command.Parameters.AddWithValue("@session_id", sessionId);
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                rows.Add(new AttendanceLogModel
+                {
+                    Id = reader.GetInt32(0),
+                    StudentId = reader.GetInt32(1),
+                    SessionId = reader.GetInt32(2),
+                    StudentName = reader.GetString(3),
+                    CourseName = reader.GetString(4),
+                    SessionTitle = reader.GetString(5),
+                    JoinedAt = reader.GetDateTime(6),
+                    LeftAt = reader.IsDBNull(7) ? null : reader.GetDateTime(7),
+                    DurationMinutes = reader.GetInt32(8),
+                    IsValid = reader.GetBoolean(9),
+                    CreatedAt = reader.GetDateTime(10)
+                });
+            }
+
+            return rows;
+        }
+
         public List<TeacherTeachingTaskModel> GetTeachingTasks(int teacherId)
         {
             var tasks = new List<TeacherTeachingTaskModel>();
@@ -1173,6 +1225,25 @@ namespace CourseGuard.Backend.Data
                     ON online_sessions(course_id, start_time);
                 CREATE INDEX IF NOT EXISTS idx_online_sessions_opened
                     ON online_sessions(is_opened);", connection))
+                command.ExecuteNonQuery();
+
+            using (var command = new NpgsqlCommand(@"
+                CREATE TABLE IF NOT EXISTS attendance_logs (
+                    id SERIAL PRIMARY KEY,
+                    student_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    session_id INT NOT NULL REFERENCES online_sessions(id) ON DELETE CASCADE,
+                    joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    left_at TIMESTAMP,
+                    duration_minutes INT DEFAULT 0,
+                    is_valid BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_attendance_logs_session_student
+                    ON attendance_logs(session_id, student_id);
+                CREATE INDEX IF NOT EXISTS idx_attendance_logs_open_session_student
+                    ON attendance_logs(session_id, student_id)
+                    WHERE left_at IS NULL;", connection))
                 command.ExecuteNonQuery();
 
             using (var command = new NpgsqlCommand(@"

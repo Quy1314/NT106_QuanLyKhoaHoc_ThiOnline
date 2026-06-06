@@ -41,6 +41,30 @@ namespace CourseGuard.Backend.Controllers
             return _dbContext.GetChatCoursesForUserAsync(userId, cancellationToken);
         }
 
+        public int GetUnreadCount(int userId)
+        {
+            LastErrorMessage = string.Empty;
+            return userId <= 0 ? 0 : _dbContext.GetUnreadChatCount(userId);
+        }
+
+        public void MarkAllRead(int userId)
+        {
+            LastErrorMessage = string.Empty;
+            if (userId > 0)
+            {
+                _dbContext.MarkAllChatRead(userId);
+            }
+        }
+
+        public void MarkCourseRead(int userId, int courseId)
+        {
+            LastErrorMessage = string.Empty;
+            if (userId > 0 && courseId > 0)
+            {
+                _dbContext.MarkCourseChatRead(userId, courseId);
+            }
+        }
+
         public List<ChatMessageModel> GetMessages(int userId, int courseId, int limit = 100)
         {
             LastErrorMessage = string.Empty;

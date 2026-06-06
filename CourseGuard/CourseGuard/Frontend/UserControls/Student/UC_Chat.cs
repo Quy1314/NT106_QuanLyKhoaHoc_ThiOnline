@@ -246,10 +246,11 @@ namespace CourseGuard.Frontend.UserControls.Student
             {
                 _isLoadingMessages = true;
                 int userId = UserSessionContext.CurrentUserId ?? 0;
-                List<ChatMessageModel> messages = await _chatController.GetMessagesAsync(userId, _selectedCourseId, 200);
+                int courseId = _selectedCourseId;
+                List<ChatMessageModel> messages = await _chatController.GetMessagesAsync(userId, courseId, 200);
 
                 // Có thể control đã bị đóng/đổi course trong lúc chờ DB xong.
-                if (!_uiAlive || IsDisposed || txtMessages.IsDisposed)
+                if (!_uiAlive || IsDisposed || txtMessages.IsDisposed || _selectedCourseId != courseId)
                 {
                     return;
                 }
@@ -278,6 +279,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 {
                     txtMessages.Text = "Chưa có tin nhắn nào trong phòng chat này.";
                 }
+                MarkDisplayedMessagesReadAsync(courseId).FireAndForgetSafe(this);
             }
             catch (ObjectDisposedException)
             {
@@ -288,6 +290,26 @@ namespace CourseGuard.Frontend.UserControls.Student
             {
                 _isLoadingMessages = false;
             }
+        }
+
+        private Task MarkDisplayedMessagesReadAsync(int courseId)
+        {
+            int userId = UserSessionContext.CurrentUserId ?? 0;
+            if (userId <= 0 || courseId <= 0)
+            {
+                return Task.CompletedTask;
+            }
+
+            return Task.Run(() =>
+            {
+                try
+                {
+                    _chatController.MarkCourseRead(userId, courseId);
+                }
+                catch
+                {
+                }
+            });
         }
 
         private async Task SendTextAsync()

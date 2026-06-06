@@ -39,6 +39,7 @@ namespace CourseGuard.Frontend.Theme
         private bool _isCollapsed = false;
         private bool _isAnimating = false;
         private bool _showLabels = true;
+        private int _chatUnreadCount;
 
         // Submenu dynamic spacing
         private int _submenuIndex = -1;
@@ -63,6 +64,24 @@ namespace CourseGuard.Frontend.Theme
 
             _animTimer = new System.Windows.Forms.Timer { Interval = AnimationIntervalMs };
             _animTimer.Tick += AnimTimer_Tick;
+        }
+
+        [Browsable(false)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public int ChatUnreadCount
+        {
+            get => _chatUnreadCount;
+            set
+            {
+                int normalized = Math.Max(0, value);
+                if (_chatUnreadCount == normalized)
+                {
+                    return;
+                }
+
+                _chatUnreadCount = normalized;
+                Invalidate();
+            }
         }
 
         protected override void OnPaintBackground(PaintEventArgs e)
@@ -305,6 +324,18 @@ namespace CourseGuard.Frontend.Theme
                         Rectangle textRect = new Rectangle(iconRect.Right, itemRect.Y, Width - iconRect.Right, _itemHeight);
                         g.DrawString(_navItems[i], AppFonts.Button, labelBrush, textRect, sfLeft);
                     }
+
+                    if (IsChatNavItem(iconKey) && _chatUnreadCount > 0)
+                    {
+                        const int badgeSize = 18;
+                        int badgeWidth = _chatUnreadCount > 99 ? 26 : badgeSize;
+                        Rectangle badgeRect = new Rectangle(
+                            itemRect.Right - badgeWidth - 6,
+                            itemRect.Y + 5,
+                            badgeWidth,
+                            badgeSize);
+                        CountBadgePainter.Draw(g, badgeRect, _chatUnreadCount);
+                    }
                 }
 
                 // 4. Logout Button
@@ -325,6 +356,11 @@ namespace CourseGuard.Frontend.Theme
                     g.DrawString("Đăng xuất", AppFonts.Button, logoutTextBrush, textRect, sfLeft);
                 }
             }
+        }
+
+        private static bool IsChatNavItem(string iconKey)
+        {
+            return string.Equals(iconKey, "message", StringComparison.OrdinalIgnoreCase);
         }
 
         private void UpdateCollapsedHoverLabel(Point mouseLocation)
