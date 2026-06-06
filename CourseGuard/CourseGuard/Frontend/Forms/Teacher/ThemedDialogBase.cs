@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
@@ -21,14 +22,16 @@ namespace CourseGuard.Frontend.Forms.Teacher
         public Panel ContentPanel => _contentPanel;
         public TableLayoutPanel FooterPanel => _footerPanel;
 
+        [AllowNull]
         public override string Text
         {
             get => base.Text;
             set
             {
-                base.Text = value;
+                string text = value ?? string.Empty;
+                base.Text = text;
                 if (_lblTitle != null)
-                    _lblTitle.Text = value;
+                    _lblTitle.Text = text;
             }
         }
 
