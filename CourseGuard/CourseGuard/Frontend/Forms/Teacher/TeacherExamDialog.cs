@@ -17,6 +17,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private readonly DarkDateTimePicker _closeTime = new();
         private readonly DarkNumericInput _duration = new();
         private readonly DarkNumericInput _maxAttempts = new();
+        private readonly DarkNumericInput _maxViolations = new();
 
         public int CourseId => _course.SelectedItem is TeacherCourseModel course ? course.Id : 0;
         public string ItemTitle => _title.Text.Trim();
@@ -25,6 +26,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         public DateTime? CloseTime => _closeTime.Checked ? _closeTime.Value : null;
         public int DurationMinutes => _duration.Value;
         public int MaxAttempts => _maxAttempts.Value;
+        public int MaxViolations => Math.Max(0, _maxViolations.Value);
 
         public TeacherExamDialog(IEnumerable<TeacherCourseModel> courses, TeacherExamModel? existing = null)
         {
@@ -59,6 +61,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
                 _duration.Value = existing.DurationMinutes > 0 ? existing.DurationMinutes : 60;
                 _maxAttempts.Value = existing.MaxAttempts > 0 ? existing.MaxAttempts : 1;
+                _maxViolations.Value = Math.Max(0, existing.MaxViolations);
                 _status.SelectedItem = existing.Status;
             }
             else
@@ -68,6 +71,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 _openTime.Value = DateTime.Now;
                 _duration.Value = 60;
                 _maxAttempts.Value = 1;
+                _maxViolations.Value = 0;
                 _status.SelectedIndex = 0;
             }
 
@@ -117,6 +121,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
             grid.Controls.Add(_duration, 3, 2);
 
             grid.Controls.Add(CreateLabel("Số lần làm bài"), 2, 3);
+            grid.Controls.Add(CreateLabel("Vi pham toi da (0 = khong gioi han)"), 0, 3);
+            grid.Controls.Add(_maxViolations, 1, 3);
             grid.Controls.Add(_maxAttempts, 3, 3);
 
             ContentPanel.Controls.Add(grid);

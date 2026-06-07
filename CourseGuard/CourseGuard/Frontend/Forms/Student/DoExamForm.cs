@@ -27,6 +27,7 @@ namespace CourseGuard.Frontend.Forms.Student
         private bool _loadingQuestion;
         private bool _submitted;
         private bool _connectionLostViolationRecorded;
+        private bool _autoSubmitTriggered;
 
         public DoExamForm() : this(0)
         {
@@ -59,6 +60,7 @@ namespace CourseGuard.Frontend.Forms.Student
         private void LowLevelKeyboardHook_OnCheatKeyPressed(object? sender, EventArgs e)
         {
             _screenStreamClient?.SendWarning();
+            HandleViolationAsync("KEY_PRESS", "RECORDED_AUTOMATICALLY").FireAndForgetSafe(this);
         }
 
         private void DoExamForm_Shown(object? sender, EventArgs e)
@@ -156,13 +158,11 @@ namespace CourseGuard.Frontend.Forms.Student
         {
             try
             {
-                var violationRepository = new ViolationRepository();
-                await violationRepository.InsertViolationAsync(new ViolationModel
-                {
-                    UserId = e.StudentId,
-                    ExamAttemptId = e.AttemptId > 0 ? e.AttemptId : null,
-                    Type = ScreenMonitorConnectionLossTracker.ViolationType
-                });
+                await HandleViolationAsync(
+                    ScreenMonitorConnectionLossTracker.ViolationType,
+                    "RECORDED_AUTOMATICALLY",
+                    e.StudentId,
+                    e.AttemptId);
 
                 string username = UserSessionContext.CurrentUsername ?? "không xác định";
                 await _authController.LogUserActivityAsync(
@@ -174,6 +174,67 @@ namespace CourseGuard.Frontend.Forms.Student
             catch (Exception ex)
             {
                 Console.WriteLine($"Cannot record connection lost violation: {ex.Message}");
+            }
+        }
+
+        private async System.Threading.Tasks.Task HandleViolationAsync(string type, string? actionTaken = null, int? studentIdOverride = null, int? attemptIdOverride = null)
+        {
+            if (_submitted)
+                return;
+
+            int studentId = studentIdOverride ?? UserSessionContext.CurrentUserId ?? 0;
+            int attemptId = attemptIdOverride ?? _session?.AttemptId ?? 0;
+            if (studentId <= 0 || attemptId <= 0)
+                return;
+
+            var violationRepository = new ViolationRepository();
+            await violationRepository.InsertViolationAsync(new ViolationModel
+            {
+                UserId = studentId,
+                ExamAttemptId = attemptId,
+                Type = type,
+                Severity = ViolationSeverityMap.Get(type),
+                ActionTaken = actionTaken
+            });
+
+            await EvaluateViolationThresholdAsync(violationRepository, attemptId);
+        }
+
+        private async System.Threading.Tasks.Task EvaluateViolationThresholdAsync(ViolationRepository violationRepository, int attemptId)
+        {
+            int maxViolations = _session?.MaxViolations ?? 0;
+            if (maxViolations <= 0 || _submitted || _autoSubmitTriggered)
+                return;
+
+            int violationCount = await violationRepository.CountViolationsByAttemptIdAsync(attemptId);
+            if (violationCount < maxViolations)
+                return;
+
+            _autoSubmitTriggered = true;
+
+            void SubmitForThreshold()
+            {
+                if (IsDisposed || _submitted)
+                    return;
+
+                MetaTheme.ShowModernDialog(
+                    this,
+                    $"Ban da dat nguong {maxViolations} vi pham. He thong se tu dong nop bai.",
+                    "Tu dong nop bai",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                SubmitExam(confirm: false);
+            }
+
+            try
+            {
+                if (InvokeRequired)
+                    BeginInvoke(new MethodInvoker(SubmitForThreshold));
+                else
+                    SubmitForThreshold();
+            }
+            catch (InvalidOperationException)
+            {
             }
         }
 

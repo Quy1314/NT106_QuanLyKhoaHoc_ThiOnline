@@ -31,6 +31,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private readonly Button _save = TeacherTabChrome.SecondaryButton("Lưu sửa");
         private readonly Button _delete = TeacherTabChrome.DangerButton("Xóa câu");
         private readonly Button _close = TeacherTabChrome.SecondaryButton("Đóng");
+        private readonly Button _randomBuilder = TeacherTabChrome.SecondaryButton("Tao ngau nhien");
         private readonly bool _canEdit;
         private readonly int _courseId;
 
@@ -65,6 +66,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             var leftButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
             leftButtons.Controls.Add(_importExcel);
             leftButtons.Controls.Add(_questionBank);
+            leftButtons.Controls.Add(_randomBuilder);
             leftPanel.Controls.Add(leftButtons, 0, 1);
 
             root.Controls.Add(leftPanel, 0, 0);
@@ -119,7 +121,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _close.Click += (_, _) => Close();
             _importExcel.Click += async (_, _) => await ImportFromExcelAsync();
             _questionBank.Click += (_, _) => OpenQuestionBank();
-            _add.Enabled = _save.Enabled = _delete.Enabled = _importExcel.Enabled = _questionBank.Enabled = _canEdit;
+            _randomBuilder.Click += (_, _) => OpenRandomBuilder();
+            _add.Enabled = _save.Enabled = _delete.Enabled = _importExcel.Enabled = _questionBank.Enabled = _randomBuilder.Enabled = _canEdit;
         }
 
         private async System.Threading.Tasks.Task ImportFromExcelAsync()
@@ -192,6 +195,16 @@ namespace CourseGuard.Frontend.Forms.Teacher
             using var qbd = new QuestionBankDialog(_teacherId, _examId, _courseId);
             qbd.ShowDialog(this);
             if (qbd.QuestionsAdded)
+            {
+                LoadQuestions();
+            }
+        }
+
+        private void OpenRandomBuilder()
+        {
+            using var dialog = new RandomExamBuilderDialog(_teacherId, _examId, _courseId);
+            dialog.ShowDialog(this);
+            if (dialog.QuestionsAdded)
             {
                 LoadQuestions();
             }

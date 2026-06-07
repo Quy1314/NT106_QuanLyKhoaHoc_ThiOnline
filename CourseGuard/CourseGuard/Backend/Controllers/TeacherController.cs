@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.Linq;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
+using CourseGuard.Backend.Services;
 
 namespace CourseGuard.Backend.Controllers
 {
@@ -183,7 +185,10 @@ namespace CourseGuard.Backend.Controllers
                         OptionC = row.OptionC,
                         OptionD = row.OptionD,
                         CorrectOption = row.CorrectOption,
-                        Points = row.Points
+                        Points = row.Points,
+                        Difficulty = QuestionMetadataNormalizer.NormalizeDifficulty(row.Difficulty),
+                        Chapter = QuestionMetadataNormalizer.NormalizeChapter(row.Chapter),
+                        QuestionType = QuestionMetadataNormalizer.MultipleChoice
                     });
                 }
             }
@@ -203,17 +208,55 @@ namespace CourseGuard.Backend.Controllers
             }
         }
 
-        public async System.Threading.Tasks.Task AddQuestionsFromBankAsync(int teacherId, int examId, List<int> questionIds)
+        public async System.Threading.Tasks.Task AddQuestionsFromBankAsync(int teacherId, int examId, int courseId, IReadOnlyList<int> questionIds)
         {
-            if (teacherId > 0 && examId > 0)
-            {
-                await _dbContext.AddQuestionsFromBankAsync(examId, questionIds);
-            }
+            if (teacherId <= 0 || examId <= 0 || courseId <= 0 || questionIds == null || questionIds.Count == 0)
+                return;
+
+            if (!_repository.GetCourses(teacherId).Any(c => c.Id == courseId))
+                return;
+
+            if (!string.Equals(_repository.GetExamStatus(teacherId, examId), WorkflowConstants.ExamStatus.Draft, System.StringComparison.OrdinalIgnoreCase))
+                return;
+
+            await _dbContext.AddQuestionsFromBankAsync(examId, courseId, questionIds);
         }
 
         public List<TeacherExamQuestionModel> GetCourseQuestionBank(int teacherId, int courseId)
         {
-            return teacherId > 0 && courseId > 0 ? _dbContext.GetQuestionsByCourseId(courseId) : new List<TeacherExamQuestionModel>();
+            return teacherId > 0 && courseId > 0 && _repository.GetCourses(teacherId).Any(c => c.Id == courseId)
+                ? _dbContext.GetQuestionsByCourseId(courseId)
+                : new List<TeacherExamQuestionModel>();
+        }
+
+        public List<string> GetQuestionBankChapters(int teacherId, int courseId)
+        {
+            if (teacherId <= 0 || courseId <= 0 || !_repository.GetCourses(teacherId).Any(c => c.Id == courseId))
+                return new List<string>();
+
+            return _dbContext.GetQuestionBankChapters(courseId);
+        }
+
+        public List<TeacherExamQuestionModel> GetRandomQuestionsByCriteria(int teacherId, int courseId, IReadOnlyList<RandomQuestionCriteria> criteria)
+        {
+            if (teacherId <= 0 || courseId <= 0 || criteria == null || !_repository.GetCourses(teacherId).Any(c => c.Id == courseId))
+                return new List<TeacherExamQuestionModel>();
+
+            return _dbContext.GetRandomQuestionsByCriteria(courseId, criteria);
+        }
+
+        public async System.Threading.Tasks.Task AddRandomQuestionsToExamAsync(int teacherId, int examId, int courseId, IReadOnlyList<RandomQuestionCriteria> criteria)
+        {
+            if (teacherId <= 0 || examId <= 0 || courseId <= 0 || criteria == null)
+                return;
+
+            if (!_repository.GetCourses(teacherId).Any(c => c.Id == courseId))
+                return;
+
+            if (!string.Equals(_repository.GetExamStatus(teacherId, examId), WorkflowConstants.ExamStatus.Draft, System.StringComparison.OrdinalIgnoreCase))
+                return;
+
+            await _dbContext.AddRandomQuestionsToExamAsync(examId, courseId, criteria);
         }
     }
 }
