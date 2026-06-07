@@ -33,5 +33,11 @@ namespace CourseGuard.Backend.Models
         [Range(0.1, 100, ErrorMessage = "Điểm phải lớn hơn 0.")]
         [ExcelColumn(Name = "Điểm")]
         public decimal Points { get; set; } = 1m;
+
+        [ExcelColumn(Name = "Độ khó")]
+        public string Difficulty { get; set; } = "MEDIUM";
+
+        [ExcelColumn(Name = "Chương")]
+        public string? Chapter { get; set; }
     }
 }

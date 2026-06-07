@@ -12,5 +12,8 @@ namespace CourseGuard.Backend.Models
         public string CorrectOption { get; set; } = "A";
         public decimal Points { get; set; }
         public int DisplayOrder { get; set; }
+        public string Difficulty { get; set; } = "MEDIUM";
+        public string? Chapter { get; set; }
+        public string QuestionType { get; set; } = "MULTIPLE_CHOICE";
     }
 }

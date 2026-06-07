@@ -106,6 +106,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _dgvViolations.Columns.Add("CreatedAt", "Thời gian");
             _dgvViolations.Columns.Add("Type", "Loại vi phạm");
 
+            _dgvViolations.Columns.Add("Severity", "Muc do");
+
             var pnlBottom = new Panel { Dock = DockStyle.Bottom, Height = 60, Padding = new Padding(0, 16, 0, 0) };
             _btnRecordViolation.Text = "Ghi nhận vi phạm";
             _btnRecordViolation.Dock = DockStyle.Fill;
@@ -151,6 +153,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
                     UserId = _studentId,
                     ExamAttemptId = _attemptId > 0 ? _attemptId : null,
                     Type = "Mất Focus / Chuyển Tab (Ghi nhận thủ công)",
+                    Severity = ViolationSeverityMap.Get("SCREEN_SWITCH"),
+                    ActionTaken = "RECORDED_MANUALLY",
                     ImageUrl = imageUrl
                 };
                 await _violationRepo.InsertViolationAsync(violation);
@@ -198,7 +202,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _dgvViolations.Rows.Clear();
             foreach (var v in violations)
             {
-                _dgvViolations.Rows.Add(v.CreatedAt.ToString("HH:mm:ss"), v.Type);
+                _dgvViolations.Rows.Add(v.CreatedAt.ToString("HH:mm:ss"), v.Type, v.Severity);
             }
         }
 

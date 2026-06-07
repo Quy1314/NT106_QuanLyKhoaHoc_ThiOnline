@@ -12,29 +12,41 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 {
     public partial class UC_TeacherExams : TeacherGridPageBase
     {
-        public UC_TeacherExams(int teacherId, TeacherController controller) : base(teacherId, controller, "Bài kiểm tra", "Tạo và quản lý kỳ thi. Giám sát nằm ở tab riêng.", "Danh sách bài kiểm tra")
+        private const string ColumnExamId = "Id";
+        private const string ColumnCourseId = "CourseId";
+        private const string ColumnCourse = "Khoa hoc";
+        private const string ColumnTitle = "Ten ky thi";
+        private const string ColumnOpen = "Mo";
+        private const string ColumnClose = "Dong";
+        private const string ColumnDuration = "Thoi luong";
+        private const string ColumnAttempts = "Luot";
+        private const string ColumnViolations = "Vi pham";
+        private const string ColumnQuestions = "Cau hoi";
+        private const string ColumnStatus = "Trang thai";
+
+        public UC_TeacherExams(int teacherId, TeacherController controller) : base(teacherId, controller, "Bai kiem tra", "Tao va quan ly ky thi. Giam sat nam o tab rieng.", "Danh sach bai kiem tra")
         {
-            var questionsButton = TeacherTabChrome.SecondaryButton("Soạn câu hỏi");
+            var questionsButton = TeacherTabChrome.SecondaryButton("Soan cau hoi");
             questionsButton.Click += async (_, _) => await EditQuestionsAsync();
             AddHeaderAction(questionsButton);
         }
 
         protected override Task<DataTable> CreateTableAsync() => Task.Run(() => TeacherTabChrome.ToTable(
-            new[] { "Id", "CourseId", "Khóa học", "Tên kỳ thi", "Mở", "Đóng", "Thời lượng", "Lượt", "Câu hỏi", "Trạng thái" },
+            new[] { ColumnExamId, ColumnCourseId, ColumnCourse, ColumnTitle, ColumnOpen, ColumnClose, ColumnDuration, ColumnAttempts, ColumnViolations, ColumnQuestions, ColumnStatus },
             Controller.GetExams(TeacherId),
-            e => new object?[] { e.Id, e.CourseId, e.CourseName, e.Title, e.OpenTime?.ToString("dd/MM/yyyy HH:mm") ?? "", e.CloseTime?.ToString("dd/MM/yyyy HH:mm") ?? "", e.DurationMinutes, e.MaxAttempts, e.QuestionCount, e.StatusText }));
+            e => new object?[] { e.Id, e.CourseId, e.CourseName, e.Title, e.OpenTime?.ToString("dd/MM/yyyy HH:mm") ?? "", e.CloseTime?.ToString("dd/MM/yyyy HH:mm") ?? "", e.DurationMinutes, e.MaxAttempts, e.MaxViolations, e.QuestionCount, e.StatusText }));
 
         private async Task EditQuestionsAsync()
         {
-            int id = CurrentInt("Id");
+            int id = CurrentInt(ColumnExamId);
             if (id <= 0)
             {
-                MetaTheme.ShowModernDialog("Vui lòng chọn một bài kiểm tra.", "Thông báo");
+                MetaTheme.ShowModernDialog("Vui long chon mot bai kiem tra.", "Thong bao");
                 return;
             }
 
-            int courseId = CurrentInt("CourseId");
-            using var dialog = new TeacherExamQuestionsDialog(TeacherId, id, CurrentString("Tên kỳ thi"), courseId);
+            int courseId = CurrentInt(ColumnCourseId);
+            using var dialog = new TeacherExamQuestionsDialog(TeacherId, id, CurrentString(ColumnTitle), courseId);
             dialog.ShowDialog(FindForm());
             await LoadDataAsync();
         }
@@ -46,7 +58,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             {
                 if (string.Equals(dialog.Status, WorkflowConstants.ExamStatus.Active, StringComparison.OrdinalIgnoreCase))
                 {
-                    MetaTheme.ShowModernDialog("Bài kiểm tra cần được tạo ở trạng thái nháp, thêm câu hỏi, rồi mới kích hoạt.", "Chưa thể kích hoạt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MetaTheme.ShowModernDialog("Bai kiem tra can duoc tao o trang thai nhap, them cau hoi, roi moi kich hoat.", "Chua the kich hoat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
@@ -58,6 +70,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     CloseTime = dialog.CloseTime,
                     DurationMinutes = dialog.DurationMinutes,
                     MaxAttempts = dialog.MaxAttempts,
+                    MaxViolations = dialog.MaxViolations,
                     Status = dialog.Status
                 });
                 await LoadDataAsync();
@@ -66,26 +79,27 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         protected override async Task EditAsync()
         {
-            int id = CurrentInt("Id");
+            int id = CurrentInt(ColumnExamId);
             if (id <= 0)
                 return;
 
             using var dialog = new TeacherExamDialog(Controller.GetCourses(TeacherId), new TeacherExamModel
             {
                 Id = id,
-                CourseId = CurrentInt("CourseId"),
-                Title = CurrentString("Tên kỳ thi"),
-                OpenTime = ParseGridDate(CurrentString("Mở")),
-                CloseTime = ParseGridDate(CurrentString("Đóng")),
-                DurationMinutes = CurrentInt("Thời lượng"),
-                MaxAttempts = CurrentInt("Lượt"),
-                Status = CurrentString("Trạng thái")
+                CourseId = CurrentInt(ColumnCourseId),
+                Title = CurrentString(ColumnTitle),
+                OpenTime = ParseGridDate(CurrentString(ColumnOpen)),
+                CloseTime = ParseGridDate(CurrentString(ColumnClose)),
+                DurationMinutes = CurrentInt(ColumnDuration),
+                MaxAttempts = CurrentInt(ColumnAttempts),
+                MaxViolations = CurrentInt(ColumnViolations),
+                Status = CurrentString(ColumnStatus)
             });
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
                 if (string.Equals(dialog.Status, WorkflowConstants.ExamStatus.Active, StringComparison.OrdinalIgnoreCase) && !Controller.CanActivateExam(TeacherId, id))
                 {
-                    MetaTheme.ShowModernDialog("Bài kiểm tra cần có ít nhất 1 câu hỏi trước khi kích hoạt.", "Chưa thể kích hoạt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MetaTheme.ShowModernDialog("Bai kiem tra can co it nhat 1 cau hoi truoc khi kich hoat.", "Chua the kich hoat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
@@ -98,6 +112,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     CloseTime = dialog.CloseTime,
                     DurationMinutes = dialog.DurationMinutes,
                     MaxAttempts = dialog.MaxAttempts,
+                    MaxViolations = dialog.MaxViolations,
                     Status = dialog.Status
                 });
                 await LoadDataAsync();
@@ -106,7 +121,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         protected override async Task DeleteAsync()
         {
-            int id = CurrentInt("Id");
+            int id = CurrentInt(ColumnExamId);
             if (id > 0)
             {
                 Controller.DeleteExam(TeacherId, id);

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using CourseGuard.Backend.Models;
+using CourseGuard.Backend.Services;
 using Npgsql;
 
 namespace CourseGuard.Backend.Data
@@ -466,8 +467,8 @@ namespace CourseGuard.Backend.Data
         public int CreateExam(int teacherId, TeacherExamModel input) => InsertCourseChild(
             teacherId,
             input.CourseId,
-            @"INSERT INTO exams (course_id, title, open_time, close_time, duration_minutes, max_attempts, created_by, status)
-              SELECT @course_id, @title, @open_time, @close_time, @duration_minutes, @max_attempts, @teacher_id, @status
+            @"INSERT INTO exams (course_id, title, open_time, close_time, duration_minutes, max_attempts, max_violations, created_by, status)
+              SELECT @course_id, @title, @open_time, @close_time, @duration_minutes, @max_attempts, @max_violations, @teacher_id, @status
               WHERE EXISTS (SELECT 1 FROM courses WHERE id = @course_id AND teacher_id = @teacher_id)
               RETURNING id",
             command => AddExamParameters(command, input, includeId: false));
@@ -477,7 +478,8 @@ namespace CourseGuard.Backend.Data
             input.CourseId,
             @"UPDATE exams ex
               SET title = @title, open_time = @open_time, close_time = @close_time,
-                  duration_minutes = @duration_minutes, max_attempts = @max_attempts, status = @status
+                  duration_minutes = @duration_minutes, max_attempts = @max_attempts,
+                  max_violations = @max_violations, status = @status
               FROM courses c
               WHERE ex.course_id = c.id AND c.teacher_id = @teacher_id AND ex.id = @id AND ex.course_id = @course_id",
             command => AddExamParameters(command, input, includeId: true));
@@ -513,7 +515,9 @@ namespace CourseGuard.Backend.Data
                        COALESCE(eq.option_a, ''), COALESCE(eq.option_b, ''),
                        COALESCE(eq.option_c, ''), COALESCE(eq.option_d, ''),
                        COALESCE(eq.correct_option, 'A'), COALESCE(eq.points, 0),
-                       COALESCE(eq.display_order, 1)
+                       COALESCE(eq.display_order, 1),
+                       COALESCE(eq.difficulty, 'MEDIUM'), eq.chapter,
+                       COALESCE(eq.question_type, 'MULTIPLE_CHOICE')
                 FROM exam_questions eq
                 JOIN exams ex ON ex.id = eq.exam_id
                 JOIN courses c ON c.id = ex.course_id
@@ -536,7 +540,10 @@ namespace CourseGuard.Backend.Data
                     OptionD = reader.GetString(6),
                     CorrectOption = reader.GetString(7),
                     Points = reader.GetDecimal(8),
-                    DisplayOrder = reader.GetInt32(9)
+                    DisplayOrder = reader.GetInt32(9),
+                    Difficulty = reader.GetString(10),
+                    Chapter = reader.IsDBNull(11) ? null : reader.GetString(11),
+                    QuestionType = reader.GetString(12)
                 });
             }
             return rows;
@@ -565,8 +572,9 @@ namespace CourseGuard.Backend.Data
             int nextOrder = GetNextQuestionOrder(connection, transaction, teacherId, input.ExamId);
             using var command = new NpgsqlCommand(@"
                 INSERT INTO exam_questions
-                    (exam_id, question_text, option_a, option_b, option_c, option_d, correct_option, points, display_order)
-                SELECT @exam_id, @question_text, @option_a, @option_b, @option_c, @option_d, @correct_option, 0, @display_order
+                    (exam_id, question_text, option_a, option_b, option_c, option_d, correct_option, points, display_order, difficulty, chapter, question_type)
+                SELECT @exam_id, @question_text, @option_a, @option_b, @option_c, @option_d, @correct_option, 0, @display_order,
+                       @difficulty, @chapter, @question_type
                 WHERE EXISTS (
                     SELECT 1 FROM exams ex
                     JOIN courses c ON c.id = ex.course_id
@@ -595,7 +603,10 @@ namespace CourseGuard.Backend.Data
                     option_b = @option_b,
                     option_c = @option_c,
                     option_d = @option_d,
-                    correct_option = @correct_option
+                    correct_option = @correct_option,
+                    difficulty = @difficulty,
+                    chapter = @chapter,
+                    question_type = @question_type
                 FROM exams ex
                 JOIN courses c ON c.id = ex.course_id
                 WHERE eq.exam_id = ex.id
@@ -922,7 +933,7 @@ namespace CourseGuard.Backend.Data
             string query = @"
                 SELECT ex.id, ex.course_id, COALESCE(c.name, ''), COALESCE(ex.title, ''),
                        ex.open_time, ex.close_time, COALESCE(ex.duration_minutes, 0),
-                       COALESCE(ex.max_attempts, 1), COUNT(eq.id)::int,
+                       COALESCE(ex.max_attempts, 1), COALESCE(ex.max_violations, 0), COUNT(eq.id)::int,
                        COALESCE(ex.status, 'DRAFT')
                 FROM exams ex
                 JOIN courses c ON c.id = ex.course_id
@@ -950,9 +961,10 @@ namespace CourseGuard.Backend.Data
                     CloseTime = close,
                     DurationMinutes = reader.GetInt32(6),
                     MaxAttempts = reader.GetInt32(7),
-                    QuestionCount = reader.GetInt32(8),
-                    Status = reader.GetString(9),
-                    StatusText = reader.GetString(9)
+                    MaxViolations = reader.GetInt32(8),
+                    QuestionCount = reader.GetInt32(9),
+                    Status = reader.GetString(10),
+                    StatusText = reader.GetString(10)
                 });
             }
             return rows;
@@ -1332,6 +1344,9 @@ namespace CourseGuard.Backend.Data
                     ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'DRAFT';
 
                 ALTER TABLE exams
+                    ADD COLUMN IF NOT EXISTS max_violations INT NOT NULL DEFAULT 0;
+
+                ALTER TABLE exams
                     ALTER COLUMN status SET DEFAULT 'DRAFT';
 
                 UPDATE exams
@@ -1428,10 +1443,45 @@ namespace CourseGuard.Backend.Data
                     ADD COLUMN IF NOT EXISTS option_d TEXT,
                     ADD COLUMN IF NOT EXISTS correct_option CHAR(1) DEFAULT 'A',
                     ADD COLUMN IF NOT EXISTS points NUMERIC(6,2) DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS display_order INT DEFAULT 1;
+                    ADD COLUMN IF NOT EXISTS display_order INT DEFAULT 1,
+                    ADD COLUMN IF NOT EXISTS difficulty VARCHAR(10) NOT NULL DEFAULT 'MEDIUM',
+                    ADD COLUMN IF NOT EXISTS chapter VARCHAR(100),
+                    ADD COLUMN IF NOT EXISTS question_type VARCHAR(20) NOT NULL DEFAULT 'MULTIPLE_CHOICE';
 
                 CREATE INDEX IF NOT EXISTS idx_exams_status ON exams(status);
                 CREATE INDEX IF NOT EXISTS idx_exam_questions_exam ON exam_questions(exam_id);
+                CREATE INDEX IF NOT EXISTS idx_exam_questions_difficulty ON exam_questions(difficulty);
+                CREATE INDEX IF NOT EXISTS idx_exam_questions_chapter ON exam_questions(chapter) WHERE chapter IS NOT NULL;
+
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_exam_questions_difficulty') THEN
+                        ALTER TABLE exam_questions
+                            ADD CONSTRAINT chk_exam_questions_difficulty
+                            CHECK (difficulty IN ('EASY', 'MEDIUM', 'HARD'));
+                    END IF;
+
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_exam_questions_question_type') THEN
+                        ALTER TABLE exam_questions
+                            ADD CONSTRAINT chk_exam_questions_question_type
+                            CHECK (question_type IN ('MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK'));
+                    END IF;
+                END $$;
+
+                DO $$
+                BEGIN
+                    IF to_regclass('public.violations') IS NOT NULL THEN
+                        ALTER TABLE violations
+                            ADD COLUMN IF NOT EXISTS severity VARCHAR(10) NOT NULL DEFAULT 'MEDIUM',
+                            ADD COLUMN IF NOT EXISTS action_taken VARCHAR(50);
+
+                        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_violations_severity') THEN
+                            ALTER TABLE violations
+                                ADD CONSTRAINT chk_violations_severity
+                                CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH'));
+                        END IF;
+                    END IF;
+                END $$;
 
                 CREATE TABLE IF NOT EXISTS exam_attempt_answers (
                     attempt_id INT NOT NULL REFERENCES exam_attempts(id) ON DELETE CASCADE,
@@ -1548,6 +1598,7 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@close_time", input.CloseTime.HasValue ? input.CloseTime.Value : DBNull.Value);
             command.Parameters.AddWithValue("@duration_minutes", input.DurationMinutes);
             command.Parameters.AddWithValue("@max_attempts", input.MaxAttempts <= 0 ? 1 : input.MaxAttempts);
+            command.Parameters.AddWithValue("@max_violations", Math.Max(0, input.MaxViolations));
             command.Parameters.AddWithValue("@status", NormalizeExamStatus(input.Status));
         }
 
@@ -1573,6 +1624,9 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@option_d", input.OptionD.Trim());
             command.Parameters.AddWithValue("@correct_option", NormalizeCorrectOption(input.CorrectOption));
             command.Parameters.AddWithValue("@display_order", displayOrder);
+            command.Parameters.AddWithValue("@difficulty", QuestionMetadataNormalizer.NormalizeDifficulty(input.Difficulty));
+            command.Parameters.AddWithValue("@chapter", QuestionMetadataNormalizer.NormalizeChapter(input.Chapter) ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@question_type", QuestionMetadataNormalizer.NormalizeQuestionType(input.QuestionType));
         }
 
         private static string NormalizeCorrectOption(string? value)

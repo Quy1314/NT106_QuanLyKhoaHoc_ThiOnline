@@ -208,6 +208,84 @@ Run("student exam form handles monitor connection lost violation", () =>
     AssertEqual(typeof(Task), recorder!.ReturnType);
 });
 
+Run("plan 03 models expose metadata and violation threshold fields", () =>
+{
+    AssertProperty(typeof(TeacherExamQuestionModel), "Difficulty");
+    AssertProperty(typeof(TeacherExamQuestionModel), "Chapter");
+    AssertProperty(typeof(TeacherExamQuestionModel), "QuestionType");
+    AssertProperty(typeof(ExcelQuestionRowModel), "Difficulty");
+    AssertProperty(typeof(ExcelQuestionRowModel), "Chapter");
+    string excelModelSource = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Models", "ExcelQuestionRowModel.cs"));
+    AssertTrue(excelModelSource.Contains("Độ khó") && excelModelSource.Contains("Chương"), "Excel metadata columns must use Vietnamese template headers");
+    AssertProperty(typeof(TeacherExamModel), "MaxViolations");
+    AssertProperty(typeof(StudentExamTakingModel), "MaxViolations");
+    AssertProperty(typeof(ViolationModel), "Severity");
+    AssertProperty(typeof(ViolationModel), "ActionTaken");
+
+    Type criteriaType = typeof(TeacherExamQuestionModel).Assembly.GetType("CourseGuard.Backend.Models.RandomQuestionCriteria")
+        ?? throw new InvalidOperationException("RandomQuestionCriteria must exist");
+    AssertProperty(criteriaType, "Difficulty");
+    AssertProperty(criteriaType, "Chapter");
+    AssertProperty(criteriaType, "Count");
+});
+
+Run("plan 03 normalizers expose expected question metadata and severity behavior", () =>
+{
+    Type metadataNormalizer = typeof(TeacherExamQuestionModel).Assembly.GetType("CourseGuard.Backend.Services.QuestionMetadataNormalizer")
+        ?? throw new InvalidOperationException("QuestionMetadataNormalizer must exist");
+    MethodInfo normalizeDifficulty = metadataNormalizer.GetMethod("NormalizeDifficulty", BindingFlags.Public | BindingFlags.Static)
+        ?? throw new InvalidOperationException("QuestionMetadataNormalizer must expose NormalizeDifficulty");
+    MethodInfo normalizeQuestionType = metadataNormalizer.GetMethod("NormalizeQuestionType", BindingFlags.Public | BindingFlags.Static)
+        ?? throw new InvalidOperationException("QuestionMetadataNormalizer must expose NormalizeQuestionType");
+    MethodInfo normalizeChapter = metadataNormalizer.GetMethod("NormalizeChapter", BindingFlags.Public | BindingFlags.Static)
+        ?? throw new InvalidOperationException("QuestionMetadataNormalizer must expose NormalizeChapter");
+
+    AssertEqual("EASY", normalizeDifficulty.Invoke(null, new object?[] { "easy" })?.ToString());
+    AssertEqual("MEDIUM", normalizeDifficulty.Invoke(null, new object?[] { "invalid" })?.ToString());
+    AssertEqual("MULTIPLE_CHOICE", normalizeQuestionType.Invoke(null, new object?[] { "" })?.ToString());
+    AssertEqual(null, normalizeChapter.Invoke(null, new object?[] { "   " }));
+
+    Type severityMap = typeof(StudentScreenStreamClient).Assembly.GetType("CourseGuard.Backend.Services.Monitoring.ViolationSeverityMap")
+        ?? throw new InvalidOperationException("ViolationSeverityMap must exist");
+    MethodInfo getSeverity = severityMap.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)
+        ?? throw new InvalidOperationException("ViolationSeverityMap must expose Get");
+
+    AssertEqual("HIGH", getSeverity.Invoke(null, new object?[] { "CONNECTION_LOST" })?.ToString());
+    AssertEqual("LOW", getSeverity.Invoke(null, new object?[] { "KEY_PRESS" })?.ToString());
+    AssertEqual("MEDIUM", getSeverity.Invoke(null, new object?[] { "Mat Focus / Chuyen Tab" })?.ToString());
+    AssertEqual("MEDIUM", getSeverity.Invoke(null, new object?[] { "UNKNOWN" })?.ToString());
+});
+
+Run("plan 03 source wiring matches question bank and violation threshold architecture", () =>
+{
+    string repoRoot = RepoRoot();
+    string db = File.ReadAllText(Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Backend", "Data", "CourseGuardDbContext.cs"));
+    string teacherRepo = File.ReadAllText(Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Backend", "Data", "TeacherRepository.cs"));
+    string violationRepo = File.ReadAllText(Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Backend", "Data", "ViolationRepository.cs"));
+    string teacherController = File.ReadAllText(Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Backend", "Controllers", "TeacherController.cs"));
+    string doExam = File.ReadAllText(Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Student", "DoExamForm.cs"));
+    string questionDialog = File.ReadAllText(Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherExamQuestionsDialog.cs"));
+    string randomDialog = File.ReadAllText(Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "RandomExamBuilderDialog.cs"));
+
+    AssertTrue(db.Contains("EnsureQuestionBankMetadataSchema"), "db context must guard question bank metadata schema");
+    AssertTrue(db.Contains("ALTER TABLE questions"), "metadata must be added to the questions bank table");
+    AssertTrue(db.Contains("ALTER TABLE exam_questions"), "metadata must also be added to exam question snapshots");
+    AssertTrue(db.Contains("max_violations"), "db context must persist exam violation threshold");
+    AssertTrue(violationRepo.Contains("COUNT(*)") && violationRepo.Contains("FROM violations"), "auto-submit must use persisted violation count");
+    AssertTrue(db.Contains("GetRandomQuestionsByCriteria"), "db context must expose random question selection");
+    AssertTrue(db.Contains("questions WHERE course_id = @course_id"), "random question selection must use questions.course_id");
+    AssertFalse(db.Contains("exam_questions\n            WHERE course_id"), "random bank selection must not query exam_questions.course_id");
+    AssertTrue(db.Contains("COALESCE(MAX(display_order), 0)") && db.Contains("NOT EXISTS") && db.Contains("existing.exam_id = @exam_id") && db.Contains("existing.question_id = q.id"), "bank/random snapshots must append display order and skip duplicate bank questions");
+    AssertFalse(db.Contains("row_number() over (order by id),"), "bank/random snapshots must not reset display order to 1 for every insert");
+    AssertTrue(teacherRepo.Contains("max_violations"), "teacher repository must read and write max violations");
+    AssertTrue(teacherController.Contains("AddRandomQuestionsToExamAsync"), "teacher controller must expose random question add flow");
+    AssertTrue(randomDialog.Contains("_previewQuestions.Select(q => q.Id)") && randomDialog.Contains("AddQuestionsFromBankAsync(_teacherId, _examId, _courseId"), "random builder must add the exact previewed question ids");
+    AssertTrue(doExam.Contains("HandleViolationAsync"), "student exam form must centralize violation handling");
+    AssertTrue(doExam.Contains("EvaluateViolationThresholdAsync"), "student exam form must evaluate violation threshold");
+    AssertTrue(doExam.Contains("SubmitExam(confirm: false)"), "threshold breach must submit without confirmation");
+    AssertTrue(questionDialog.Contains("RandomExamBuilderDialog"), "question editor must open random exam builder");
+});
+
 Run("chat send status formatter labels pending sent and failed sends", () =>
 {
     Type formatterType = typeof(UC_Chat).Assembly.GetType("CourseGuard.Frontend.Helpers.ChatSendStatusLineFormatter")
@@ -1927,6 +2005,11 @@ static void AssertFalse(bool value, string message)
 {
     if (value)
         throw new InvalidOperationException(message);
+}
+
+static void AssertProperty(Type type, string name)
+{
+    AssertTrue(type.GetProperty(name) != null, $"{type.Name} must expose {name}");
 }
 
 static void AssertProfileUsesValidatedSave(Type pageType, string pageName)
