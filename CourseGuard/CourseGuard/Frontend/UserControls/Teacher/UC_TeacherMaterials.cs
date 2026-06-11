@@ -55,6 +55,9 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 Controller.CreateMaterial(TeacherId, BuildMaterialModel(dialog.CourseId, dialog.SelectedFilePath));
                 LoadCourseFilter();
                 await LoadDataAsync();
+                MetaTheme.ShowModernDialog(
+                    "Đã thêm tài liệu. Học viên sẽ thấy tài liệu khi đã được duyệt tham gia và khóa học đang hoạt động/mở.",
+                    "Thông báo");
             }
         }
 

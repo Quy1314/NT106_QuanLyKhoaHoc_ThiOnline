@@ -128,7 +128,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 LEFT JOIN USERS u ON u.ID = m.UPLOADED_BY
                 WHERE e.STUDENT_ID = @student_id
                   AND UPPER(COALESCE(e.STATUS, '')) IN ('ACTIVE', 'APPROVED')
-                  AND UPPER(COALESCE(c.STATUS, '')) = 'ACTIVE'
+                  AND UPPER(COALESCE(c.STATUS, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
                 ORDER BY m.UPLOADED_AT DESC, m.ID DESC";
 
             using var command = new NpgsqlCommand(query, connection);
@@ -314,7 +314,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 WHERE m.id = @material_id
                   AND e.student_id = @student_id
                   AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
-                  AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'", connection);
+                  AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')", connection);
             command.Parameters.AddWithValue("@material_id", materialId);
             command.Parameters.AddWithValue("@student_id", studentId);
             object? value = command.ExecuteScalar();
