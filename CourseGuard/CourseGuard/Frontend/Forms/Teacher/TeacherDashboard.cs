@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
@@ -169,14 +170,62 @@ namespace CourseGuard.Frontend.Forms.Teacher
             NavigateToPage(e.PageName);
         }
 
-        private void Topbar_QuickSearchRequested(object? sender, TopbarQuickSearchRequestedEventArgs e)
+        private async void Topbar_QuickSearchRequested(object? sender, TopbarQuickSearchRequestedEventArgs e)
         {
             string keyword = e.Keyword.Trim();
             if (string.IsNullOrWhiteSpace(keyword))
                 return;
 
+            try
+            {
+                List<TopbarSearchResult> results = BuildNavigationSearchResults(keyword);
+                List<TeacherQuickSearchResultModel> dataResults = await _teacherController.SearchQuickAccessAsync(_teacherId, keyword);
+                results.AddRange(dataResults.Select(ToTopbarSearchResult));
+
+                _topbar.ShowQuickSearchResults(results);
+            }
+            catch (Exception ex)
+            {
+                _topbar.ShowQuickSearchResults(new[]
+                {
+                    new TopbarSearchResult
+                    {
+                        Group = "Lỗi tìm kiếm",
+                        Title = "Không thể tìm kiếm lúc này",
+                        Description = ex.Message,
+                        Keyword = keyword
+                    }
+                });
+            }
+        }
+
+        private async void Topbar_SearchResultSelected(object? sender, TopbarSearchResultSelectedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(e.Result.PageName))
+                return;
+
+            NavigateToPage(e.Result.PageName);
+
+            if (e.Result.Payload is TeacherQuickSearchRequest request)
+            {
+                await ApplyQuickSearchToCurrentPageAsync(request);
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(e.Result.Keyword) && _content.Controls.OfType<UC_TeacherCourses>().FirstOrDefault() is UC_TeacherCourses courses)
+                courses.ApplyGlobalSearch(e.Result.Keyword);
+        }
+
+        private async Task ApplyQuickSearchToCurrentPageAsync(TeacherQuickSearchRequest request)
+        {
+            if (_content.Controls.OfType<ITeacherQuickSearchTarget>().FirstOrDefault() is ITeacherQuickSearchTarget target)
+                await target.ApplyQuickSearchAsync(request);
+        }
+
+        private List<TopbarSearchResult> BuildNavigationSearchResults(string keyword)
+        {
             string normalized = keyword.ToLowerInvariant();
-            IEnumerable<TopbarSearchResult> results = _routes.Keys
+            return _routes.Keys
                 .Where(page => page.ToLowerInvariant().Contains(normalized))
                 .Select(page => new TopbarSearchResult
                 {
@@ -185,15 +234,27 @@ namespace CourseGuard.Frontend.Forms.Teacher
                     Description = BuildSearchDescription(page),
                     PageName = page,
                     Keyword = keyword
-                });
-
-            _topbar.ShowQuickSearchResults(results);
+                })
+                .ToList();
         }
 
-        private void Topbar_SearchResultSelected(object? sender, TopbarSearchResultSelectedEventArgs e)
+        private static TopbarSearchResult ToTopbarSearchResult(TeacherQuickSearchResultModel result)
         {
-            if (!string.IsNullOrWhiteSpace(e.Result.PageName))
-                NavigateToPage(e.Result.PageName);
+            return new TopbarSearchResult
+            {
+                Group = result.Group,
+                Title = result.Title,
+                Description = result.Description,
+                PageName = result.PageName,
+                Keyword = result.Keyword,
+                Payload = new TeacherQuickSearchRequest
+                {
+                    Kind = result.Kind,
+                    Id = result.Id,
+                    ParentId = result.ParentId,
+                    Keyword = result.Keyword
+                }
+            };
         }
 
         private void NavigateToPage(string pageName)
