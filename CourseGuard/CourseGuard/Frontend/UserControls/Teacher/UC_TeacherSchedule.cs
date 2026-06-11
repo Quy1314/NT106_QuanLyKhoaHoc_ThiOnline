@@ -37,6 +37,11 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private bool _isCalendarView = true;
         private bool _isOpeningClass;
         private List<TeacherScheduleItemModel> _sessions = new();
+        private List<TeacherScheduleItemModel> _filteredSessions = new();
+        private ComboBox _cboTimeFilter = null!;
+        private readonly System.Windows.Forms.Timer _filterDebounceTimer;
+        private readonly Dictionary<int, (List<TeacherScheduleItemModel> Sessions, Dictionary<DateTime, List<TeacherScheduleItemModel>> SessionsByDate, DateTime CalendarStart, DateTime CalendarEnd, string EmptyMessage)> _filterCache = new();
+        private int _filterRenderVersion;
 
         public UC_TeacherSchedule(int teacherId)
             : this(teacherId, new TeacherController(new CourseGuardDbContext("")))
@@ -48,9 +53,16 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _teacherId = teacherId;
             _controller = controller ?? throw new ArgumentNullException(nameof(controller));
             _classroomSignal = new ClassroomOpenSignalCoordinator(TcpClassroomService.Instance);
+            _filterDebounceTimer = new System.Windows.Forms.Timer { Interval = 100 };
+            _filterDebounceTimer.Tick += (_, _) =>
+            {
+                _filterDebounceTimer.Stop();
+                ApplyTimeFilterAsync().FireAndForgetSafe(this);
+            };
             BuildUI();
 
             LoadDataAsync().FireAndForgetSafe(this);
+            Disposed += (_, _) => _filterDebounceTimer.Dispose();
         }
 
         private void BuildUI()
@@ -86,6 +98,16 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _btnRefresh = TeacherTabChrome.SecondaryButton("Tải lại");
             _btnToggleView = TeacherTabChrome.SecondaryButton("Dạng Bảng");
             _btnOpenClass = TeacherTabChrome.PrimaryButton("Dạy online");
+            _cboTimeFilter = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = 130
+            };
+            _cboTimeFilter.Items.AddRange(new object[] { "Hôm nay", "Tuần này", "Tháng này", "Tất cả" });
+            _cboTimeFilter.SelectedIndex = 3;
+            _cboTimeFilter.Font = AppFonts.Body;
+            _cboTimeFilter.BackColor = AppColors.BgCard;
+            _cboTimeFilter.ForeColor = AppColors.TextPrimary;
             
             _btnAdd.Click += async (_, _) => await AddAsync();
             _btnEdit.Click += async (_, _) => await EditAsync();
@@ -93,11 +115,12 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _btnRefresh.Click += async (_, _) => await LoadDataAsync();
             _btnToggleView.Click += ToggleView;
             _btnOpenClass.Click += async (_, _) => await OpenClassAsync();
+            _cboTimeFilter.SelectedIndexChanged += (_, _) => ScheduleFilterRefresh();
             _grid.SelectionChanged += (_, _) => UpdateActionButtons();
 
             _rootLayout = TeacherTabChrome.CreateRoot(this);
             var header = TeacherTabChrome.CreateHeader("Lịch dạy", "Quản lý lịch học và mở lớp trực tuyến",
-                new Control[] { _btnOpenClass, _btnToggleView, _btnAdd, _btnEdit, _btnDelete, _btnRefresh });
+                new Control[] { _cboTimeFilter, _btnOpenClass, _btnToggleView, _btnAdd, _btnEdit, _btnDelete, _btnRefresh });
             _rootLayout.Controls.Add(header, 0, 0);
 
             _emptyStateLabel = new Label
@@ -116,6 +139,10 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             
             var scheduleCard = TeacherTabChrome.CreateDataCard("Lịch dạy của bạn", _dataCard);
             scheduleCard.Padding = new Padding(12);
+            EnableDoubleBuffering(this);
+            EnableDoubleBuffering(_dataCard);
+            EnableDoubleBuffering(_calendarView);
+            EnableDoubleBuffering(_grid);
             _rootLayout.Controls.Add(scheduleCard, 0, 1);
         }
         
@@ -124,8 +151,13 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             this.ShowSkeleton(SkeletonType.CalendarView);
             try
             {
-                _sessions = await Task.Run(() => _controller.GetSchedule(_teacherId).ToList());
-                RefreshView();
+                _sessions = (await Task.Run(() => _controller.GetSchedule(_teacherId).ToList()))
+                    .OrderBy(s => s.StartTime ?? DateTime.MaxValue)
+                    .ThenBy(s => s.CourseName)
+                    .ThenBy(s => s.Title)
+                    .ToList();
+                _filterCache.Clear();
+                await ApplyTimeFilterAsync();
             }
             catch (Exception ex)
             {
@@ -137,24 +169,120 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             }
         }
         
-        private void RefreshView()
+        private void ScheduleFilterRefresh()
         {
-            bool hasRows = _sessions.Count > 0;
-            UpdateActionButtons();
-            
-            if (_isCalendarView)
+            _filterDebounceTimer.Stop();
+            _filterDebounceTimer.Start();
+        }
+
+        private async Task ApplyTimeFilterAsync()
+        {
+            int renderVersion = ++_filterRenderVersion;
+            int filterIndex = _cboTimeFilter.SelectedIndex;
+            if (_filterCache.TryGetValue(filterIndex, out var cached))
             {
-                _grid.Visible = false;
-                _calendarView.Visible = true;
-                _emptyStateLabel.Visible = !hasRows;
-                RenderCalendar();
+                _filteredSessions = cached.Sessions;
+                RefreshView(cached.Sessions, cached.SessionsByDate, cached.EmptyMessage, cached.CalendarStart, cached.CalendarEnd);
+                return;
             }
-            else
+
+            var source = _sessions.ToList();
+            var prepared = await Task.Run(() => PrepareFilterData(source, filterIndex));
+            if (IsDisposed || renderVersion != _filterRenderVersion) return;
+
+            _filterCache[filterIndex] = prepared;
+            _filteredSessions = prepared.Sessions;
+            RefreshView(prepared.Sessions, prepared.SessionsByDate, prepared.EmptyMessage, prepared.CalendarStart, prepared.CalendarEnd);
+        }
+
+        private static (List<TeacherScheduleItemModel> Sessions, Dictionary<DateTime, List<TeacherScheduleItemModel>> SessionsByDate, DateTime CalendarStart, DateTime CalendarEnd, string EmptyMessage) PrepareFilterData(List<TeacherScheduleItemModel> sessions, int filterIndex)
+        {
+            IEnumerable<TeacherScheduleItemModel> filtered = sessions;
+            DateTime now = DateTime.Now;
+            string emptyMessage = "Chưa có lịch dạy phù hợp.";
+            DateTime calendarStart;
+            DateTime calendarEnd;
+
+            switch (filterIndex)
             {
-                _calendarView.Visible = false;
-                _grid.Visible = hasRows;
-                _emptyStateLabel.Visible = !hasRows;
-                
+                case 0:
+                    calendarStart = now.Date;
+                    calendarEnd = now.Date;
+                    filtered = filtered.Where(s => s.StartTime.HasValue && s.StartTime.Value.Date == calendarStart);
+                    emptyMessage = "Hôm nay chưa có lịch dạy.";
+                    break;
+                case 1:
+                    DateTime startOfWeek = now.Date.AddDays(-(int)now.DayOfWeek + 1);
+                    DateTime endOfWeek = startOfWeek.AddDays(7);
+                    filtered = filtered.Where(s => s.StartTime.HasValue && s.StartTime.Value >= startOfWeek && s.StartTime.Value < endOfWeek);
+                    calendarStart = startOfWeek;
+                    calendarEnd = endOfWeek.AddDays(-1);
+                    emptyMessage = "Chưa có lịch dạy trong tuần này.";
+                    break;
+                case 2:
+                    DateTime startOfMonth = new(now.Year, now.Month, 1);
+                    DateTime endOfMonth = startOfMonth.AddMonths(1);
+                    filtered = filtered.Where(s => s.StartTime.HasValue && s.StartTime.Value >= startOfMonth && s.StartTime.Value < endOfMonth);
+                    calendarStart = startOfMonth;
+                    calendarEnd = endOfMonth.AddDays(-1);
+                    emptyMessage = "Chưa có lịch dạy trong tháng này.";
+                    break;
+                default:
+                    calendarStart = now.Date.AddDays(-(int)now.DayOfWeek);
+                    calendarEnd = now.Date.AddMonths(6);
+                    filtered = filtered.Where(s => !s.StartTime.HasValue || (s.StartTime.Value.Date >= calendarStart && s.StartTime.Value.Date <= calendarEnd));
+                    break;
+            }
+
+            var filteredList = filtered
+                .OrderBy(s => s.StartTime ?? DateTime.MaxValue)
+                .ThenBy(s => s.CourseName)
+                .ThenBy(s => s.Title)
+                .ToList();
+            var sessionsByDate = filteredList
+                .Where(s => s.StartTime.HasValue)
+                .GroupBy(s => s.StartTime!.Value.Date)
+                .ToDictionary(g => g.Key, g => g.OrderBy(s => s.StartTime).ThenBy(s => s.Title).ToList());
+
+            return (filteredList, sessionsByDate, calendarStart, calendarEnd, emptyMessage);
+        }
+
+        private void RefreshView(List<TeacherScheduleItemModel> sessions, Dictionary<DateTime, List<TeacherScheduleItemModel>> sessionsByDate, string emptyMessage, DateTime calendarStart, DateTime calendarEnd)
+        {
+            bool hasRows = sessions.Count > 0;
+            _emptyStateLabel.Text = emptyMessage;
+            UpdateActionButtons();
+            _dataCard.SuspendLayout();
+            try
+            {
+                if (_isCalendarView)
+                {
+                    _grid.Visible = false;
+                    _calendarView.Visible = true;
+                    _emptyStateLabel.Visible = !hasRows;
+                    RenderCalendar(sessions, sessionsByDate, calendarStart, calendarEnd);
+                }
+                else
+                {
+                    _calendarView.Visible = false;
+                    _grid.Visible = hasRows;
+                    _emptyStateLabel.Visible = !hasRows;
+                    BindGrid(sessions);
+                }
+            }
+            finally
+            {
+                _dataCard.ResumeLayout(true);
+            }
+            CenterEmptyLabel();
+            UpdateActionButtons();
+        }
+
+        private void BindGrid(List<TeacherScheduleItemModel> sessions)
+        {
+            _grid.SuspendLayout();
+            try
+            {
                 var dt = new DataTable();
                 dt.Columns.Add("Id", typeof(int));
                 dt.Columns.Add("CourseId", typeof(int));
@@ -163,28 +291,32 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 dt.Columns.Add("Bắt đầu", typeof(string));
                 dt.Columns.Add("Kết thúc", typeof(string));
                 dt.Columns.Add("Link", typeof(string));
-                
-                foreach (var s in _sessions)
+
+                foreach (var s in sessions)
                 {
-                    dt.Rows.Add(s.Id, s.CourseId, s.CourseName, s.Title, 
-                        s.StartTime?.ToString("dd/MM/yyyy HH:mm") ?? "", 
-                        s.EndTime?.ToString("dd/MM/yyyy HH:mm") ?? "", 
+                    dt.Rows.Add(s.Id, s.CourseId, s.CourseName, s.Title,
+                        s.StartTime?.ToString("dd/MM/yyyy HH:mm") ?? "",
+                        s.EndTime?.ToString("dd/MM/yyyy HH:mm") ?? "",
                         s.MeetingLink);
                 }
-                
+
                 _grid.DataSource = dt;
                 if (_grid.Columns["Id"] != null) _grid.Columns["Id"]!.Visible = false;
                 if (_grid.Columns["CourseId"] != null) _grid.Columns["CourseId"]!.Visible = false;
                 _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
                 ApplyScheduleGridSizing();
+                _grid.ClearSelection();
+                _grid.CurrentCell = null;
             }
-            CenterEmptyLabel();
-            UpdateActionButtons();
+            finally
+            {
+                _grid.ResumeLayout();
+            }
         }
 
         private void UpdateActionButtons()
         {
-            bool hasRows = _sessions.Count > 0;
+            bool hasRows = _filteredSessions.Count > 0;
             _btnEdit.Enabled = hasRows && !_isCalendarView;
             _btnDelete.Enabled = hasRows && !_isCalendarView;
             _btnOpenClass.Enabled = hasRows && !_isCalendarView;
@@ -199,7 +331,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             if (idValue == null || !int.TryParse(idValue.ToString(), out int sessionId))
                 return null;
 
-            return _sessions.FirstOrDefault(s => s.Id == sessionId);
+            return _filteredSessions.FirstOrDefault(s => s.Id == sessionId) ?? _sessions.FirstOrDefault(s => s.Id == sessionId);
         }
 
         private void ApplyScheduleGridSizing()
@@ -233,7 +365,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         {
             _isCalendarView = !_isCalendarView;
             _btnToggleView.Text = _isCalendarView ? "Dạng Bảng" : "Dạng Lịch";
-            RefreshView();
+            ApplyTimeFilterAsync().FireAndForgetSafe(this);
         }
         
         private static string GetVietnameseDayOfWeek(DayOfWeek dayOfWeek)
@@ -250,79 +382,117 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             };
         }
 
-        private void RenderCalendar()
+        private void RenderCalendar(List<TeacherScheduleItemModel> sessions, Dictionary<DateTime, List<TeacherScheduleItemModel>> sessionsByDate, DateTime rangeStart, DateTime rangeEnd)
         {
+            _dataCard.SuspendLayout();
             _calendarView.SuspendLayout();
-            _calendarView.Controls.Clear();
-            _calendarView.RowStyles.Clear();
-            
-            DateTime today = DateTime.Now.Date;
-            DateTime start = today.AddDays(-(int)today.DayOfWeek);
-            DateTime end = today.AddMonths(6);
-            int totalDays = (end - start).Days + 1;
-            int totalWeeks = Math.Max(1, (int)Math.Ceiling(totalDays / 7d));
-            
-            _calendarView.RowCount = totalWeeks;
-            for (int i = 0; i < totalWeeks; i++)
-                _calendarView.RowStyles.Add(new RowStyle(SizeType.Absolute, 128f));
-            
-            for (int row = 0; row < totalWeeks; row++)
+            try
             {
-                for (int col = 0; col < 7; col++)
+                _calendarView.Controls.Clear();
+                _calendarView.RowStyles.Clear();
+
+                DateTime today = DateTime.Now.Date;
+                DateTime start = rangeStart.Date;
+                DateTime end = rangeEnd.Date;
+                if (end < start) end = start;
+                int totalDays = (end - start).Days + 1;
+                int totalWeeks = Math.Max(1, (int)Math.Ceiling(totalDays / 7d));
+
+                _calendarView.RowCount = totalWeeks;
+                bool useScrollableRows = totalWeeks > 6;
+                _calendarView.AutoScroll = useScrollableRows;
+                for (int i = 0; i < totalWeeks; i++)
                 {
-                    DateTime currentDate = start.AddDays(row * 7 + col);
-                    var daySessions = _sessions.Where(s => s.StartTime.HasValue && s.StartTime.Value.Date == currentDate).ToList();
-                    
-                    bool hasSession = daySessions.Count > 0;
-                    Color scheduledDayColor = Color.FromArgb(34, 197, 94);
-                    Color scheduledSessionColor = Color.FromArgb(220, 252, 231);
-                    Color dayBackColor = hasSession
-                        ? scheduledDayColor
-                        : currentDate.Date == today ? AppColors.Border : AppColors.BgBase;
-                    Color dateTextColor = hasSession ? Color.White : AppColors.TextPrimary;
-                    Color sessionTextColor = hasSession ? scheduledSessionColor : AppColors.TextSecondary;
-                    
-                    var pnl = new RoundedPanel
+                    _calendarView.RowStyles.Add(useScrollableRows
+                        ? new RowStyle(SizeType.Absolute, 128f)
+                        : new RowStyle(SizeType.Percent, 100f / totalWeeks));
+                }
+
+                for (int row = 0; row < totalWeeks; row++)
+                {
+                    for (int col = 0; col < 7; col++)
                     {
-                        CornerRadius = 10,
-                        BackColor = dayBackColor,
-                        Dock = DockStyle.Fill,
-                        Margin = new Padding(2),
-                        Padding = new Padding(5)
-                    };
-                    
-                    var lblDate = new Label
-                    {
-                        Text = $"{GetVietnameseDayOfWeek(currentDate.DayOfWeek)} - {currentDate:dd/MM}",
-                        Font = MetaTheme.Fonts.BodySmBold(),
-                        ForeColor = dateTextColor,
-                        BackColor = dayBackColor,
-                        AutoSize = true,
-                        Dock = DockStyle.Top
-                    };
-                    pnl.Controls.Add(lblDate);
-                    
-                    foreach (var s in daySessions)
-                    {
-                        var lblSession = new Label
-                        {
-                            Text = $"{s.StartTime:HH:mm} - {s.Title}",
-                            Font = MetaTheme.Fonts.Caption(),
-                            ForeColor = sessionTextColor,
-                            BackColor = dayBackColor,
-                            AutoSize = false,
-                            Height = 38,
-                            Dock = DockStyle.Top,
-                            MaximumSize = new Size(0, 38)
-                        };
-                        pnl.Controls.Add(lblSession);
-                        lblSession.BringToFront();
+                        DateTime currentDate = start.AddDays(row * 7 + col);
+                        sessionsByDate.TryGetValue(currentDate, out var daySessions);
+                        _calendarView.Controls.Add(CreateCalendarDayCell(currentDate, daySessions ?? new List<TeacherScheduleItemModel>(), today), col, row);
                     }
-                    _calendarView.Controls.Add(pnl, col, row);
                 }
             }
+            finally
+            {
+                _calendarView.ResumeLayout();
+                _dataCard.ResumeLayout(true);
+            }
+        }
 
-            _calendarView.ResumeLayout();
+        private static Control CreateCalendarDayCell(DateTime currentDate, List<TeacherScheduleItemModel> daySessions, DateTime today)
+        {
+            bool hasSession = daySessions.Count > 0;
+            Color scheduledDayColor = Color.FromArgb(34, 197, 94);
+            Color scheduledSessionColor = Color.FromArgb(220, 252, 231);
+            Color dayBackColor = hasSession
+                ? scheduledDayColor
+                : currentDate.Date == today ? AppColors.Border : AppColors.BgBase;
+            Color dateTextColor = hasSession ? Color.White : AppColors.TextPrimary;
+            Color sessionTextColor = hasSession ? scheduledSessionColor : AppColors.TextSecondary;
+
+            var pnl = new RoundedPanel
+            {
+                CornerRadius = 10,
+                BackColor = dayBackColor,
+                FillColor = dayBackColor,
+                BorderColor = hasSession ? Color.FromArgb(22, 163, 74) : AppColors.Border,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(2),
+                Padding = new Padding(5)
+            };
+            EnableDoubleBuffering(pnl);
+
+            var lblDate = new Label
+            {
+                Text = $"{GetVietnameseDayOfWeek(currentDate.DayOfWeek)} - {currentDate:dd/MM}",
+                Font = MetaTheme.Fonts.BodySmBold(),
+                ForeColor = dateTextColor,
+                BackColor = dayBackColor,
+                AutoSize = true,
+                Dock = DockStyle.Top
+            };
+            pnl.Controls.Add(lblDate);
+
+            foreach (var s in daySessions.OrderBy(s => s.StartTime).Take(3))
+            {
+                var lblSession = new Label
+                {
+                    Text = $"{s.StartTime:HH:mm} - {s.Title}",
+                    Font = MetaTheme.Fonts.Caption(),
+                    ForeColor = sessionTextColor,
+                    BackColor = dayBackColor,
+                    AutoSize = false,
+                    Height = 34,
+                    Dock = DockStyle.Top,
+                    MaximumSize = new Size(0, 34)
+                };
+                pnl.Controls.Add(lblSession);
+                lblSession.BringToFront();
+            }
+
+            if (daySessions.Count > 3)
+            {
+                var lblMore = new Label
+                {
+                    Text = $"+{daySessions.Count - 3} lịch dạy khác",
+                    Font = MetaTheme.Fonts.Caption(),
+                    ForeColor = sessionTextColor,
+                    BackColor = dayBackColor,
+                    AutoSize = false,
+                    Height = 22,
+                    Dock = DockStyle.Top
+                };
+                pnl.Controls.Add(lblMore);
+                lblMore.BringToFront();
+            }
+        
+            return pnl;
         }
         
         private async Task OpenClassAsync()
@@ -450,6 +620,13 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 _controller.DeleteScheduleItem(_teacherId, id);
                 await LoadDataAsync();
             }
+        }
+
+        private static void EnableDoubleBuffering(Control control)
+        {
+            typeof(Control)
+                .GetProperty("DoubleBuffered", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                ?.SetValue(control, true, null);
         }
     }
 }
