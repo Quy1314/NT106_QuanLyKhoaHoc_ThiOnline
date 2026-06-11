@@ -1195,6 +1195,7 @@ namespace CourseGuard.Backend.Data
                     JOIN enrollments e ON e.course_id = c.id
                     WHERE e.student_id = @student_id
                       AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                      AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
                       AND (
                            COALESCE(m.file_name, '') ILIKE @pattern
                            OR COALESCE(m.file_path, '') ILIKE @pattern
@@ -3668,9 +3669,29 @@ namespace CourseGuard.Backend.Data
                 JOIN enrollments e ON e.course_id = c.id
                 WHERE e.student_id = @student_id
                   AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
-                  AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'
+                  AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
                   AND UPPER(COALESCE(l.status, '')) = 'PUBLISHED'
-                ORDER BY l.publish_at DESC, l.id DESC";
+
+                UNION ALL
+
+                SELECT -m.id AS id,
+                       c.id AS course_id,
+                       c.name AS course_name,
+                       COALESCE(m.file_name, 'Tài liệu') AS title,
+                       '' AS content,
+                       m.uploaded_at AS publish_at,
+                       'PUBLISHED' AS status,
+                       COALESCE(m.file_name, '') AS file_name,
+                       COALESCE(m.file_size, 0) AS file_size,
+                       (m.file_content IS NOT NULL) AS has_stored_content
+                FROM materials m
+                JOIN courses c ON c.id = m.course_id
+                JOIN enrollments e ON e.course_id = c.id
+                WHERE e.student_id = @student_id
+                  AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
+
+                ORDER BY publish_at DESC, id DESC";
 
             await using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@student_id", studentId);
@@ -3700,17 +3721,32 @@ namespace CourseGuard.Backend.Data
         {
             await using var connection = CreateConnection();
             await connection.OpenAsync(cancellationToken);
-            await using var command = new NpgsqlCommand(@"
+
+            bool isMaterialRow = lessonId < 0;
+            int sourceId = isMaterialRow ? Math.Abs(lessonId) : lessonId;
+            string query = isMaterialRow
+                ? @"
+                SELECT m.file_content
+                FROM materials m
+                JOIN courses c ON c.id = m.course_id
+                JOIN enrollments e ON e.course_id = c.id
+                WHERE m.id = @source_id
+                  AND e.student_id = @student_id
+                  AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')"
+                : @"
                 SELECT l.file_content
                 FROM teacher_lessons l
                 JOIN courses c ON c.id = l.course_id
                 JOIN enrollments e ON e.course_id = c.id
-                WHERE l.id = @lesson_id
+                WHERE l.id = @source_id
                   AND e.student_id = @student_id
                   AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
-                  AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'
-                  AND UPPER(COALESCE(l.status, '')) = 'PUBLISHED'", connection);
-            command.Parameters.AddWithValue("@lesson_id", lessonId);
+                  AND UPPER(COALESCE(c.status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'OPEN')
+                  AND UPPER(COALESCE(l.status, '')) = 'PUBLISHED'";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@source_id", sourceId);
             command.Parameters.AddWithValue("@student_id", studentId);
             
             var result = await command.ExecuteScalarAsync(cancellationToken);
