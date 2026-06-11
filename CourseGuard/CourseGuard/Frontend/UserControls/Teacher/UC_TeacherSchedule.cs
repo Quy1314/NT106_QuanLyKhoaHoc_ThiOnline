@@ -34,7 +34,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private Button _btnDelete = null!;
         private Button _btnRefresh = null!;
 
-        private bool _isCalendarView = false;
+        private bool _isCalendarView = true;
         private bool _isOpeningClass;
         private List<TeacherScheduleItemModel> _sessions = new();
 
@@ -73,20 +73,19 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 7,
-                RowCount = 5,
+                RowCount = 1,
                 Visible = false,
                 BackColor = AppColors.BgBase,
                 AutoScroll = true
             };
             for (int i = 0; i < 7; i++) _calendarView.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / 7));
-            for (int i = 0; i < 5; i++) _calendarView.RowStyles.Add(new RowStyle(SizeType.Absolute, 128f));
 
             _btnAdd = TeacherTabChrome.PrimaryButton("Thêm");
             _btnEdit = TeacherTabChrome.SecondaryButton("Sửa");
             _btnDelete = TeacherTabChrome.DangerButton("Xóa");
             _btnRefresh = TeacherTabChrome.SecondaryButton("Tải lại");
-            _btnToggleView = TeacherTabChrome.SecondaryButton("Dạng Lịch");
-            _btnOpenClass = TeacherTabChrome.PrimaryButton("Mở Lớp");
+            _btnToggleView = TeacherTabChrome.SecondaryButton("Dạng Bảng");
+            _btnOpenClass = TeacherTabChrome.PrimaryButton("Dạy online");
             
             _btnAdd.Click += async (_, _) => await AddAsync();
             _btnEdit.Click += async (_, _) => await EditAsync();
@@ -94,6 +93,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _btnRefresh.Click += async (_, _) => await LoadDataAsync();
             _btnToggleView.Click += ToggleView;
             _btnOpenClass.Click += async (_, _) => await OpenClassAsync();
+            _grid.SelectionChanged += (_, _) => UpdateActionButtons();
 
             _rootLayout = TeacherTabChrome.CreateRoot(this);
             var header = TeacherTabChrome.CreateHeader("Lịch dạy", "Quản lý lịch học và mở lớp trực tuyến",
@@ -140,8 +140,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private void RefreshView()
         {
             bool hasRows = _sessions.Count > 0;
-            _btnEdit.Enabled = hasRows && !_isCalendarView;
-            _btnDelete.Enabled = hasRows && !_isCalendarView;
+            UpdateActionButtons();
             
             if (_isCalendarView)
             {
@@ -180,6 +179,27 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 ApplyScheduleGridSizing();
             }
             CenterEmptyLabel();
+            UpdateActionButtons();
+        }
+
+        private void UpdateActionButtons()
+        {
+            bool hasRows = _sessions.Count > 0;
+            _btnEdit.Enabled = hasRows && !_isCalendarView;
+            _btnDelete.Enabled = hasRows && !_isCalendarView;
+            _btnOpenClass.Enabled = hasRows && !_isCalendarView;
+        }
+
+        private TeacherScheduleItemModel? GetSelectedSession()
+        {
+            if (_grid.CurrentRow == null || _grid.CurrentRow.IsNewRow)
+                return null;
+
+            var idValue = _grid.CurrentRow.Cells["Id"]?.Value;
+            if (idValue == null || !int.TryParse(idValue.ToString(), out int sessionId))
+                return null;
+
+            return _sessions.FirstOrDefault(s => s.Id == sessionId);
         }
 
         private void ApplyScheduleGridSizing()
@@ -232,22 +252,40 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         private void RenderCalendar()
         {
+            _calendarView.SuspendLayout();
             _calendarView.Controls.Clear();
-            if (_sessions.Count == 0) return;
+            _calendarView.RowStyles.Clear();
             
-            DateTime start = DateTime.Now.Date.AddDays(-(int)DateTime.Now.DayOfWeek);
+            DateTime today = DateTime.Now.Date;
+            DateTime start = today.AddDays(-(int)today.DayOfWeek);
+            DateTime end = today.AddMonths(6);
+            int totalDays = (end - start).Days + 1;
+            int totalWeeks = Math.Max(1, (int)Math.Ceiling(totalDays / 7d));
             
-            for (int row = 0; row < 5; row++)
+            _calendarView.RowCount = totalWeeks;
+            for (int i = 0; i < totalWeeks; i++)
+                _calendarView.RowStyles.Add(new RowStyle(SizeType.Absolute, 128f));
+            
+            for (int row = 0; row < totalWeeks; row++)
             {
                 for (int col = 0; col < 7; col++)
                 {
                     DateTime currentDate = start.AddDays(row * 7 + col);
                     var daySessions = _sessions.Where(s => s.StartTime.HasValue && s.StartTime.Value.Date == currentDate).ToList();
                     
+                    bool hasSession = daySessions.Count > 0;
+                    Color scheduledDayColor = Color.FromArgb(34, 197, 94);
+                    Color scheduledSessionColor = Color.FromArgb(220, 252, 231);
+                    Color dayBackColor = hasSession
+                        ? scheduledDayColor
+                        : currentDate.Date == today ? AppColors.Border : AppColors.BgBase;
+                    Color dateTextColor = hasSession ? Color.White : AppColors.TextPrimary;
+                    Color sessionTextColor = hasSession ? scheduledSessionColor : AppColors.TextSecondary;
+                    
                     var pnl = new RoundedPanel
                     {
                         CornerRadius = 10,
-                        BackColor = currentDate.Date == DateTime.Now.Date ? AppColors.Border : AppColors.BgBase,
+                        BackColor = dayBackColor,
                         Dock = DockStyle.Fill,
                         Margin = new Padding(2),
                         Padding = new Padding(5)
@@ -257,7 +295,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     {
                         Text = $"{GetVietnameseDayOfWeek(currentDate.DayOfWeek)} - {currentDate:dd/MM}",
                         Font = MetaTheme.Fonts.BodySmBold(),
-                        ForeColor = AppColors.TextPrimary,
+                        ForeColor = dateTextColor,
+                        BackColor = dayBackColor,
                         AutoSize = true,
                         Dock = DockStyle.Top
                     };
@@ -269,7 +308,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                         {
                             Text = $"{s.StartTime:HH:mm} - {s.Title}",
                             Font = MetaTheme.Fonts.Caption(),
-                            ForeColor = AppColors.TextSecondary,
+                            ForeColor = sessionTextColor,
+                            BackColor = dayBackColor,
                             AutoSize = false,
                             Height = 38,
                             Dock = DockStyle.Top,
@@ -281,23 +321,32 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     _calendarView.Controls.Add(pnl, col, row);
                 }
             }
+
+            _calendarView.ResumeLayout();
         }
         
         private async Task OpenClassAsync()
         {
-            int sessionId = 0;
+            var selectedSession = GetSelectedSession();
+            int sessionId = selectedSession?.Id ?? 0;
             if (_isCalendarView)
             {
-                MetaTheme.ShowModernDialog("Vui lòng chuyển sang Dạng Bảng để chọn lớp cần mở.", "Thông báo");
+                MetaTheme.ShowModernDialog("Vui lòng chuyển sang Dạng Bảng để chọn lịch dạy online.", "Thông báo");
                 return;
-            }
-            if (_grid.CurrentRow != null && !_grid.CurrentRow.IsNewRow)
-            {
-                sessionId = Convert.ToInt32(_grid.CurrentRow.Cells["Id"].Value);
             }
             if (sessionId <= 0)
             {
-                MetaTheme.ShowModernDialog("Vui lòng chọn một lớp để mở.", "Thông báo");
+                MetaTheme.ShowModernDialog("Vui lòng chọn một lịch dạy để dạy online.", "Thông báo");
+                return;
+            }
+            if (!selectedSession!.StartTime.HasValue)
+            {
+                MetaTheme.ShowModernDialog("Lịch dạy này chưa có thời gian bắt đầu.", "Thông báo");
+                return;
+            }
+            if (DateTime.Now < selectedSession.StartTime.Value)
+            {
+                MetaTheme.ShowModernDialog($"Chưa đến giờ dạy online. Lớp này bắt đầu lúc {selectedSession.StartTime:dd/MM/yyyy HH:mm}.", "Thông báo");
                 return;
             }
 
@@ -320,7 +369,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             }
             catch (Exception ex)
             {
-                MetaTheme.ShowModernDialog("Lỗi khi mở lớp: " + ex.Message, "Lỗi");
+                MetaTheme.ShowModernDialog("Lỗi khi vào dạy online: " + ex.Message, "Lỗi");
             }
             finally
             {
@@ -332,14 +381,21 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         // --- CRUD Methods ---
         private async Task AddAsync()
         {
-            using var dialog = new TeacherSimpleItemDialog("Lịch dạy", _controller.GetCourses(_teacherId), status: "ACTIVE");
+            DateTime defaultStart = DateTime.Now.Date.AddHours(Math.Max(DateTime.Now.Hour, 7));
+            using var dialog = new TeacherSimpleItemDialog(
+                "Thêm lịch dạy",
+                _controller.GetCourses(_teacherId),
+                status: "ACTIVE",
+                enableTimeRange: true,
+                selectedStartTime: defaultStart,
+                selectedEndTime: defaultStart.AddHours(2));
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
                 _controller.CreateScheduleItem(_teacherId, new TeacherScheduleItemModel { 
                     CourseId = dialog.CourseId, 
                     Title = dialog.ItemTitle, 
-                    StartTime = dialog.SelectedDate, 
-                    EndTime = dialog.SelectedDate.AddHours(2), 
+                    StartTime = dialog.SelectedStartTime, 
+                    EndTime = dialog.SelectedEndTime, 
                     MeetingLink = dialog.Details 
                 });
                 await LoadDataAsync();
@@ -350,18 +406,34 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         {
             if (_grid.CurrentRow == null || _grid.CurrentRow.IsNewRow) return;
             int id = Convert.ToInt32(_grid.CurrentRow.Cells["Id"].Value);
-            string title = _grid.CurrentRow.Cells["Tiêu đề"].Value?.ToString() ?? "";
-            string link = _grid.CurrentRow.Cells["Link"].Value?.ToString() ?? "";
+            var session = _sessions.FirstOrDefault(s => s.Id == id);
+            if (session == null)
+            {
+                MetaTheme.ShowModernDialog("Không tìm thấy lịch dạy cần sửa.", "Thông báo");
+                return;
+            }
+
+            DateTime selectedStart = session.StartTime ?? DateTime.Now;
+            DateTime selectedEnd = session.EndTime ?? selectedStart.AddHours(2);
             
-            using var dialog = new TeacherSimpleItemDialog("Sửa lịch dạy", _controller.GetCourses(_teacherId), title, link, "ACTIVE");
+            using var dialog = new TeacherSimpleItemDialog(
+                "Sửa lịch dạy",
+                _controller.GetCourses(_teacherId),
+                session.Title,
+                session.MeetingLink,
+                "ACTIVE",
+                session.CourseId,
+                enableTimeRange: true,
+                selectedStartTime: selectedStart,
+                selectedEndTime: selectedEnd);
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
                 _controller.UpdateScheduleItem(_teacherId, new TeacherScheduleItemModel { 
                     Id = id, 
                     CourseId = dialog.CourseId, 
                     Title = dialog.ItemTitle, 
-                    StartTime = dialog.SelectedDate, 
-                    EndTime = dialog.SelectedDate.AddHours(2), 
+                    StartTime = dialog.SelectedStartTime, 
+                    EndTime = dialog.SelectedEndTime, 
                     MeetingLink = dialog.Details 
                 });
                 await LoadDataAsync();

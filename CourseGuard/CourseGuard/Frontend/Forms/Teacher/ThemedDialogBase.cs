@@ -108,24 +108,36 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 }
             };
 
-            var closeButton = new Button
+            var closeButton = new Panel
             {
                 Anchor = AnchorStyles.None,
-                Size = new Size(28, 28),
-                Text = "×",
-                FlatStyle = FlatStyle.Flat,
+                Size = new Size(30, 30),
                 BackColor = AppColors.IsDarkMode ? Color.FromArgb(78, 91, 111) : Color.FromArgb(229, 231, 235),
-                ForeColor = AppColors.TextSecondary,
-                Font = AppFonts.Semibold(13f),
                 Cursor = Cursors.Hand,
                 TabStop = false,
                 Margin = Padding.Empty,
-                Padding = new Padding(1, 0, 0, 1)
+                Padding = Padding.Empty
             };
-            closeButton.FlatAppearance.BorderSize = 0;
-            closeButton.FlatAppearance.MouseOverBackColor = AppColors.IsDarkMode ? Color.FromArgb(95, 108, 132) : Color.FromArgb(209, 213, 219);
-            closeButton.FlatAppearance.MouseDownBackColor = AppColors.BgElevated;
-            RoundedButtonHelper.Apply(closeButton, 14);
+            closeButton.Paint += (_, e) =>
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                using var pen = new Pen(AppColors.TextPrimary, 2.2f)
+                {
+                    StartCap = LineCap.Round,
+                    EndCap = LineCap.Round
+                };
+                e.Graphics.DrawLine(pen, 10, 10, 20, 20);
+                e.Graphics.DrawLine(pen, 20, 10, 10, 20);
+            };
+            closeButton.MouseEnter += (_, _) => closeButton.BackColor = AppColors.IsDarkMode ? Color.FromArgb(95, 108, 132) : Color.FromArgb(209, 213, 219);
+            closeButton.MouseLeave += (_, _) => closeButton.BackColor = AppColors.IsDarkMode ? Color.FromArgb(78, 91, 111) : Color.FromArgb(229, 231, 235);
+            closeButton.MouseDown += (_, _) => closeButton.BackColor = AppColors.BgElevated;
+            closeButton.Resize += (_, _) =>
+            {
+                closeButton.Region?.Dispose();
+                using var path = GraphicsHelpers.RoundedRect(new Rectangle(0, 0, closeButton.Width, closeButton.Height), 15);
+                closeButton.Region = new Region(path);
+            };
             closeButton.Click += (_, _) =>
             {
                 DialogResult = DialogResult.Cancel;
