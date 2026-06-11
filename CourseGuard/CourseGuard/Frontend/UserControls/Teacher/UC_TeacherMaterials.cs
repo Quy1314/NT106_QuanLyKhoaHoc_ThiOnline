@@ -16,23 +16,10 @@ namespace CourseGuard.Frontend.UserControls.Teacher
     public partial class UC_TeacherMaterials : TeacherGridPageBase, ITeacherQuickSearchTarget
     {
         private readonly ComboBox _courseFilter = new();
-        private readonly TextBox _searchBox = new();
         private string _quickSearchKeyword = string.Empty;
 
         public UC_TeacherMaterials(int teacherId, TeacherController controller) : base(teacherId, controller, "Tài liệu", "Đăng và quản lý tài liệu cho khóa học thuộc quyền.", "Danh sách tài liệu")
         {
-            _searchBox.Name = "txtMaterialSearch";
-            _searchBox.Width = 240;
-            _searchBox.PlaceholderText = "Tìm tên file, khóa học...";
-            AppColors.ApplyTheme(_searchBox);
-            _searchBox.TextChanged += async (_, _) =>
-            {
-                _quickSearchKeyword = _searchBox.Text.Trim();
-                if (IsHandleCreated && !Disposing && !IsDisposed)
-                    await LoadDataAsync();
-            };
-            AddHeaderAction(_searchBox);
-
             _courseFilter.Width = 220;
             _courseFilter.DropDownStyle = ComboBoxStyle.DropDownList;
             AppColors.ApplyTheme(_courseFilter);
@@ -92,7 +79,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 return;
 
             _quickSearchKeyword = request.Keyword ?? string.Empty;
-            _searchBox.Text = _quickSearchKeyword;
             SelectCourseFilter(request.ParentId ?? 0);
             await LoadDataAsync();
             SelectMaterialRow(request.Id);

@@ -181,12 +181,14 @@ namespace CourseGuard.Backend.Controllers
             Task<List<TeacherQuickSearchResultModel>> coursesTask = Task.Run(() => SearchCourses(teacherId, trimmedKeyword));
             Task<List<TeacherQuickSearchResultModel>> studentsTask = Task.Run(() => SearchStudents(teacherId, trimmedKeyword));
             Task<List<TeacherQuickSearchResultModel>> materialsTask = Task.Run(() => SearchMaterials(teacherId, trimmedKeyword));
+            Task<List<TeacherQuickSearchResultModel>> resultTask = Task.Run(() => SearchResultQuickAccess(teacherId, trimmedKeyword));
 
-            await Task.WhenAll(coursesTask, studentsTask, materialsTask);
+            await Task.WhenAll(coursesTask, studentsTask, materialsTask, resultTask);
 
             return coursesTask.Result
                 .Concat(studentsTask.Result)
                 .Concat(materialsTask.Result)
+                .Concat(resultTask.Result)
                 .ToList();
         }
 
@@ -251,6 +253,45 @@ namespace CourseGuard.Backend.Controllers
                     Keyword = keyword
                 })
                 .ToList();
+        }
+
+        private List<TeacherQuickSearchResultModel> SearchResultQuickAccess(int teacherId, string keyword)
+        {
+            List<TeacherScoreModel> scoreRows = GetResults(teacherId);
+
+            var courseResults = scoreRows
+                .Where(row => ContainsKeyword(row.CourseName, keyword))
+                .GroupBy(row => row.CourseId)
+                .Select(group => group.First())
+                .Take(5)
+                .Select(row => new TeacherQuickSearchResultModel
+                {
+                    Kind = TeacherQuickSearchKinds.ResultCourse,
+                    Id = row.CourseId,
+                    Group = "Kết quả",
+                    Title = $"[Kết quả] Khóa học: {row.CourseName}",
+                    Description = "Xem bảng điểm của khóa học này",
+                    PageName = "Kết quả",
+                    Keyword = keyword
+                });
+
+            var studentResults = scoreRows
+                .Where(row => ContainsKeyword(row.StudentName, keyword))
+                .GroupBy(row => row.StudentId)
+                .Select(group => group.First())
+                .Take(5)
+                .Select(row => new TeacherQuickSearchResultModel
+                {
+                    Kind = TeacherQuickSearchKinds.ResultStudent,
+                    Id = row.StudentId,
+                    Group = "Kết quả",
+                    Title = $"[Kết quả] Sinh viên: {row.StudentName}",
+                    Description = "Xem bảng điểm của sinh viên này",
+                    PageName = "Kết quả",
+                    Keyword = keyword
+                });
+
+            return courseResults.Concat(studentResults).ToList();
         }
 
         private static bool ContainsKeyword(string? value, string keyword)

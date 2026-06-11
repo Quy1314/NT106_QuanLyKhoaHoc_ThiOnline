@@ -16,7 +16,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
     {
         private readonly System.Windows.Forms.Button _submitButton = TeacherTabChrome.PrimaryButton("Gửi duyệt");
         private readonly System.Windows.Forms.Button _viewDetailsButton = TeacherTabChrome.SecondaryButton("Xem chi tiết");
-        private readonly TextBox txtSearch = new();
         private readonly ComboBox cboStatusFilter = new();
         private readonly Label _detailName = new();
         private readonly Label _detailDates = new();
@@ -26,6 +25,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private readonly Label _detailRejectionReason = new();
         private List<TeacherCourseModel> _allCourses = new();
         private bool _isBinding;
+        private string _quickSearchKeyword = string.Empty;
 
         public UC_TeacherCourses(int teacherId, TeacherController controller) : base(teacherId, controller, "Khóa học của tôi", "Tạo và quản lý các khóa học thuộc quyền giảng viên.", "Danh sách khóa học")
         {
@@ -86,12 +86,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         private void ConfigureSearchAndFilters()
         {
-            txtSearch.Name = "txtSearch";
-            txtSearch.Width = 240;
-            txtSearch.PlaceholderText = "Tìm theo tên khóa học...";
-            txtSearch.Margin = new Padding(8, 0, 0, 0);
-            txtSearch.TextChanged += async (_, _) => await ReloadWithFiltersAsync();
-
             cboStatusFilter.Name = "cboStatusFilter";
             cboStatusFilter.DropDownStyle = ComboBoxStyle.DropDownList;
             cboStatusFilter.Width = 150;
@@ -100,7 +94,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             cboStatusFilter.SelectedIndexChanged += async (_, _) => await ReloadWithFiltersAsync();
             TeacherTabChrome.StyleSecondaryButton(_viewDetailsButton);
 
-            AddHeaderAction(txtSearch);
             AddHeaderAction(cboStatusFilter);
         }
 
@@ -217,7 +210,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         private IEnumerable<TeacherCourseModel> ApplyLocalFilters(IEnumerable<TeacherCourseModel> courses)
         {
-            string keyword = txtSearch.Text.Trim();
+            string keyword = _quickSearchKeyword.Trim();
             string status = cboStatusFilter.SelectedItem?.ToString() ?? "Tất cả";
             IEnumerable<TeacherCourseModel> filtered = courses;
 
@@ -290,9 +283,10 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _detailStatus.ForeColor = AppColors.TextSecondary;
         }
 
-        public void ApplyGlobalSearch(string keyword)
+        public async Task ApplyGlobalSearch(string keyword)
         {
-            txtSearch.Text = keyword ?? string.Empty;
+            _quickSearchKeyword = keyword ?? string.Empty;
+            await ReloadWithFiltersAsync();
         }
 
         public async Task ApplyQuickSearchAsync(TeacherQuickSearchRequest request)
@@ -300,7 +294,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             if (!string.Equals(request.Kind, TeacherQuickSearchKinds.Course, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            txtSearch.Text = request.Keyword ?? string.Empty;
+            _quickSearchKeyword = request.Keyword ?? string.Empty;
             cboStatusFilter.SelectedIndex = 0;
             await ReloadWithFiltersAsync();
             SelectCourseRow(request.Id);

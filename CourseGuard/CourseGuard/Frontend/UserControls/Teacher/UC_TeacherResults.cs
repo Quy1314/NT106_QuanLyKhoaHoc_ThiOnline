@@ -15,7 +15,7 @@ using ClosedXML.Excel;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
 {
-    public partial class UC_TeacherResults : TeacherGridPageBase
+    public partial class UC_TeacherResults : TeacherGridPageBase, ITeacherQuickSearchTarget
     {
         private static readonly HashSet<string> EditableStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -25,6 +25,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         };
 
         private readonly Button _exportButton = new() { Text = "Xuất bảng điểm" };
+        private DataTable? _allResults;
 
         public UC_TeacherResults(int teacherId, TeacherController controller) : base(teacherId, controller, "Kết quả", "Xem và cập nhật điểm cho bài thi thuộc khóa học của mình.", "Bảng điểm")
         {
@@ -51,10 +52,101 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         protected override string EditSelectionColumnName => "AttemptId";
 
-        protected override Task<DataTable> CreateTableAsync() => Task.Run(() => TeacherTabChrome.ToTable(
-            new[] { "AttemptId", "ExamId", "CourseId", "StudentId", "Khóa học", "Kỳ thi", "Sinh viên", "Điểm", "Trạng thái", "Nộp lúc" },
-            Controller.GetResults(TeacherId),
-            r => new object?[] { r.AttemptId, r.ExamId, r.CourseId, r.StudentId, r.CourseName, r.ExamTitle, r.StudentName, r.Score, r.Status, r.SubmitTime?.ToString("dd/MM/yyyy HH:mm") ?? "" }));
+        protected override Task OnRefreshAsync()
+        {
+            RestoreAllResultsFromCache();
+            return Task.CompletedTask;
+        }
+
+        protected override async Task<DataTable> CreateTableAsync()
+        {
+            DataTable table = await Task.Run(() => TeacherTabChrome.ToTable(
+                new[] { "AttemptId", "ExamId", "CourseId", "StudentId", "Khóa học", "Kỳ thi", "Sinh viên", "Điểm", "Trạng thái", "Nộp lúc" },
+                Controller.GetResults(TeacherId),
+                r => new object?[] { r.AttemptId, r.ExamId, r.CourseId, r.StudentId, r.CourseName, r.ExamTitle, r.StudentName, r.Score, r.Status, r.SubmitTime?.ToString("dd/MM/yyyy HH:mm") ?? "" }));
+            _allResults = table.Copy();
+            return table;
+        }
+
+        public async Task ApplyQuickSearchAsync(TeacherQuickSearchRequest request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.Kind) || request.Id <= 0)
+            {
+                RestoreAllResultsFromCache();
+                return;
+            }
+
+            if (!string.Equals(request.Kind, TeacherQuickSearchKinds.ResultCourse, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(request.Kind, TeacherQuickSearchKinds.ResultStudent, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (_allResults == null)
+                await LoadDataAsync();
+
+            ApplyResultFilter(request);
+        }
+
+        private void ApplyResultFilter(TeacherQuickSearchRequest request)
+        {
+            if (_allResults == null)
+                return;
+
+            string columnName = string.Equals(request.Kind, TeacherQuickSearchKinds.ResultCourse, StringComparison.OrdinalIgnoreCase)
+                ? "CourseId"
+                : "StudentId";
+
+            if (!_allResults.Columns.Contains(columnName))
+                return;
+
+            Grid.SuspendLayout();
+            SuspendLayout();
+            try
+            {
+                DataView view = new(_allResults) { RowFilter = $"{columnName} = {request.Id}" };
+                DataTable filteredTable = view.ToTable();
+                BindingSource.DataSource = filteredTable;
+                Grid.DataSource = BindingSource;
+                HideIdColumns();
+                Grid.ClearSelection();
+                Grid.CurrentCell = null;
+            }
+            finally
+            {
+                ResumeLayout(true);
+                Grid.ResumeLayout(true);
+            }
+        }
+
+        private void RestoreAllResultsFromCache()
+        {
+            if (_allResults == null)
+                return;
+
+            Grid.SuspendLayout();
+            SuspendLayout();
+            try
+            {
+                BindingSource.DataSource = _allResults.Copy();
+                Grid.DataSource = BindingSource;
+                HideIdColumns();
+                Grid.ClearSelection();
+                Grid.CurrentCell = null;
+            }
+            finally
+            {
+                ResumeLayout(true);
+                Grid.ResumeLayout(true);
+            }
+        }
+
+        private void HideIdColumns()
+        {
+            foreach (DataGridViewColumn column in Grid.Columns)
+            {
+                if (column.Name.EndsWith("Id", StringComparison.OrdinalIgnoreCase) || column.Name == "ID")
+                    column.Visible = false;
+            }
+        }
 
         protected override async Task EditAsync()
         {

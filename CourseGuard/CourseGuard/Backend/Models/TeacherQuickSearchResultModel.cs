@@ -5,6 +5,8 @@ namespace CourseGuard.Backend.Models
         public const string Course = "Course";
         public const string Student = "Student";
         public const string Material = "Material";
+        public const string ResultCourse = "ResultCourse";
+        public const string ResultStudent = "ResultStudent";
     }
 
     public sealed class TeacherQuickSearchResultModel

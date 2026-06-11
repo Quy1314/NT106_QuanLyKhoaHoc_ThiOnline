@@ -29,7 +29,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             Controller = controller ?? throw new ArgumentNullException(nameof(controller));
             _emptyMessage = $"Chưa có dữ liệu trong {cardTitle.ToLowerInvariant()}.";
             InitializeComponent(title, subtitle, cardTitle, showCrud);
-            RefreshButton.Click += async (_, _) => await LoadDataAsync();
+            RefreshButton.Click += async (_, _) => await OnRefreshAsync();
             AddButton.Click += async (_, _) => await AddAsync();
             EditButton.Click += async (_, _) => {
                 if (RequiresSelectionForEdit && CurrentInt(EditSelectionColumnName) <= 0) {
@@ -51,6 +51,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         protected virtual Task AddAsync() => Task.CompletedTask;
         protected virtual Task EditAsync() => Task.CompletedTask;
         protected virtual Task DeleteAsync() => Task.CompletedTask;
+        protected virtual Task OnRefreshAsync() => LoadDataAsync();
         protected virtual bool RequiresSelectionForEdit => true;
         protected virtual string EditSelectionColumnName => "Id";
         protected abstract Task<DataTable> CreateTableAsync();

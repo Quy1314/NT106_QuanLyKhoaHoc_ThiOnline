@@ -13,7 +13,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 {
     public partial class UC_TeacherStudents : TeacherGridPageBase, ITeacherQuickSearchTarget
     {
-        private readonly TextBox _searchBox = new();
         private List<TeacherStudentModel> _allStudents = new();
         private string _quickSearchKeyword = string.Empty;
 
@@ -25,8 +24,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             TeacherTabChrome.FitButtonToText(AddButton);
             TeacherTabChrome.FitButtonToText(EditButton);
             DeleteButton.Visible = false;
-
-            ConfigureSearchBox();
 
             var attendanceButton = TeacherTabChrome.SecondaryButton("Điểm danh");
             attendanceButton.Click += (_, _) =>
@@ -71,24 +68,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 return;
 
             _quickSearchKeyword = request.Keyword ?? string.Empty;
-            _searchBox.Text = _quickSearchKeyword;
             await LoadDataAsync();
             SelectStudentRow(request.Id, request.ParentId);
-        }
-
-        private void ConfigureSearchBox()
-        {
-            _searchBox.Name = "txtStudentSearch";
-            _searchBox.Width = 240;
-            _searchBox.PlaceholderText = "Tìm học viên, email, khóa học...";
-            AppColors.ApplyTheme(_searchBox);
-            _searchBox.TextChanged += async (_, _) =>
-            {
-                _quickSearchKeyword = _searchBox.Text.Trim();
-                if (IsHandleCreated && !Disposing && !IsDisposed)
-                    await LoadDataAsync();
-            };
-            AddHeaderAction(_searchBox);
         }
 
         private IEnumerable<TeacherStudentModel> ApplyLocalFilter(IEnumerable<TeacherStudentModel> students)

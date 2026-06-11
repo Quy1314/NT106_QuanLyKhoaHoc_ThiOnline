@@ -174,7 +174,10 @@ namespace CourseGuard.Frontend.Forms.Teacher
         {
             string keyword = e.Keyword.Trim();
             if (string.IsNullOrWhiteSpace(keyword))
+            {
+                await ApplyQuickSearchToCurrentPageAsync(new TeacherQuickSearchRequest());
                 return;
+            }
 
             try
             {
@@ -213,7 +216,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             }
 
             if (!string.IsNullOrWhiteSpace(e.Result.Keyword) && _content.Controls.OfType<UC_TeacherCourses>().FirstOrDefault() is UC_TeacherCourses courses)
-                courses.ApplyGlobalSearch(e.Result.Keyword);
+                await courses.ApplyGlobalSearch(e.Result.Keyword);
         }
 
         private async Task ApplyQuickSearchToCurrentPageAsync(TeacherQuickSearchRequest request)

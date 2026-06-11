@@ -679,6 +679,7 @@ namespace CourseGuard.Frontend.Theme
             if (string.IsNullOrWhiteSpace(_quickSearchBox.Text))
             {
                 HideSearchResults();
+                QuickSearchRequested?.Invoke(this, new TopbarQuickSearchRequestedEventArgs(string.Empty));
                 return;
             }
 
