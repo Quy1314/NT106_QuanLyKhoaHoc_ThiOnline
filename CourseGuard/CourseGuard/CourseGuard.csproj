@@ -35,6 +35,7 @@
     <PackageReference Include="Google.Apis.Gmail.v1" Version="1.73.0.4029" />
     <PackageReference Include="MailKit" Version="4.16.0" />
     <PackageReference Include="MiniExcel" Version="1.44.1" />
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
     <PackageReference Include="AForge.Video" Version="2.2.5" />
     <PackageReference Include="AForge.Video.DirectShow" Version="2.2.5" />
     <PackageReference Include="Npgsql" Version="10.0.2" />

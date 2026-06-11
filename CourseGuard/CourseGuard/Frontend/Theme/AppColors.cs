@@ -383,6 +383,18 @@ namespace CourseGuard.Frontend.Theme
                 return;
             }
 
+            if (variant == "success")
+            {
+                btn.ForeColor = Color.White;
+                btn.BackColor = Success;
+                btn.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#16A34A");
+                btn.FlatAppearance.BorderSize = 0;
+                btn.FlatAppearance.MouseOverBackColor = ColorTranslator.FromHtml("#16A34A");
+                btn.FlatAppearance.MouseDownBackColor = ColorTranslator.FromHtml("#15803D");
+                btn.Cursor = Cursors.Hand;
+                return;
+            }
+
             if (variant == "danger")
             {
                 btn.ForeColor = Color.White;

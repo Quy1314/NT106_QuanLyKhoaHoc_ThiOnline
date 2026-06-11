@@ -706,7 +706,8 @@ namespace CourseGuard.Backend.Data
                 JOIN courses c ON c.id = ex.course_id
                 WHERE a.exam_id = ex.id
                   AND c.teacher_id = @teacher_id
-                  AND a.id = @attempt_id", connection);
+                  AND a.id = @attempt_id
+                  AND UPPER(COALESCE(a.status, '')) IN ('SUBMITTED', 'COMPLETED', 'GRADED')", connection);
             command.Parameters.AddWithValue("@teacher_id", teacherId);
             command.Parameters.AddWithValue("@attempt_id", input.AttemptId);
             command.Parameters.AddWithValue("@score", input.Score.HasValue ? input.Score.Value : DBNull.Value);
