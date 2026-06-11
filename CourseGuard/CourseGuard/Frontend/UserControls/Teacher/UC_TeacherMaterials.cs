@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
@@ -11,12 +13,26 @@ using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
 {
-    public partial class UC_TeacherMaterials : TeacherGridPageBase
+    public partial class UC_TeacherMaterials : TeacherGridPageBase, ITeacherQuickSearchTarget
     {
         private readonly ComboBox _courseFilter = new();
+        private readonly TextBox _searchBox = new();
+        private string _quickSearchKeyword = string.Empty;
 
         public UC_TeacherMaterials(int teacherId, TeacherController controller) : base(teacherId, controller, "Tài liệu", "Đăng và quản lý tài liệu cho khóa học thuộc quyền.", "Danh sách tài liệu")
         {
+            _searchBox.Name = "txtMaterialSearch";
+            _searchBox.Width = 240;
+            _searchBox.PlaceholderText = "Tìm tên file, khóa học...";
+            AppColors.ApplyTheme(_searchBox);
+            _searchBox.TextChanged += async (_, _) =>
+            {
+                _quickSearchKeyword = _searchBox.Text.Trim();
+                if (IsHandleCreated && !Disposing && !IsDisposed)
+                    await LoadDataAsync();
+            };
+            AddHeaderAction(_searchBox);
+
             _courseFilter.Width = 220;
             _courseFilter.DropDownStyle = ComboBoxStyle.DropDownList;
             AppColors.ApplyTheme(_courseFilter);
@@ -27,7 +43,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         protected override Task<DataTable> CreateTableAsync() => Task.Run(() => TeacherTabChrome.ToTable(
             new[] { "Id", "CourseId", "Khóa học", "Tên file", "Kích thước", "Nguồn", "Ngày đăng", "Đường dẫn" },
-            Controller.GetMaterials(TeacherId, SelectedCourseId),
+            ApplyLocalFilter(Controller.GetMaterials(TeacherId, SelectedCourseId)),
             m => new object?[] { m.Id, m.CourseId, m.CourseName, m.FileName, FormatSize(m.FileSize), m.HasStoredContent ? "Database" : "Đường dẫn", m.UploadedAt.ToString("dd/MM/yyyy HH:mm"), m.FilePath }));
 
         protected override async Task AddAsync()
@@ -67,6 +83,18 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             }
         }
 
+        public async Task ApplyQuickSearchAsync(TeacherQuickSearchRequest request)
+        {
+            if (!string.Equals(request.Kind, TeacherQuickSearchKinds.Material, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _quickSearchKeyword = request.Keyword ?? string.Empty;
+            _searchBox.Text = _quickSearchKeyword;
+            SelectCourseFilter(request.ParentId ?? 0);
+            await LoadDataAsync();
+            SelectMaterialRow(request.Id);
+        }
+
         private int? SelectedCourseId => _courseFilter.SelectedItem is CourseFilterItem item && item.CourseId > 0
             ? item.CourseId
             : null;
@@ -80,16 +108,61 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             foreach (TeacherCourseModel course in Controller.GetCourses(TeacherId))
                 _courseFilter.Items.Add(new CourseFilterItem(course.Id, course.Name));
 
+            SelectCourseFilter(selectedCourseId);
+        }
+
+        private void SelectCourseFilter(int courseId)
+        {
             int index = 0;
             for (int i = 0; i < _courseFilter.Items.Count; i++)
             {
-                if (_courseFilter.Items[i] is CourseFilterItem candidate && candidate.CourseId == selectedCourseId)
+                if (_courseFilter.Items[i] is CourseFilterItem candidate && candidate.CourseId == courseId)
                 {
                     index = i;
                     break;
                 }
             }
-            _courseFilter.SelectedIndex = index;
+
+            if (_courseFilter.Items.Count > 0)
+                _courseFilter.SelectedIndex = index;
+        }
+
+        private IEnumerable<TeacherMaterialModel> ApplyLocalFilter(IEnumerable<TeacherMaterialModel> materials)
+        {
+            string keyword = _quickSearchKeyword.Trim();
+            if (string.IsNullOrWhiteSpace(keyword))
+                return materials;
+
+            return materials.Where(m => ContainsKeyword(m.FileName, keyword)
+                || ContainsKeyword(m.CourseName, keyword)
+                || ContainsKeyword(m.FilePath, keyword)
+                || ContainsKeyword(m.ContentType, keyword));
+        }
+
+        private void SelectMaterialRow(int materialId)
+        {
+            if (materialId <= 0 || !Grid.Columns.Contains("Id"))
+                return;
+
+            Grid.ClearSelection();
+            foreach (DataGridViewRow row in Grid.Rows)
+            {
+                if (row.IsNewRow || row.Cells["Id"].Value == null)
+                    continue;
+
+                if (Convert.ToInt32(row.Cells["Id"].Value) != materialId)
+                    continue;
+
+                row.Selected = true;
+                Grid.CurrentCell = GetFirstVisibleCell(row);
+                Grid.FirstDisplayedScrollingRowIndex = Math.Max(0, row.Index);
+                break;
+            }
+        }
+
+        private DataGridViewCell? GetFirstVisibleCell(DataGridViewRow row)
+        {
+            return row.Cells.Cast<DataGridViewCell>().FirstOrDefault(cell => cell.Visible);
         }
 
         private static TeacherMaterialModel BuildMaterialModel(int courseId, string filePath)
@@ -116,6 +189,12 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             if (bytes < 1024 * 1024)
                 return $"{bytes / 1024d:0.#} KB";
             return $"{bytes / 1024d / 1024d:0.#} MB";
+        }
+
+        private static bool ContainsKeyword(string? value, string keyword)
+        {
+            return !string.IsNullOrWhiteSpace(value)
+                && value.Contains(keyword, StringComparison.OrdinalIgnoreCase);
         }
 
         private sealed class CourseFilterItem

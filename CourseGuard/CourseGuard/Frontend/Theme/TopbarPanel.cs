@@ -55,6 +55,7 @@ namespace CourseGuard.Frontend.Theme
         public string Description { get; set; } = string.Empty;
         public string PageName { get; set; } = string.Empty;
         public string Keyword { get; set; } = string.Empty;
+        public object? Payload { get; set; }
     }
 
     public class TopbarPanel : UserControl
@@ -87,6 +88,7 @@ namespace CourseGuard.Frontend.Theme
         private ContextMenuStrip _notificationMenu;
         private ContextMenuStrip _accountMenu;
         private ContextMenuStrip _searchMenu;
+        private readonly System.Windows.Forms.Timer _quickSearchDebounceTimer;
         private FloatingTopbarLabel? _floatingLabel;
         private string _floatingLabelText = string.Empty;
         private Image? _avatarImage;
@@ -206,12 +208,15 @@ namespace CourseGuard.Frontend.Theme
                 Font = AppFonts.Body,
                 TabStop = false
             };
-            _quickSearchBox.KeyDown += QuickSearchBox_KeyDown;
-            _quickSearchBox.TextChanged += (_, _) =>
+            _quickSearchDebounceTimer = new System.Windows.Forms.Timer { Interval = 400 };
+            _quickSearchDebounceTimer.Tick += (_, _) =>
             {
-                if (string.IsNullOrWhiteSpace(_quickSearchBox.Text))
-                    HideSearchResults();
+                _quickSearchDebounceTimer.Stop();
+                SubmitQuickSearch();
             };
+
+            _quickSearchBox.KeyDown += QuickSearchBox_KeyDown;
+            _quickSearchBox.TextChanged += QuickSearchBox_TextChanged;
             SearchFocusManager.MarkSearchInput(_quickSearchBox);
             Controls.Add(_quickSearchBox);
 
@@ -663,11 +668,26 @@ namespace CourseGuard.Frontend.Theme
                 return;
 
             e.SuppressKeyPress = true;
+            _quickSearchDebounceTimer.Stop();
             SubmitQuickSearch();
+        }
+
+        private void QuickSearchBox_TextChanged(object? sender, EventArgs e)
+        {
+            _quickSearchDebounceTimer.Stop();
+
+            if (string.IsNullOrWhiteSpace(_quickSearchBox.Text))
+            {
+                HideSearchResults();
+                return;
+            }
+
+            _quickSearchDebounceTimer.Start();
         }
 
         private void SubmitQuickSearch()
         {
+            _quickSearchDebounceTimer.Stop();
             string keyword = _quickSearchBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(keyword))
             {

@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services;
@@ -168,6 +170,105 @@ namespace CourseGuard.Backend.Controllers
 
         public System.Threading.Tasks.Task<byte[]?> GetLessonFileContentAsync(int teacherId, int lessonId) =>
             teacherId <= 0 || lessonId <= 0 ? System.Threading.Tasks.Task.FromResult<byte[]?>(null) : _repository.GetLessonFileContentAsync(lessonId);
+
+        public async Task<List<TeacherQuickSearchResultModel>> SearchQuickAccessAsync(int teacherId, string keyword)
+        {
+            if (teacherId <= 0 || string.IsNullOrWhiteSpace(keyword))
+                return new List<TeacherQuickSearchResultModel>();
+
+            string trimmedKeyword = keyword.Trim();
+
+            Task<List<TeacherQuickSearchResultModel>> coursesTask = Task.Run(() => SearchCourses(teacherId, trimmedKeyword));
+            Task<List<TeacherQuickSearchResultModel>> studentsTask = Task.Run(() => SearchStudents(teacherId, trimmedKeyword));
+            Task<List<TeacherQuickSearchResultModel>> materialsTask = Task.Run(() => SearchMaterials(teacherId, trimmedKeyword));
+
+            await Task.WhenAll(coursesTask, studentsTask, materialsTask);
+
+            return coursesTask.Result
+                .Concat(studentsTask.Result)
+                .Concat(materialsTask.Result)
+                .ToList();
+        }
+
+        private List<TeacherQuickSearchResultModel> SearchCourses(int teacherId, string keyword)
+        {
+            return GetCourses(teacherId)
+                .Where(course => ContainsKeyword(course.Name, keyword) || ContainsKeyword(course.Description, keyword))
+                .Take(8)
+                .Select(course => new TeacherQuickSearchResultModel
+                {
+                    Kind = TeacherQuickSearchKinds.Course,
+                    Id = course.Id,
+                    Group = "Khóa học",
+                    Title = course.Name,
+                    Description = $"{course.Status} • {course.StudentCount} học viên",
+                    PageName = "Khóa học",
+                    Keyword = keyword
+                })
+                .ToList();
+        }
+
+        private List<TeacherQuickSearchResultModel> SearchStudents(int teacherId, string keyword)
+        {
+            return GetPendingEnrollments(teacherId)
+                .Concat(GetEnrolledStudents(teacherId))
+                .Where(student => ContainsKeyword(student.StudentName, keyword)
+                    || ContainsKeyword(student.Email, keyword)
+                    || ContainsKeyword(student.CourseName, keyword))
+                .GroupBy(student => new { student.StudentId, student.CourseId })
+                .Select(group => group.First())
+                .Take(8)
+                .Select(student => new TeacherQuickSearchResultModel
+                {
+                    Kind = TeacherQuickSearchKinds.Student,
+                    Id = student.StudentId,
+                    ParentId = student.CourseId,
+                    Group = "Sinh viên",
+                    Title = student.StudentName,
+                    Description = $"{student.Email} • {student.CourseName} • {student.Status}",
+                    PageName = "Sinh viên",
+                    Keyword = keyword
+                })
+                .ToList();
+        }
+
+        private List<TeacherQuickSearchResultModel> SearchMaterials(int teacherId, string keyword)
+        {
+            return GetMaterials(teacherId)
+                .Where(material => ContainsKeyword(material.FileName, keyword)
+                    || ContainsKeyword(material.CourseName, keyword)
+                    || ContainsKeyword(material.FilePath, keyword))
+                .Take(8)
+                .Select(material => new TeacherQuickSearchResultModel
+                {
+                    Kind = TeacherQuickSearchKinds.Material,
+                    Id = material.Id,
+                    ParentId = material.CourseId,
+                    Group = "Tài liệu",
+                    Title = material.FileName,
+                    Description = $"{material.CourseName} • {FormatQuickSearchSize(material.FileSize)}",
+                    PageName = "Tài liệu",
+                    Keyword = keyword
+                })
+                .ToList();
+        }
+
+        private static bool ContainsKeyword(string? value, string keyword)
+        {
+            return !string.IsNullOrWhiteSpace(value)
+                && value.Contains(keyword, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string FormatQuickSearchSize(long bytes)
+        {
+            if (bytes <= 0)
+                return "Không rõ dung lượng";
+            if (bytes < 1024)
+                return $"{bytes} B";
+            if (bytes < 1024 * 1024)
+                return $"{bytes / 1024d:0.#} KB";
+            return $"{bytes / 1024d / 1024d:0.#} MB";
+        }
 
         public async System.Threading.Tasks.Task<List<TeacherExamQuestionModel>> ParseAndValidateExcelAsync(string filePath)
         {
