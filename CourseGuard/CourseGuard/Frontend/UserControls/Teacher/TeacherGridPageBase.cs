@@ -65,6 +65,19 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             panel.Controls.Add(action);
         }
 
+        protected void AddHeaderActionBefore(Control action, Control before)
+        {
+            FlowLayoutPanel? panel = FindActionPanel(this);
+            if (panel == null)
+                return;
+
+            action.Margin = new Padding(8, 0, 0, 0);
+            int beforeIndex = panel.Controls.GetChildIndex(before);
+            panel.Controls.Add(action);
+            if (beforeIndex >= 0)
+                panel.Controls.SetChildIndex(action, beforeIndex);
+        }
+
         protected int CurrentInt(string columnName)
         {
             if (!Grid.Visible || Grid.CurrentRow == null || Grid.CurrentRow.IsNewRow || !Grid.Columns.Contains(columnName))
@@ -131,7 +144,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         {
             foreach (Control child in root.Controls)
             {
-                if (child is FlowLayoutPanel panel)
+                if (child is FlowLayoutPanel { FlowDirection: FlowDirection.LeftToRight } panel)
                     return panel;
 
                 FlowLayoutPanel? nested = FindActionPanel(child);
