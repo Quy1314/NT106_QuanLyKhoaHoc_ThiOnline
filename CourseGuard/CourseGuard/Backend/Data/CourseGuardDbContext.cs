@@ -2328,7 +2328,7 @@ namespace CourseGuard.Backend.Data
                 JOIN users u ON u.id = c.teacher_id
                 WHERE e.student_id = @student_id
                   AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
-                  AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'
+                  AND UPPER(COALESCE(c.status, '')) IN ('ACTIVE', 'APPROVED', 'OPEN')
                 ORDER BY os.start_time ASC NULLS LAST, os.id DESC";
 
             using var command = new NpgsqlCommand(query, connection);
