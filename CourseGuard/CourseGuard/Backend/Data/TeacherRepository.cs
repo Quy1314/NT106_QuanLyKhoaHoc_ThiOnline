@@ -695,6 +695,79 @@ namespace CourseGuard.Backend.Data
             return rows;
         }
 
+        public List<TeacherQuickSearchResultModel> SearchResultQuickAccess(int teacherId, string keyword)
+        {
+            var results = new List<TeacherQuickSearchResultModel>();
+            using var connection = _dbContext.CreateConnection();
+            connection.Open();
+
+            string pattern = $"%{keyword.Trim()}%";
+            using var courseCommand = new NpgsqlCommand(@"
+                SELECT c.id, COALESCE(c.name, ''), COUNT(DISTINCT a.id) AS attempt_count
+                FROM courses c
+                JOIN exams ex ON ex.course_id = c.id
+                JOIN exam_attempts a ON a.exam_id = ex.id
+                WHERE c.teacher_id = @teacher_id
+                  AND COALESCE(c.name, '') ILIKE @pattern
+                GROUP BY c.id, c.name
+                ORDER BY c.name
+                LIMIT 5", connection);
+            courseCommand.Parameters.AddWithValue("@teacher_id", teacherId);
+            courseCommand.Parameters.AddWithValue("@pattern", pattern);
+            using (var reader = courseCommand.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    string courseName = reader.GetString(1);
+                    int attemptCount = Convert.ToInt32(reader.GetValue(2));
+                    results.Add(new TeacherQuickSearchResultModel
+                    {
+                        Kind = TeacherQuickSearchKinds.ResultCourse,
+                        Id = reader.GetInt32(0),
+                        Group = "Kết quả",
+                        Title = $"[Kết quả] {courseName}",
+                        Description = $"Xem {attemptCount} bài thi trong khóa học {courseName}",
+                        PageName = "Kết quả",
+                        Keyword = keyword
+                    });
+                }
+            }
+
+            using var studentCommand = new NpgsqlCommand(@"
+                SELECT s.id, COALESCE(s.full_name, s.username, ''), COUNT(DISTINCT a.id) AS attempt_count
+                FROM exam_attempts a
+                JOIN exams ex ON ex.id = a.exam_id
+                JOIN courses c ON c.id = ex.course_id
+                JOIN users s ON s.id = a.student_id
+                WHERE c.teacher_id = @teacher_id
+                  AND COALESCE(s.full_name, s.username, '') ILIKE @pattern
+                GROUP BY s.id, s.full_name, s.username
+                ORDER BY COALESCE(s.full_name, s.username, '')
+                LIMIT 5", connection);
+            studentCommand.Parameters.AddWithValue("@teacher_id", teacherId);
+            studentCommand.Parameters.AddWithValue("@pattern", pattern);
+            using (var reader = studentCommand.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    string studentName = reader.GetString(1);
+                    int attemptCount = Convert.ToInt32(reader.GetValue(2));
+                    results.Add(new TeacherQuickSearchResultModel
+                    {
+                        Kind = TeacherQuickSearchKinds.ResultStudent,
+                        Id = reader.GetInt32(0),
+                        Group = "Kết quả",
+                        Title = $"[Kết quả] {studentName}",
+                        Description = $"Xem {attemptCount} bài thi của sinh viên {studentName}",
+                        PageName = "Kết quả",
+                        Keyword = keyword
+                    });
+                }
+            }
+
+            return results;
+        }
+
         public bool UpdateScore(int teacherId, TeacherScoreModel input)
         {
             using var connection = _dbContext.CreateConnection();

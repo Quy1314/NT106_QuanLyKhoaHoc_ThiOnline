@@ -15,7 +15,7 @@ using ClosedXML.Excel;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
 {
-    public partial class UC_TeacherResults : TeacherGridPageBase
+    public partial class UC_TeacherResults : TeacherGridPageBase, ITeacherQuickSearchTarget
     {
         private static readonly HashSet<string> EditableStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -25,6 +25,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         };
 
         private readonly Button _exportButton = new() { Text = "Xuất bảng điểm" };
+        private TeacherQuickSearchRequest? _quickSearchRequest;
 
         public UC_TeacherResults(int teacherId, TeacherController controller) : base(teacherId, controller, "Kết quả", "Xem và cập nhật điểm cho bài thi thuộc khóa học của mình.", "Bảng điểm")
         {
@@ -51,10 +52,43 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         protected override string EditSelectionColumnName => "AttemptId";
 
-        protected override Task<DataTable> CreateTableAsync() => Task.Run(() => TeacherTabChrome.ToTable(
+        protected override Task<DataTable> CreateTableAsync() => Task.Run(() => BuildResultsTable(ApplyQuickSearchFilter(Controller.GetResults(TeacherId))));
+
+        public async Task ApplyQuickSearchAsync(TeacherQuickSearchRequest request)
+        {
+            if (!IsResultQuickSearch(request.Kind))
+                return;
+
+            _quickSearchRequest = request;
+            await LoadDataAsync();
+            SelectResultRow(request);
+        }
+
+        private IEnumerable<TeacherScoreModel> ApplyQuickSearchFilter(IEnumerable<TeacherScoreModel> rows)
+        {
+            if (_quickSearchRequest == null)
+                return rows;
+
+            string keyword = (_quickSearchRequest.Keyword ?? string.Empty).Trim();
+            if (string.Equals(_quickSearchRequest.Kind, TeacherQuickSearchKinds.ResultCourse, StringComparison.OrdinalIgnoreCase))
+            {
+                return rows.Where(row => row.CourseId == _quickSearchRequest.Id
+                    || ContainsKeyword(row.CourseName, keyword));
+            }
+
+            if (string.Equals(_quickSearchRequest.Kind, TeacherQuickSearchKinds.ResultStudent, StringComparison.OrdinalIgnoreCase))
+            {
+                return rows.Where(row => row.StudentId == _quickSearchRequest.Id
+                    || ContainsKeyword(row.StudentName, keyword));
+            }
+
+            return rows;
+        }
+
+        private static DataTable BuildResultsTable(IEnumerable<TeacherScoreModel> rows) => TeacherTabChrome.ToTable(
             new[] { "AttemptId", "ExamId", "CourseId", "StudentId", "Khóa học", "Kỳ thi", "Sinh viên", "Điểm", "Trạng thái", "Nộp lúc" },
-            Controller.GetResults(TeacherId),
-            r => new object?[] { r.AttemptId, r.ExamId, r.CourseId, r.StudentId, r.CourseName, r.ExamTitle, r.StudentName, r.Score, r.Status, r.SubmitTime?.ToString("dd/MM/yyyy HH:mm") ?? "" }));
+            rows,
+            r => new object?[] { r.AttemptId, r.ExamId, r.CourseId, r.StudentId, r.CourseName, r.ExamTitle, r.StudentName, r.Score, r.Status, r.SubmitTime?.ToString("dd/MM/yyyy HH:mm") ?? "" });
 
         protected override async Task EditAsync()
         {
@@ -105,6 +139,55 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
             await LoadDataAsync();
             MetaTheme.ShowModernDialog("Đã cập nhật điểm thành công.", "Thành công");
+        }
+
+        private static bool IsResultQuickSearch(string kind)
+        {
+            return string.Equals(kind, TeacherQuickSearchKinds.ResultCourse, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(kind, TeacherQuickSearchKinds.ResultStudent, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool ContainsKeyword(string? value, string keyword)
+        {
+            return !string.IsNullOrWhiteSpace(keyword)
+                && !string.IsNullOrWhiteSpace(value)
+                && value.Contains(keyword, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void SelectResultRow(TeacherQuickSearchRequest request)
+        {
+            string columnName = string.Equals(request.Kind, TeacherQuickSearchKinds.ResultCourse, StringComparison.OrdinalIgnoreCase)
+                ? "CourseId"
+                : "StudentId";
+
+            if (request.Id <= 0 || !Grid.Columns.Contains(columnName))
+                return;
+
+            Grid.ClearSelection();
+            foreach (DataGridViewRow row in Grid.Rows)
+            {
+                if (row.IsNewRow || row.Cells[columnName].Value == null)
+                    continue;
+
+                if (Convert.ToInt32(row.Cells[columnName].Value) != request.Id)
+                    continue;
+
+                row.Selected = true;
+                Grid.CurrentCell = GetFirstVisibleCell(row);
+                Grid.FirstDisplayedScrollingRowIndex = Math.Max(0, row.Index);
+                break;
+            }
+        }
+
+        private DataGridViewCell? GetFirstVisibleCell(DataGridViewRow row)
+        {
+            foreach (DataGridViewCell cell in row.Cells)
+            {
+                if (cell.Visible)
+                    return cell;
+            }
+
+            return null;
         }
 
         private async Task ExportExcelAsync()
