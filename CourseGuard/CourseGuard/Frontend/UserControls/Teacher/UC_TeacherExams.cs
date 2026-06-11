@@ -14,19 +14,19 @@ namespace CourseGuard.Frontend.UserControls.Teacher
     {
         private const string ColumnExamId = "Id";
         private const string ColumnCourseId = "CourseId";
-        private const string ColumnCourse = "Khoa hoc";
-        private const string ColumnTitle = "Ten ky thi";
-        private const string ColumnOpen = "Mo";
-        private const string ColumnClose = "Dong";
-        private const string ColumnDuration = "Thoi luong";
-        private const string ColumnAttempts = "Luot";
-        private const string ColumnViolations = "Vi pham";
-        private const string ColumnQuestions = "Cau hoi";
-        private const string ColumnStatus = "Trang thai";
+        private const string ColumnCourse = "Khóa học";
+        private const string ColumnTitle = "Tên kỳ thi";
+        private const string ColumnOpen = "Mở";
+        private const string ColumnClose = "Đóng";
+        private const string ColumnDuration = "Thời lượng";
+        private const string ColumnAttempts = "Lượt";
+        private const string ColumnViolations = "Vi phạm";
+        private const string ColumnQuestions = "Câu hỏi";
+        private const string ColumnStatus = "Trạng thái";
 
-        public UC_TeacherExams(int teacherId, TeacherController controller) : base(teacherId, controller, "Bai kiem tra", "Tao va quan ly ky thi. Giam sat nam o tab rieng.", "Danh sach bai kiem tra")
+        public UC_TeacherExams(int teacherId, TeacherController controller) : base(teacherId, controller, "Bài kiểm tra", "Tạo và quản lý kỳ thi. Giám sát nằm ở tab riêng.", "Danh sách bài kiểm tra")
         {
-            var questionsButton = TeacherTabChrome.SecondaryButton("Soan cau hoi");
+            var questionsButton = TeacherTabChrome.SecondaryButton("Soạn câu hỏi");
             questionsButton.Click += async (_, _) => await EditQuestionsAsync();
             AddHeaderAction(questionsButton);
         }
@@ -41,7 +41,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             int id = CurrentInt(ColumnExamId);
             if (id <= 0)
             {
-                MetaTheme.ShowModernDialog("Vui long chon mot bai kiem tra.", "Thong bao");
+                MetaTheme.ShowModernDialog("Vui lòng chọn một bài kiểm tra.", "Thông báo");
                 return;
             }
 
@@ -58,7 +58,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             {
                 if (string.Equals(dialog.Status, WorkflowConstants.ExamStatus.Active, StringComparison.OrdinalIgnoreCase))
                 {
-                    MetaTheme.ShowModernDialog("Bai kiem tra can duoc tao o trang thai nhap, them cau hoi, roi moi kich hoat.", "Chua the kich hoat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MetaTheme.ShowModernDialog("Bài kiểm tra cần được tạo ở trạng thái nháp, thêm câu hỏi, rồi mới kích hoạt.", "Chưa thể kích hoạt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
@@ -99,7 +99,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             {
                 if (string.Equals(dialog.Status, WorkflowConstants.ExamStatus.Active, StringComparison.OrdinalIgnoreCase) && !Controller.CanActivateExam(TeacherId, id))
                 {
-                    MetaTheme.ShowModernDialog("Bai kiem tra can co it nhat 1 cau hoi truoc khi kich hoat.", "Chua the kich hoat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MetaTheme.ShowModernDialog("Bài kiểm tra cần có ít nhất 1 câu hỏi trước khi kích hoạt.", "Chưa thể kích hoạt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 

@@ -181,10 +181,12 @@ namespace CourseGuard.Backend.Controllers
             Task<List<TeacherQuickSearchResultModel>> coursesTask = Task.Run(() => SearchCourses(teacherId, trimmedKeyword));
             Task<List<TeacherQuickSearchResultModel>> studentsTask = Task.Run(() => SearchStudents(teacherId, trimmedKeyword));
             Task<List<TeacherQuickSearchResultModel>> materialsTask = Task.Run(() => SearchMaterials(teacherId, trimmedKeyword));
+            Task<List<TeacherQuickSearchResultModel>> resultsTask = Task.Run(() => SearchResults(teacherId, trimmedKeyword));
 
-            await Task.WhenAll(coursesTask, studentsTask, materialsTask);
+            await Task.WhenAll(coursesTask, studentsTask, materialsTask, resultsTask);
 
-            return coursesTask.Result
+            return resultsTask.Result
+                .Concat(coursesTask.Result)
                 .Concat(studentsTask.Result)
                 .Concat(materialsTask.Result)
                 .ToList();
@@ -251,6 +253,11 @@ namespace CourseGuard.Backend.Controllers
                     Keyword = keyword
                 })
                 .ToList();
+        }
+
+        private List<TeacherQuickSearchResultModel> SearchResults(int teacherId, string keyword)
+        {
+            return _repository.SearchResultQuickAccess(teacherId, keyword);
         }
 
         private static bool ContainsKeyword(string? value, string keyword)
