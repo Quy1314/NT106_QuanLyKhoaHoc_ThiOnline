@@ -262,10 +262,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
                 if (lstContacts.Items.Count > 0)
                 {
-                    lstContacts.ClearSelected();
-                    _selectedCourseId = 0;
-                    _hasLoadedInitialMessages = false;
-                    _messageList.ClearMessages();
+                    lstContacts.SelectedIndex = 0;
                 }
                 else
                 {

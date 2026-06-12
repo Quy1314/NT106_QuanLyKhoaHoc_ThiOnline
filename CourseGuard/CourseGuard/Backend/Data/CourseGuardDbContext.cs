@@ -59,10 +59,13 @@ namespace CourseGuard.Backend.Data
             using var connection = CreateConnection();
             connection.Open();
 
-            string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status 
-                            FROM USERS u 
-                            JOIN ROLES r ON u.role_id = r.id 
-                            WHERE LOWER(u.username) = LOWER(@username)";
+            string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status,
+                                    COALESCE(sp.avatar_path, tp.avatar_path, '') AS avatar_path
+                             FROM USERS u
+                             JOIN ROLES r ON u.role_id = r.id
+                             LEFT JOIN student_profiles sp ON sp.user_id = u.id
+                             LEFT JOIN teacher_profiles tp ON tp.user_id = u.id
+                             WHERE LOWER(u.username) = LOWER(@username)";
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@username", username);
 
@@ -77,7 +80,8 @@ namespace CourseGuard.Backend.Data
                     FullName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
                     Email = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
                     Role = reader.GetString(5),
-                    Status = reader.GetString(6)
+                    Status = reader.GetString(6),
+                    AvatarPath = reader.IsDBNull(7) ? string.Empty : reader.GetString(7)
                 };
             }
 
@@ -89,10 +93,13 @@ namespace CourseGuard.Backend.Data
             using var connection = CreateConnection();
             await connection.OpenAsync(cancellationToken);
 
-            const string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status
-                            FROM USERS u
-                            JOIN ROLES r ON u.role_id = r.id
-                            WHERE LOWER(u.username) = LOWER(@username)";
+            const string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status,
+                                    COALESCE(sp.avatar_path, tp.avatar_path, '') AS avatar_path
+                             FROM USERS u
+                             JOIN ROLES r ON u.role_id = r.id
+                             LEFT JOIN student_profiles sp ON sp.user_id = u.id
+                             LEFT JOIN teacher_profiles tp ON tp.user_id = u.id
+                             WHERE LOWER(u.username) = LOWER(@username)";
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@username", username);
 
@@ -107,7 +114,8 @@ namespace CourseGuard.Backend.Data
                     FullName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
                     Email = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
                     Role = reader.GetString(5),
-                    Status = reader.GetString(6)
+                    Status = reader.GetString(6),
+                    AvatarPath = reader.IsDBNull(7) ? string.Empty : reader.GetString(7)
                 };
             }
 
@@ -3087,10 +3095,13 @@ namespace CourseGuard.Backend.Data
                        COALESCE(m.FILE_SIZE, 0) AS FILE_SIZE,
                        COALESCE(m.MIME_TYPE, '') AS MIME_TYPE,
                        m.POLL_ID,
+                       COALESCE(tp.avatar_path, sp.avatar_path, '') AS SENDER_AVATAR,
                        m.SENT_AT
                 FROM MESSAGES m
                 JOIN USERS u ON u.ID = m.SENDER_ID
                 LEFT JOIN ROLES r ON r.ID = u.ROLE_ID
+                LEFT JOIN student_profiles sp ON sp.user_id = u.ID
+                LEFT JOIN teacher_profiles tp ON tp.user_id = u.ID
                 WHERE m.COURSE_ID = @course_id
                   AND COALESCE(m.IS_DELETED, FALSE) = FALSE
                 ORDER BY m.SENT_AT ASC
@@ -3130,10 +3141,13 @@ namespace CourseGuard.Backend.Data
                        COALESCE(m.FILE_SIZE, 0) AS FILE_SIZE,
                        COALESCE(m.MIME_TYPE, '') AS MIME_TYPE,
                        m.POLL_ID,
+                       COALESCE(tp.avatar_path, sp.avatar_path, '') AS SENDER_AVATAR,
                        m.SENT_AT
                 FROM MESSAGES m
                 JOIN USERS u ON u.ID = m.SENDER_ID
                 LEFT JOIN ROLES r ON r.ID = u.ROLE_ID
+                LEFT JOIN student_profiles sp ON sp.user_id = u.ID
+                LEFT JOIN teacher_profiles tp ON tp.user_id = u.ID
                 WHERE m.COURSE_ID = @course_id
                   AND COALESCE(m.IS_DELETED, FALSE) = FALSE
                 ORDER BY m.SENT_AT ASC
@@ -3186,10 +3200,13 @@ namespace CourseGuard.Backend.Data
                            COALESCE(m.FILE_SIZE, 0) AS FILE_SIZE,
                            COALESCE(m.MIME_TYPE, '') AS MIME_TYPE,
                            m.POLL_ID,
+                           COALESCE(tp.avatar_path, sp.avatar_path, '') AS SENDER_AVATAR,
                            m.SENT_AT
                     FROM MESSAGES m
                     JOIN USERS u ON u.ID = m.SENDER_ID
                     LEFT JOIN ROLES r ON r.ID = u.ROLE_ID
+                    LEFT JOIN student_profiles sp ON sp.user_id = u.ID
+                    LEFT JOIN teacher_profiles tp ON tp.user_id = u.ID
                     WHERE m.COURSE_ID = @course_id
                       AND m.ID < @before_message_id
                       AND COALESCE(m.IS_DELETED, FALSE) = FALSE
@@ -3245,10 +3262,13 @@ namespace CourseGuard.Backend.Data
                        COALESCE(m.FILE_SIZE, 0) AS FILE_SIZE,
                        COALESCE(m.MIME_TYPE, '') AS MIME_TYPE,
                        m.POLL_ID,
+                       COALESCE(tp.avatar_path, sp.avatar_path, '') AS SENDER_AVATAR,
                        m.SENT_AT
                 FROM MESSAGES m
                 JOIN USERS u ON u.ID = m.SENDER_ID
                 LEFT JOIN ROLES r ON r.ID = u.ROLE_ID
+                LEFT JOIN student_profiles sp ON sp.user_id = u.ID
+                LEFT JOIN teacher_profiles tp ON tp.user_id = u.ID
                 WHERE m.COURSE_ID = @course_id
                   AND m.ID > @after_message_id
                   AND COALESCE(m.IS_DELETED, FALSE) = FALSE
@@ -3297,7 +3317,8 @@ namespace CourseGuard.Backend.Data
                 FileSize = reader.GetInt64(9),
                 MimeType = reader.GetString(10),
                 PollId = reader.IsDBNull(11) ? null : reader.GetInt32(11),
-                SentAt = reader.GetDateTime(12)
+                SenderAvatar = reader.IsDBNull(12) ? string.Empty : reader.GetString(12),
+                SentAt = reader.GetDateTime(13)
             };
         }
 

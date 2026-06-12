@@ -11,6 +11,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
     public class ChatMessageListControl : UserControl
     {
         private readonly DoubleBufferedFlowLayoutPanel _panel = new();
+        private readonly AvatarImageLoader _avatarImageLoader = new();
         private bool _suppressTopReached;
 
         public event EventHandler? TopReached;
@@ -216,7 +217,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
                 return pollBubble;
             }
 
-            var bubble = new ChatBubbleControl(message, currentUserId);
+            var bubble = new ChatBubbleControl(message, currentUserId, _avatarImageLoader);
             bubble.UpdateContainerWidth(_panel.ClientSize.Width);
             return bubble;
         }
@@ -328,6 +329,16 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             target = Math.Max(0, Math.Min(target, max));
             _panel.VerticalScroll.Value = target;
             _panel.PerformLayout();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _avatarImageLoader.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
 
         private void OnPanelScroll(object? sender, ScrollEventArgs e)
