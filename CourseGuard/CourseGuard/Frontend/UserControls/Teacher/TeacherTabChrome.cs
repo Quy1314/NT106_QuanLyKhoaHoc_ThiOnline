@@ -251,6 +251,13 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             return button;
         }
 
+        public static Button SuccessButton(string text)
+        {
+            var button = new Button { Text = text };
+            StyleSuccessButton(button);
+            return button;
+        }
+
         public static void StylePrimaryButton(Button button)
         {
             MetaTheme.StylePrimaryButton(button);
@@ -294,6 +301,23 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             button.Cursor = Cursors.Hand;
             button.FlatAppearance.MouseOverBackColor = Color.FromArgb(220, 38, 38);
             button.FlatAppearance.MouseDownBackColor = Color.FromArgb(185, 28, 28);
+            RoundedButtonHelper.Apply(button, ButtonRadius);
+        }
+
+        public static void StyleSuccessButton(Button button)
+        {
+            PrepareButton(button);
+            button.Tag = "success";
+            button.FlatStyle = FlatStyle.Flat;
+            button.UseVisualStyleBackColor = false;
+            button.FlatAppearance.BorderSize = 0;
+            button.BackColor = AppColors.Success;
+            button.ForeColor = Color.White;
+            button.Font = AppFonts.Button;
+            button.Cursor = Cursors.Hand;
+            button.FlatAppearance.BorderColor = ControlPaint.Dark(AppColors.Success);
+            button.FlatAppearance.MouseOverBackColor = ControlPaint.Dark(AppColors.Success);
+            button.FlatAppearance.MouseDownBackColor = ControlPaint.DarkDark(AppColors.Success);
             RoundedButtonHelper.Apply(button, ButtonRadius);
         }
 

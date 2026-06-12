@@ -12,11 +12,13 @@ namespace CourseGuard.Backend.Controllers
     {
         private readonly TeacherRepository _repository;
         private readonly CourseGuardDbContext _dbContext;
+        private readonly TeacherStudentExcelExportService _studentExcelExportService;
 
         public TeacherController(CourseGuardDbContext dbContext)
         {
             _repository = new TeacherRepository(dbContext);
             _dbContext = dbContext;
+            _studentExcelExportService = new TeacherStudentExcelExportService();
         }
 
         public TeacherDashboardSummaryModel GetDashboardSummary(int teacherId) =>
@@ -108,6 +110,17 @@ namespace CourseGuard.Backend.Controllers
 
         public List<TeacherStudentModel> GetEnrolledStudents(int teacherId, int? courseId = null) =>
             teacherId <= 0 ? new List<TeacherStudentModel>() : _repository.GetEnrolledStudents(teacherId, courseId);
+
+        public Task ExportStudentsToExcelAsync(IEnumerable<TeacherStudentModel> students, string filePath, System.Threading.CancellationToken cancellationToken = default)
+        {
+            if (students == null)
+                throw new ArgumentNullException(nameof(students));
+
+            if (string.IsNullOrWhiteSpace(filePath))
+                throw new ArgumentException("Đường dẫn lưu file Excel không hợp lệ.", nameof(filePath));
+
+            return _studentExcelExportService.ExportStudentsAsync(students, filePath, cancellationToken);
+        }
 
         public bool ApproveEnrollment(int teacherId, int courseId, int studentId) =>
             teacherId > 0 && _repository.ApproveEnrollment(teacherId, courseId, studentId);
