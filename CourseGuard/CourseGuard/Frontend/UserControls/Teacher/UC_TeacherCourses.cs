@@ -100,7 +100,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             cboStatusFilter.SelectedIndexChanged += async (_, _) => await ReloadWithFiltersAsync();
             TeacherTabChrome.StyleSecondaryButton(_viewDetailsButton);
 
-            AddHeaderAction(txtSearch);
             AddHeaderAction(cboStatusFilter);
         }
 

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -44,6 +46,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             RoundedButtonHelper.Apply(btnSend, 10);
             lstContacts.SelectedIndexChanged += async (_, _) => await OnCourseChangedAsync();
+            lstContacts.DrawItem += DrawCourseItem;
             _messageList.TopReached += async (_, _) => await LoadOlderMessagesAsync();
             _messageList.PollVoteRequested += async (_, args) => await VotePollAsync(args);
             _messageList.PollCloseRequested += (_, args) =>
@@ -98,8 +101,8 @@ namespace CourseGuard.Frontend.UserControls.Student
                 ColumnCount = 2,
                 RowCount = 1
             };
-            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32f));
-            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 68f));
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24f));
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 76f));
             content.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
             var contactsCard = StudentTabChrome.CreateDataCard("Khóa học", lstContacts);
@@ -164,10 +167,65 @@ namespace CourseGuard.Frontend.UserControls.Student
             lstContacts.BorderStyle = BorderStyle.None;
             lstContacts.BackColor = AppColors.BgCard;
             lstContacts.ForeColor = AppColors.TextPrimary;
+            lstContacts.Font = AppFonts.Semibold(11f);
+            lstContacts.DrawMode = DrawMode.OwnerDrawFixed;
+            lstContacts.ItemHeight = 42;
+            lstContacts.IntegralHeight = false;
+            lstContacts.HorizontalScrollbar = false;
+            lstContacts.Margin = new Padding(0);
             _messageList.BackColor = AppColors.BgCard;
             txtMessages.Visible = false;
             txtInput.BackColor = AppColors.BgCard;
             txtInput.ForeColor = AppColors.TextPrimary;
+        }
+
+        private void DrawCourseItem(object? sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0 || e.Index >= lstContacts.Items.Count)
+                return;
+
+            bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            Rectangle bounds = e.Bounds;
+            Color backColor = selected ? MetaTheme.Colors.Primary : AppColors.BgCard;
+            Color textColor = selected ? Color.White : AppColors.TextPrimary;
+
+            using var canvas = new SolidBrush(AppColors.BgCard);
+            e.Graphics.FillRectangle(canvas, bounds);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            Rectangle itemBounds = new(bounds.Left + 8, bounds.Top + 3, bounds.Width - 16, bounds.Height - 6);
+            using GraphicsPath itemPath = CreateRoundedRectanglePath(itemBounds, 10);
+            using var background = new SolidBrush(backColor);
+            e.Graphics.FillPath(background, itemPath);
+
+            if (!selected)
+            {
+                using var border = new Pen(MetaTheme.Colors.BorderSoft);
+                e.Graphics.DrawPath(border, itemPath);
+            }
+
+            Rectangle textBounds = new(itemBounds.Left + 12, itemBounds.Top + 1, itemBounds.Width - 24, itemBounds.Height - 2);
+            TextRenderer.DrawText(
+                e.Graphics,
+                lstContacts.Items[e.Index]?.ToString() ?? string.Empty,
+                lstContacts.Font,
+                textBounds,
+                textColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+            e.DrawFocusRectangle();
+        }
+
+        private static GraphicsPath CreateRoundedRectanglePath(Rectangle bounds, int radius)
+        {
+            int diameter = radius * 2;
+            var path = new GraphicsPath();
+            path.AddArc(bounds.Left, bounds.Top, diameter, diameter, 180, 90);
+            path.AddArc(bounds.Right - diameter, bounds.Top, diameter, diameter, 270, 90);
+            path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+            path.AddArc(bounds.Left, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         private async Task LoadCoursesAsync()

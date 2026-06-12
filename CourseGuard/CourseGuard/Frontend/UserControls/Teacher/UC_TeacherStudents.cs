@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
@@ -13,8 +16,10 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 {
     public partial class UC_TeacherStudents : TeacherGridPageBase, ITeacherQuickSearchTarget
     {
+        private readonly Button _exportExcelButton = TeacherTabChrome.SuccessButton("Xuất Excel");
         private List<TeacherStudentModel> _allStudents = new();
         private string _quickSearchKeyword = string.Empty;
+        private bool _isExporting;
 
         public UC_TeacherStudents(int teacherId, TeacherController controller) : base(teacherId, controller, "Sinh viên", "Duyệt ghi danh và xem danh sách học viên thuộc khóa học của mình.", "Yêu cầu và học viên")
         {
@@ -24,6 +29,10 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             TeacherTabChrome.FitButtonToText(AddButton);
             TeacherTabChrome.FitButtonToText(EditButton);
             DeleteButton.Visible = false;
+
+            TeacherTabChrome.FitButtonToText(_exportExcelButton);
+            _exportExcelButton.Click += async (_, _) => await ExportVisibleStudentsAsync();
+            AddHeaderActionBefore(_exportExcelButton, RefreshButton);
 
             var attendanceButton = TeacherTabChrome.SecondaryButton("Điểm danh");
             attendanceButton.Click += (_, _) =>
@@ -118,6 +127,139 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private DataGridViewCell? GetFirstVisibleCell(DataGridViewRow row)
         {
             return row.Cells.Cast<DataGridViewCell>().FirstOrDefault(cell => cell.Visible);
+        }
+
+        private async Task ExportVisibleStudentsAsync()
+        {
+            if (_isExporting)
+                return;
+
+            List<TeacherStudentModel> visibleStudents = ApplyLocalFilter(_allStudents).ToList();
+            if (visibleStudents.Count == 0)
+            {
+                MetaTheme.ShowModernDialog("Không có sinh viên để xuất Excel.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            List<ExportCourseOption> courseOptions = BuildExportCourseOptions(visibleStudents);
+            using var selectionDialog = new ExportSelectionDialog(courseOptions);
+            if (selectionDialog.ShowDialog(FindForm()) != DialogResult.OK)
+                return;
+
+            List<TeacherStudentModel> studentsToExport = BuildExportRows(visibleStudents, selectionDialog);
+            if (studentsToExport.Count == 0)
+            {
+                MetaTheme.ShowModernDialog("Không có sinh viên phù hợp với lựa chọn xuất Excel.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string scopeName = selectionDialog.SelectedScope == StudentExportScope.Course
+                ? SanitizeFileName(selectionDialog.SelectedCourseName)
+                : "TatCa";
+            string defaultFileName = $"DanhSachSinhVien_{scopeName}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+            using var saveDialog = new SaveFileDialog
+            {
+                Title = "Xuất danh sách sinh viên",
+                Filter = "Excel Workbook (*.xlsx)|*.xlsx",
+                FileName = defaultFileName,
+                AddExtension = true,
+                DefaultExt = "xlsx",
+                OverwritePrompt = true
+            };
+
+            if (saveDialog.ShowDialog(FindForm()) != DialogResult.OK)
+                return;
+
+            try
+            {
+                _isExporting = true;
+                _exportExcelButton.Enabled = false;
+                UseWaitCursor = true;
+                Cursor.Current = Cursors.WaitCursor;
+
+                await Controller.ExportStudentsToExcelAsync(studentsToExport, saveDialog.FileName);
+
+                DialogResult openFile = MetaTheme.ShowModernDialog(
+                    $"Đã xuất danh sách sinh viên thành công:\n{saveDialog.FileName}\n\nBạn có muốn mở file ngay không?",
+                    "Xuất Excel thành công",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+
+                if (openFile == DialogResult.Yes)
+                {
+                    Process.Start(new ProcessStartInfo(saveDialog.FileName)
+                    {
+                        UseShellExecute = true
+                    });
+                }
+            }
+            catch (IOException)
+            {
+                MetaTheme.ShowModernDialog(
+                    "File Excel đang được mở bởi một chương trình khác. Vui lòng đóng file và thử lại.",
+                    "Không thể ghi file Excel",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                MetaTheme.ShowModernDialog(
+                    "Không thể xuất danh sách sinh viên: " + ex.Message,
+                    "Lỗi",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+            finally
+            {
+                _isExporting = false;
+                _exportExcelButton.Enabled = true;
+                UseWaitCursor = false;
+                Cursor.Current = Cursors.Default;
+            }
+        }
+
+        private static List<ExportCourseOption> BuildExportCourseOptions(IEnumerable<TeacherStudentModel> students)
+        {
+            return students
+                .Where(student => student.CourseId > 0 && !string.IsNullOrWhiteSpace(student.CourseName))
+                .GroupBy(student => student.CourseId)
+                .Select(group => new ExportCourseOption(
+                    group.Key,
+                    group.Select(student => student.CourseName)
+                        .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? string.Empty))
+                .OrderBy(option => option.CourseName, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+        }
+
+        private static List<TeacherStudentModel> BuildExportRows(
+            IEnumerable<TeacherStudentModel> visibleStudents,
+            ExportSelectionDialog selectionDialog)
+        {
+            IEnumerable<TeacherStudentModel> query = visibleStudents;
+
+            if (selectionDialog.SelectedScope == StudentExportScope.Course && selectionDialog.SelectedCourseId.HasValue)
+            {
+                int selectedCourseId = selectionDialog.SelectedCourseId.Value;
+                query = query.Where(student => student.CourseId == selectedCourseId)
+                    .OrderBy(student => student.StudentName, StringComparer.CurrentCultureIgnoreCase);
+            }
+            else
+            {
+                query = query
+                    .OrderBy(student => student.CourseName, StringComparer.CurrentCultureIgnoreCase)
+                    .ThenBy(student => student.StudentName, StringComparer.CurrentCultureIgnoreCase);
+            }
+
+            return query.ToList();
+        }
+
+        private static string SanitizeFileName(string value)
+        {
+            string safe = string.IsNullOrWhiteSpace(value) ? "KhoaHoc" : value.Trim();
+            safe = Regex.Replace(safe, "[\\\\/:*?\"<>|]", "_");
+            safe = Regex.Replace(safe, @"\s+", "_");
+            safe = Regex.Replace(safe, "_+", "_").Trim('_', '.', ' ');
+            return string.IsNullOrWhiteSpace(safe) ? "KhoaHoc" : safe;
         }
 
         private static bool ContainsKeyword(string? value, string keyword)
