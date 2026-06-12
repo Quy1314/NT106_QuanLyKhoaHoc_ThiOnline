@@ -3072,6 +3072,7 @@ namespace CourseGuard.Backend.Data
             using var connection = CreateConnection();
             connection.Open();
             EnsureChatSchema(connection);
+            EnsurePollSchema(connection);
 
             const string query = @"
                 SELECT m.ID,
@@ -3085,6 +3086,7 @@ namespace CourseGuard.Backend.Data
                        COALESCE(m.FILE_NAME, '') AS FILE_NAME,
                        COALESCE(m.FILE_SIZE, 0) AS FILE_SIZE,
                        COALESCE(m.MIME_TYPE, '') AS MIME_TYPE,
+                       m.POLL_ID,
                        m.SENT_AT
                 FROM MESSAGES m
                 JOIN USERS u ON u.ID = m.SENDER_ID
@@ -3100,23 +3102,10 @@ namespace CourseGuard.Backend.Data
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
-                result.Add(new ChatMessageModel
-                {
-                    Id = reader.GetInt32(0),
-                    CourseId = reader.GetInt32(1),
-                    SenderId = reader.GetInt32(2),
-                    SenderName = reader.GetString(3),
-                    SenderRole = reader.GetString(4),
-                    Content = reader.GetString(5),
-                    MessageType = reader.GetString(6),
-                    FileUrl = reader.GetString(7),
-                    FileName = reader.GetString(8),
-                    FileSize = reader.GetInt64(9),
-                    MimeType = reader.GetString(10),
-                    SentAt = reader.GetDateTime(11)
-                });
+                result.Add(ReadChatMessage(reader));
             }
 
+            AttachPollData(connection, result, currentUserId: 0);
             return result;
         }
 
@@ -3126,6 +3115,7 @@ namespace CourseGuard.Backend.Data
             await using var connection = CreateConnection();
             await connection.OpenAsync(cancellationToken);
             EnsureChatSchema(connection);
+            EnsurePollSchema(connection);
 
             const string query = @"
                 SELECT m.ID,
@@ -3139,6 +3129,7 @@ namespace CourseGuard.Backend.Data
                        COALESCE(m.FILE_NAME, '') AS FILE_NAME,
                        COALESCE(m.FILE_SIZE, 0) AS FILE_SIZE,
                        COALESCE(m.MIME_TYPE, '') AS MIME_TYPE,
+                       m.POLL_ID,
                        m.SENT_AT
                 FROM MESSAGES m
                 JOIN USERS u ON u.ID = m.SENDER_ID
@@ -3151,27 +3142,740 @@ namespace CourseGuard.Backend.Data
             await using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@course_id", courseId);
             command.Parameters.AddWithValue("@limit", limit <= 0 ? 100 : limit);
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+            {
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    result.Add(ReadChatMessage(reader));
+                }
+            }
+
+            await AttachPollDataAsync(connection, result, currentUserId: 0, cancellationToken);
+            return result;
+        }
+
+        public async Task<List<ChatMessageModel>> GetChatMessagesForUserAsync(int userId, int courseId, int limit = 100, CancellationToken cancellationToken = default)
+        {
+            var messages = await GetChatMessagesAsync(courseId, limit, cancellationToken);
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsurePollSchema(connection);
+            await AttachPollDataAsync(connection, messages, userId, cancellationToken);
+            return messages;
+        }
+
+        public async Task<List<ChatMessageModel>> GetChatMessagesBeforeAsync(int courseId, int beforeMessageId, int limit = 20, CancellationToken cancellationToken = default)
+        {
+            var result = new List<ChatMessageModel>();
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsureChatSchema(connection);
+            EnsurePollSchema(connection);
+
+            const string query = @"
+                SELECT * FROM (
+                    SELECT m.ID,
+                           m.COURSE_ID,
+                           m.SENDER_ID,
+                           COALESCE(u.FULL_NAME, u.USERNAME, 'Unknown') AS SENDER_NAME,
+                           COALESCE(r.NAME, '') AS SENDER_ROLE,
+                           COALESCE(m.CONTENT, '') AS CONTENT,
+                           COALESCE(m.MESSAGE_TYPE, 'TEXT') AS MESSAGE_TYPE,
+                           COALESCE(m.FILE_URL, '') AS FILE_URL,
+                           COALESCE(m.FILE_NAME, '') AS FILE_NAME,
+                           COALESCE(m.FILE_SIZE, 0) AS FILE_SIZE,
+                           COALESCE(m.MIME_TYPE, '') AS MIME_TYPE,
+                           m.POLL_ID,
+                           m.SENT_AT
+                    FROM MESSAGES m
+                    JOIN USERS u ON u.ID = m.SENDER_ID
+                    LEFT JOIN ROLES r ON r.ID = u.ROLE_ID
+                    WHERE m.COURSE_ID = @course_id
+                      AND m.ID < @before_message_id
+                      AND COALESCE(m.IS_DELETED, FALSE) = FALSE
+                    ORDER BY m.ID DESC
+                    LIMIT @limit
+                ) older_messages
+                ORDER BY ID ASC";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            command.Parameters.AddWithValue("@before_message_id", beforeMessageId);
+            command.Parameters.AddWithValue("@limit", limit <= 0 ? 20 : limit);
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+            {
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    result.Add(ReadChatMessage(reader));
+                }
+            }
+
+            await AttachPollDataAsync(connection, result, currentUserId: 0, cancellationToken);
+            return result;
+        }
+
+        public async Task<List<ChatMessageModel>> GetChatMessagesBeforeForUserAsync(int userId, int courseId, int beforeMessageId, int limit = 20, CancellationToken cancellationToken = default)
+        {
+            var messages = await GetChatMessagesBeforeAsync(courseId, beforeMessageId, limit, cancellationToken);
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsurePollSchema(connection);
+            await AttachPollDataAsync(connection, messages, userId, cancellationToken);
+            return messages;
+        }
+
+        public async Task<List<ChatMessageModel>> GetChatMessagesAfterAsync(int courseId, int afterMessageId, int limit = 50, CancellationToken cancellationToken = default)
+        {
+            var result = new List<ChatMessageModel>();
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsureChatSchema(connection);
+            EnsurePollSchema(connection);
+
+            const string query = @"
+                SELECT m.ID,
+                       m.COURSE_ID,
+                       m.SENDER_ID,
+                       COALESCE(u.FULL_NAME, u.USERNAME, 'Unknown') AS SENDER_NAME,
+                       COALESCE(r.NAME, '') AS SENDER_ROLE,
+                       COALESCE(m.CONTENT, '') AS CONTENT,
+                       COALESCE(m.MESSAGE_TYPE, 'TEXT') AS MESSAGE_TYPE,
+                       COALESCE(m.FILE_URL, '') AS FILE_URL,
+                       COALESCE(m.FILE_NAME, '') AS FILE_NAME,
+                       COALESCE(m.FILE_SIZE, 0) AS FILE_SIZE,
+                       COALESCE(m.MIME_TYPE, '') AS MIME_TYPE,
+                       m.POLL_ID,
+                       m.SENT_AT
+                FROM MESSAGES m
+                JOIN USERS u ON u.ID = m.SENDER_ID
+                LEFT JOIN ROLES r ON r.ID = u.ROLE_ID
+                WHERE m.COURSE_ID = @course_id
+                  AND m.ID > @after_message_id
+                  AND COALESCE(m.IS_DELETED, FALSE) = FALSE
+                ORDER BY m.ID ASC
+                LIMIT @limit";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            command.Parameters.AddWithValue("@after_message_id", afterMessageId);
+            command.Parameters.AddWithValue("@limit", limit <= 0 ? 50 : limit);
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+            {
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    result.Add(ReadChatMessage(reader));
+                }
+            }
+
+            await AttachPollDataAsync(connection, result, currentUserId: 0, cancellationToken);
+            return result;
+        }
+
+        public async Task<List<ChatMessageModel>> GetChatMessagesAfterForUserAsync(int userId, int courseId, int afterMessageId, int limit = 50, CancellationToken cancellationToken = default)
+        {
+            var messages = await GetChatMessagesAfterAsync(courseId, afterMessageId, limit, cancellationToken);
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsurePollSchema(connection);
+            await AttachPollDataAsync(connection, messages, userId, cancellationToken);
+            return messages;
+        }
+
+        private static ChatMessageModel ReadChatMessage(NpgsqlDataReader reader)
+        {
+            return new ChatMessageModel
+            {
+                Id = reader.GetInt32(0),
+                CourseId = reader.GetInt32(1),
+                SenderId = reader.GetInt32(2),
+                SenderName = reader.GetString(3),
+                SenderRole = reader.GetString(4),
+                Content = reader.GetString(5),
+                MessageType = reader.GetString(6),
+                FileUrl = reader.GetString(7),
+                FileName = reader.GetString(8),
+                FileSize = reader.GetInt64(9),
+                MimeType = reader.GetString(10),
+                PollId = reader.IsDBNull(11) ? null : reader.GetInt32(11),
+                SentAt = reader.GetDateTime(12)
+            };
+        }
+
+        public async Task<int> CreatePollMessageAsync(int teacherId, int courseId, string question, IReadOnlyList<string> options, CancellationToken cancellationToken = default)
+        {
+            if (teacherId <= 0 || courseId <= 0 || string.IsNullOrWhiteSpace(question) || options == null)
+            {
+                return 0;
+            }
+
+            var cleanedOptions = options
+                .Where(option => !string.IsNullOrWhiteSpace(option))
+                .Select(option => option.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(6)
+                .ToList();
+
+            if (cleanedOptions.Count < 2 || !CanCreateCoursePoll(teacherId, courseId))
+            {
+                return 0;
+            }
+
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsureChatSchema(connection);
+            EnsurePollSchema(connection);
+
+            await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                const string insertMessageSql = @"
+                    INSERT INTO MESSAGES (COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, SENT_AT)
+                    VALUES (@course_id, @sender_id, @content, 'POLL', CURRENT_TIMESTAMP)
+                    RETURNING ID";
+
+                int messageId;
+                await using (var messageCommand = new NpgsqlCommand(insertMessageSql, connection, transaction))
+                {
+                    messageCommand.Parameters.AddWithValue("@course_id", courseId);
+                    messageCommand.Parameters.AddWithValue("@sender_id", teacherId);
+                    messageCommand.Parameters.AddWithValue("@content", question.Trim());
+                    object? messageResult = await messageCommand.ExecuteScalarAsync(cancellationToken);
+                    messageId = messageResult == null || messageResult == DBNull.Value ? 0 : Convert.ToInt32(messageResult);
+                }
+
+                if (messageId <= 0)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return 0;
+                }
+
+                const string insertPollSql = @"
+                    INSERT INTO POLLS (COURSE_ID, MESSAGE_ID, CREATED_BY, QUESTION, IS_CLOSED, CREATED_AT)
+                    VALUES (@course_id, @message_id, @created_by, @question, FALSE, CURRENT_TIMESTAMP)
+                    RETURNING ID";
+
+                int pollId;
+                await using (var pollCommand = new NpgsqlCommand(insertPollSql, connection, transaction))
+                {
+                    pollCommand.Parameters.AddWithValue("@course_id", courseId);
+                    pollCommand.Parameters.AddWithValue("@message_id", messageId);
+                    pollCommand.Parameters.AddWithValue("@created_by", teacherId);
+                    pollCommand.Parameters.AddWithValue("@question", question.Trim());
+                    object? pollResult = await pollCommand.ExecuteScalarAsync(cancellationToken);
+                    pollId = pollResult == null || pollResult == DBNull.Value ? 0 : Convert.ToInt32(pollResult);
+                }
+
+                if (pollId <= 0)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return 0;
+                }
+
+                const string insertOptionSql = @"
+                    INSERT INTO POLL_OPTIONS (POLL_ID, OPTION_TEXT, SORT_ORDER, CREATED_AT)
+                    VALUES (@poll_id, @option_text, @sort_order, CURRENT_TIMESTAMP)";
+
+                for (int i = 0; i < cleanedOptions.Count; i++)
+                {
+                    await using var optionCommand = new NpgsqlCommand(insertOptionSql, connection, transaction);
+                    optionCommand.Parameters.AddWithValue("@poll_id", pollId);
+                    optionCommand.Parameters.AddWithValue("@option_text", cleanedOptions[i]);
+                    optionCommand.Parameters.AddWithValue("@sort_order", i);
+                    await optionCommand.ExecuteNonQueryAsync(cancellationToken);
+                }
+
+                await transaction.CommitAsync(cancellationToken);
+                return messageId;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        public bool CanCreateCoursePoll(int teacherId, int courseId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1
+                    FROM COURSES c
+                    JOIN USERS u ON u.ID = @teacher_id
+                    LEFT JOIN ROLES r ON r.ID = u.ROLE_ID
+                    WHERE c.ID = @course_id
+                      AND c.TEACHER_ID = @teacher_id
+                      AND UPPER(COALESCE(r.NAME, '')) = 'TEACHER'
+                      AND UPPER(COALESCE(c.STATUS, 'ACTIVE')) = 'ACTIVE'
+                ) THEN 1 ELSE 0 END";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@teacher_id", teacherId);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            return Convert.ToInt32(command.ExecuteScalar()) == 1;
+        }
+
+        public async Task<bool> VotePollAsync(int userId, int pollId, int optionId, CancellationToken cancellationToken = default)
+        {
+            if (userId <= 0 || pollId <= 0 || optionId <= 0)
+            {
+                return false;
+            }
+
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsurePollSchema(connection);
+
+            const string query = @"
+                WITH poll_context AS (
+                    SELECT p.ID AS POLL_ID, p.COURSE_ID
+                    FROM POLLS p
+                    WHERE p.ID = @poll_id
+                      AND COALESCE(p.IS_CLOSED, FALSE) = FALSE
+                ), authorized_user AS (
+                    SELECT pc.POLL_ID
+                    FROM poll_context pc
+                    JOIN COURSES c ON c.ID = pc.COURSE_ID
+                    LEFT JOIN ENROLLMENTS e ON e.COURSE_ID = pc.COURSE_ID AND e.STUDENT_ID = @user_id
+                    WHERE c.TEACHER_ID = @user_id
+                       OR (e.STUDENT_ID IS NOT NULL AND UPPER(COALESCE(e.STATUS, 'ACTIVE')) IN ('ACTIVE', 'APPROVED'))
+                ), valid_option AS (
+                    SELECT po.ID AS OPTION_ID, po.POLL_ID
+                    FROM POLL_OPTIONS po
+                    JOIN authorized_user au ON au.POLL_ID = po.POLL_ID
+                    WHERE po.ID = @option_id
+                )
+                INSERT INTO POLL_VOTES (POLL_ID, USER_ID, OPTION_ID, VOTED_AT)
+                SELECT POLL_ID, @user_id, OPTION_ID, CURRENT_TIMESTAMP
+                FROM valid_option
+                ON CONFLICT (POLL_ID, USER_ID) DO UPDATE
+                SET OPTION_ID = EXCLUDED.OPTION_ID,
+                    VOTED_AT = CURRENT_TIMESTAMP";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            command.Parameters.AddWithValue("@poll_id", pollId);
+            command.Parameters.AddWithValue("@option_id", optionId);
+            return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+        }
+
+        public async Task<bool> ClosePollAsync(int teacherId, int pollId, CancellationToken cancellationToken = default)
+        {
+            if (teacherId <= 0 || pollId <= 0)
+            {
+                return false;
+            }
+
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsurePollSchema(connection);
+
+            const string query = @"
+                UPDATE POLLS p
+                SET IS_CLOSED = TRUE,
+                    CLOSED_AT = COALESCE(CLOSED_AT, CURRENT_TIMESTAMP)
+                FROM COURSES c
+                JOIN USERS u ON u.ID = @teacher_id
+                LEFT JOIN ROLES r ON r.ID = u.ROLE_ID
+                WHERE p.ID = @poll_id
+                  AND c.ID = p.COURSE_ID
+                  AND c.TEACHER_ID = @teacher_id
+                  AND UPPER(COALESCE(r.NAME, '')) = 'TEACHER'
+                  AND COALESCE(p.IS_CLOSED, FALSE) = FALSE";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@teacher_id", teacherId);
+            command.Parameters.AddWithValue("@poll_id", pollId);
+            return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+        }
+
+        public async Task<int> TryCreatePollBumpMessageAsync(int actorUserId, int pollId, string caption, CancellationToken cancellationToken = default)
+        {
+            if (actorUserId <= 0 || pollId <= 0 || string.IsNullOrWhiteSpace(caption))
+            {
+                return 0;
+            }
+
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            EnsureChatSchema(connection);
+            EnsurePollSchema(connection);
+
+            const string query = @"
+                WITH poll_context AS (
+                    SELECT p.ID AS POLL_ID, p.COURSE_ID
+                    FROM POLLS p
+                    JOIN COURSES c ON c.ID = p.COURSE_ID
+                    LEFT JOIN ENROLLMENTS e ON e.COURSE_ID = p.COURSE_ID AND e.STUDENT_ID = @actor_user_id
+                    WHERE p.ID = @poll_id
+                      AND (
+                          c.TEACHER_ID = @actor_user_id
+                          OR (e.STUDENT_ID IS NOT NULL AND UPPER(COALESCE(e.STATUS, 'ACTIVE')) IN ('ACTIVE', 'APPROVED'))
+                      )
+                ), cooldown AS (
+                    SELECT CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM MESSAGES m
+                        WHERE m.POLL_ID = @poll_id
+                          AND m.MESSAGE_TYPE = 'POLL_BUMP'
+                          AND COALESCE(m.IS_DELETED, FALSE) = FALSE
+                          AND m.SENT_AT >= CURRENT_TIMESTAMP - INTERVAL '30 seconds'
+                    ) THEN 1 ELSE 0 END AS IS_COOLDOWN_ACTIVE
+                )
+                INSERT INTO MESSAGES (COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, POLL_ID, SENT_AT)
+                SELECT pc.COURSE_ID,
+                       @actor_user_id,
+                       @caption,
+                       'POLL_BUMP',
+                       pc.POLL_ID,
+                       CURRENT_TIMESTAMP
+                FROM poll_context pc
+                CROSS JOIN cooldown cd
+                WHERE cd.IS_COOLDOWN_ACTIVE = 0
+                RETURNING ID";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@actor_user_id", actorUserId);
+            command.Parameters.AddWithValue("@poll_id", pollId);
+            command.Parameters.AddWithValue("@caption", caption.Trim());
+            object? result = await command.ExecuteScalarAsync(cancellationToken);
+            return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+        }
+
+        public async Task<string> GetUserDisplayNameAsync(int userId, CancellationToken cancellationToken = default)
+        {
+            if (userId <= 0)
+            {
+                return string.Empty;
+            }
+
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            const string query = @"
+                SELECT COALESCE(NULLIF(TRIM(FULL_NAME), ''), NULLIF(TRIM(USERNAME), ''), 'Người dùng')
+                FROM USERS
+                WHERE ID = @user_id";
+
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            object? result = await command.ExecuteScalarAsync(cancellationToken);
+            return result == null || result == DBNull.Value ? string.Empty : Convert.ToString(result) ?? string.Empty;
+        }
+
+        private static void AttachPollData(NpgsqlConnection connection, List<ChatMessageModel> messages, int currentUserId)
+        {
+            var pollMessageIds = messages
+                .Where(message => string.Equals(message.MessageType, "POLL", StringComparison.OrdinalIgnoreCase))
+                .Select(message => message.Id)
+                .Distinct()
+                .ToArray();
+
+            var bumpPollIds = messages
+                .Where(message => string.Equals(message.MessageType, "POLL_BUMP", StringComparison.OrdinalIgnoreCase) && message.PollId.HasValue)
+                .Select(message => message.PollId!.Value)
+                .Distinct()
+                .ToArray();
+
+            if (pollMessageIds.Length == 0 && bumpPollIds.Length == 0)
+            {
+                return;
+            }
+
+            const string pollQuery = @"
+                SELECT p.ID, p.COURSE_ID, p.MESSAGE_ID, p.CREATED_BY, p.QUESTION,
+                       COALESCE(p.IS_CLOSED, FALSE) AS IS_CLOSED,
+                       p.CREATED_AT, p.CLOSED_AT,
+                       COALESCE(total_votes.TOTAL, 0) AS TOTAL_VOTES,
+                       my_vote.OPTION_ID AS MY_OPTION_ID
+                FROM POLLS p
+                LEFT JOIN (
+                    SELECT POLL_ID, COUNT(*) AS TOTAL
+                    FROM POLL_VOTES
+                    GROUP BY POLL_ID
+                ) total_votes ON total_votes.POLL_ID = p.ID
+                LEFT JOIN POLL_VOTES my_vote ON my_vote.POLL_ID = p.ID AND my_vote.USER_ID = @current_user_id
+                WHERE p.MESSAGE_ID = ANY(@message_ids)
+                   OR p.ID = ANY(@poll_ids)";
+
+            var pollsByMessageId = new Dictionary<int, PollModel>();
+            var pollsById = new Dictionary<int, PollModel>();
+            using (var command = new NpgsqlCommand(pollQuery, connection))
+            {
+                command.Parameters.AddWithValue("@message_ids", pollMessageIds);
+                command.Parameters.AddWithValue("@poll_ids", bumpPollIds);
+                command.Parameters.AddWithValue("@current_user_id", currentUserId);
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    var poll = new PollModel
+                    {
+                        Id = reader.GetInt32(0),
+                        CourseId = reader.GetInt32(1),
+                        MessageId = reader.GetInt32(2),
+                        CreatedBy = reader.GetInt32(3),
+                        Question = reader.GetString(4),
+                        IsClosed = reader.GetBoolean(5),
+                        CreatedAt = reader.GetDateTime(6),
+                        ClosedAt = reader.IsDBNull(7) ? null : reader.GetDateTime(7),
+                        TotalVotes = reader.GetInt32(8),
+                        MySelectedOptionId = reader.IsDBNull(9) ? null : reader.GetInt32(9)
+                    };
+                    pollsByMessageId[poll.MessageId] = poll;
+                    pollsById[poll.Id] = poll;
+                }
+            }
+
+            AttachPollOptions(connection, pollsById.Values.ToList());
+            foreach (var message in messages)
+            {
+                if (string.Equals(message.MessageType, "POLL", StringComparison.OrdinalIgnoreCase)
+                    && pollsByMessageId.TryGetValue(message.Id, out PollModel? pollByMessage))
+                {
+                    message.PollId = pollByMessage.Id;
+                    message.Poll = pollByMessage;
+                    continue;
+                }
+
+                if (string.Equals(message.MessageType, "POLL_BUMP", StringComparison.OrdinalIgnoreCase)
+                    && message.PollId.HasValue
+                    && pollsById.TryGetValue(message.PollId.Value, out PollModel? pollById))
+                {
+                    message.Poll = pollById;
+                }
+            }
+        }
+
+        private static async Task AttachPollDataAsync(NpgsqlConnection connection, List<ChatMessageModel> messages, int currentUserId, CancellationToken cancellationToken)
+        {
+            var pollMessageIds = messages
+                .Where(message => string.Equals(message.MessageType, "POLL", StringComparison.OrdinalIgnoreCase))
+                .Select(message => message.Id)
+                .Distinct()
+                .ToArray();
+
+            var bumpPollIds = messages
+                .Where(message => string.Equals(message.MessageType, "POLL_BUMP", StringComparison.OrdinalIgnoreCase) && message.PollId.HasValue)
+                .Select(message => message.PollId!.Value)
+                .Distinct()
+                .ToArray();
+
+            if (pollMessageIds.Length == 0 && bumpPollIds.Length == 0)
+            {
+                return;
+            }
+
+            const string pollQuery = @"
+                SELECT p.ID, p.COURSE_ID, p.MESSAGE_ID, p.CREATED_BY, p.QUESTION,
+                       COALESCE(p.IS_CLOSED, FALSE) AS IS_CLOSED,
+                       p.CREATED_AT, p.CLOSED_AT,
+                       COALESCE(total_votes.TOTAL, 0) AS TOTAL_VOTES,
+                       my_vote.OPTION_ID AS MY_OPTION_ID
+                FROM POLLS p
+                LEFT JOIN (
+                    SELECT POLL_ID, COUNT(*) AS TOTAL
+                    FROM POLL_VOTES
+                    GROUP BY POLL_ID
+                ) total_votes ON total_votes.POLL_ID = p.ID
+                LEFT JOIN POLL_VOTES my_vote ON my_vote.POLL_ID = p.ID AND my_vote.USER_ID = @current_user_id
+                WHERE p.MESSAGE_ID = ANY(@message_ids)
+                   OR p.ID = ANY(@poll_ids)";
+
+            var pollsByMessageId = new Dictionary<int, PollModel>();
+            var pollsById = new Dictionary<int, PollModel>();
+            await using (var command = new NpgsqlCommand(pollQuery, connection))
+            {
+                command.Parameters.AddWithValue("@message_ids", pollMessageIds);
+                command.Parameters.AddWithValue("@poll_ids", bumpPollIds);
+                command.Parameters.AddWithValue("@current_user_id", currentUserId);
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    var poll = new PollModel
+                    {
+                        Id = reader.GetInt32(0),
+                        CourseId = reader.GetInt32(1),
+                        MessageId = reader.GetInt32(2),
+                        CreatedBy = reader.GetInt32(3),
+                        Question = reader.GetString(4),
+                        IsClosed = reader.GetBoolean(5),
+                        CreatedAt = reader.GetDateTime(6),
+                        ClosedAt = reader.IsDBNull(7) ? null : reader.GetDateTime(7),
+                        TotalVotes = reader.GetInt32(8),
+                        MySelectedOptionId = reader.IsDBNull(9) ? null : reader.GetInt32(9)
+                    };
+                    pollsByMessageId[poll.MessageId] = poll;
+                    pollsById[poll.Id] = poll;
+                }
+            }
+
+            await AttachPollOptionsAsync(connection, pollsById.Values.ToList(), cancellationToken);
+            foreach (var message in messages)
+            {
+                if (string.Equals(message.MessageType, "POLL", StringComparison.OrdinalIgnoreCase)
+                    && pollsByMessageId.TryGetValue(message.Id, out PollModel? pollByMessage))
+                {
+                    message.PollId = pollByMessage.Id;
+                    message.Poll = pollByMessage;
+                    continue;
+                }
+
+                if (string.Equals(message.MessageType, "POLL_BUMP", StringComparison.OrdinalIgnoreCase)
+                    && message.PollId.HasValue
+                    && pollsById.TryGetValue(message.PollId.Value, out PollModel? pollById))
+                {
+                    message.Poll = pollById;
+                }
+            }
+        }
+
+        private static void AttachPollOptions(NpgsqlConnection connection, List<PollModel> polls)
+        {
+            if (polls.Count == 0)
+            {
+                return;
+            }
+
+            int[] pollIds = polls.Select(poll => poll.Id).ToArray();
+            var pollsById = polls.ToDictionary(poll => poll.Id);
+            const string optionQuery = @"
+                SELECT po.ID, po.POLL_ID, po.OPTION_TEXT, po.SORT_ORDER,
+                       COALESCE(vote_counts.VOTE_COUNT, 0) AS VOTE_COUNT
+                FROM POLL_OPTIONS po
+                LEFT JOIN (
+                    SELECT OPTION_ID, COUNT(*) AS VOTE_COUNT
+                    FROM POLL_VOTES
+                    GROUP BY OPTION_ID
+                ) vote_counts ON vote_counts.OPTION_ID = po.ID
+                WHERE po.POLL_ID = ANY(@poll_ids)
+                ORDER BY po.POLL_ID, po.SORT_ORDER, po.ID";
+
+            using var command = new NpgsqlCommand(optionQuery, connection);
+            command.Parameters.AddWithValue("@poll_ids", pollIds);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                int pollId = reader.GetInt32(1);
+                if (!pollsById.TryGetValue(pollId, out PollModel? poll))
+                {
+                    continue;
+                }
+
+                poll.Options.Add(new PollOptionModel
+                {
+                    Id = reader.GetInt32(0),
+                    PollId = pollId,
+                    OptionText = reader.GetString(2),
+                    SortOrder = reader.GetInt32(3),
+                    VoteCount = reader.GetInt32(4)
+                });
+            }
+        }
+
+        private static async Task AttachPollOptionsAsync(NpgsqlConnection connection, List<PollModel> polls, CancellationToken cancellationToken)
+        {
+            if (polls.Count == 0)
+            {
+                return;
+            }
+
+            int[] pollIds = polls.Select(poll => poll.Id).ToArray();
+            var pollsById = polls.ToDictionary(poll => poll.Id);
+            const string optionQuery = @"
+                SELECT po.ID, po.POLL_ID, po.OPTION_TEXT, po.SORT_ORDER,
+                       COALESCE(vote_counts.VOTE_COUNT, 0) AS VOTE_COUNT
+                FROM POLL_OPTIONS po
+                LEFT JOIN (
+                    SELECT OPTION_ID, COUNT(*) AS VOTE_COUNT
+                    FROM POLL_VOTES
+                    GROUP BY OPTION_ID
+                ) vote_counts ON vote_counts.OPTION_ID = po.ID
+                WHERE po.POLL_ID = ANY(@poll_ids)
+                ORDER BY po.POLL_ID, po.SORT_ORDER, po.ID";
+
+            await using var command = new NpgsqlCommand(optionQuery, connection);
+            command.Parameters.AddWithValue("@poll_ids", pollIds);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
-                result.Add(new ChatMessageModel
+                int pollId = reader.GetInt32(1);
+                if (!pollsById.TryGetValue(pollId, out PollModel? poll))
+                {
+                    continue;
+                }
+
+                poll.Options.Add(new PollOptionModel
                 {
                     Id = reader.GetInt32(0),
-                    CourseId = reader.GetInt32(1),
-                    SenderId = reader.GetInt32(2),
-                    SenderName = reader.GetString(3),
-                    SenderRole = reader.GetString(4),
-                    Content = reader.GetString(5),
-                    MessageType = reader.GetString(6),
-                    FileUrl = reader.GetString(7),
-                    FileName = reader.GetString(8),
-                    FileSize = reader.GetInt64(9),
-                    MimeType = reader.GetString(10),
-                    SentAt = reader.GetDateTime(11)
+                    PollId = pollId,
+                    OptionText = reader.GetString(2),
+                    SortOrder = reader.GetInt32(3),
+                    VoteCount = reader.GetInt32(4)
                 });
             }
+        }
 
-            return result;
+        private static void EnsurePollSchema(NpgsqlConnection connection)
+        {
+            const string sql = @"
+                CREATE TABLE IF NOT EXISTS POLLS (
+                    ID SERIAL PRIMARY KEY,
+                    COURSE_ID INT NOT NULL REFERENCES COURSES(ID) ON DELETE CASCADE,
+                    MESSAGE_ID INT NOT NULL UNIQUE REFERENCES MESSAGES(ID) ON DELETE CASCADE,
+                    CREATED_BY INT NOT NULL REFERENCES USERS(ID) ON DELETE CASCADE,
+                    QUESTION TEXT NOT NULL,
+                    IS_CLOSED BOOLEAN NOT NULL DEFAULT FALSE,
+                    CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CLOSED_AT TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS POLL_OPTIONS (
+                    ID SERIAL PRIMARY KEY,
+                    POLL_ID INT NOT NULL REFERENCES POLLS(ID) ON DELETE CASCADE,
+                    OPTION_TEXT TEXT NOT NULL,
+                    SORT_ORDER INT NOT NULL DEFAULT 0,
+                    CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS POLL_VOTES (
+                    POLL_ID INT NOT NULL REFERENCES POLLS(ID) ON DELETE CASCADE,
+                    USER_ID INT NOT NULL REFERENCES USERS(ID) ON DELETE CASCADE,
+                    OPTION_ID INT NOT NULL REFERENCES POLL_OPTIONS(ID) ON DELETE CASCADE,
+                    VOTED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (POLL_ID, USER_ID)
+                );
+
+                ALTER TABLE MESSAGES ADD COLUMN IF NOT EXISTS POLL_ID INT;
+
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM information_schema.table_constraints
+                        WHERE LOWER(table_name) = 'messages'
+                          AND LOWER(constraint_name) = 'fk_messages_polls'
+                    ) THEN
+                        ALTER TABLE MESSAGES
+                        ADD CONSTRAINT FK_MESSAGES_POLLS
+                        FOREIGN KEY (POLL_ID) REFERENCES POLLS(ID) ON DELETE SET NULL;
+                    END IF;
+                END $$;
+
+                CREATE INDEX IF NOT EXISTS IDX_POLLS_COURSE_ID ON POLLS(COURSE_ID);
+                CREATE INDEX IF NOT EXISTS IDX_POLLS_MESSAGE_ID ON POLLS(MESSAGE_ID);
+                CREATE INDEX IF NOT EXISTS IDX_POLL_OPTIONS_POLL_ID ON POLL_OPTIONS(POLL_ID);
+                CREATE INDEX IF NOT EXISTS IDX_POLL_OPTIONS_SORT_ORDER ON POLL_OPTIONS(POLL_ID, SORT_ORDER, ID);
+                CREATE INDEX IF NOT EXISTS IDX_POLL_VOTES_POLL_ID ON POLL_VOTES(POLL_ID);
+                CREATE INDEX IF NOT EXISTS IDX_POLL_VOTES_OPTION_ID ON POLL_VOTES(OPTION_ID);
+                CREATE INDEX IF NOT EXISTS IDX_MESSAGES_POLL_ID ON MESSAGES(POLL_ID);
+                CREATE INDEX IF NOT EXISTS IDX_MESSAGES_POLL_BUMP_COOLDOWN
+                    ON MESSAGES(POLL_ID, MESSAGE_TYPE, SENT_AT DESC)
+                    WHERE MESSAGE_TYPE = 'POLL_BUMP';";
+
+            using var command = new NpgsqlCommand(sql, connection);
+            command.ExecuteNonQuery();
         }
 
         private static void EnsureAuditLogSchema(NpgsqlConnection connection)
