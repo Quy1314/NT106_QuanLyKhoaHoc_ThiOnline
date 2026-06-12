@@ -10,6 +10,7 @@ using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Frontend.UserControls.Shared.Chat;
 
 namespace CourseGuard.Frontend.UserControls.Student
 {
@@ -18,9 +19,11 @@ namespace CourseGuard.Frontend.UserControls.Student
         private readonly ChatController _chatController;
         private readonly System.Windows.Forms.Timer _pollTimer;
         private readonly List<ChatCourseModel> _courses = new();
+        private readonly ChatMessageListControl _messageList = new();
         private int _selectedCourseId;
         private bool _isLoadingMessages;
-        private bool _hasPendingLocalSend;
+        private bool _isLoadingOlderMessages;
+        private bool _hasLoadedInitialMessages;
         private bool _isSending;
         private bool _uiAlive = true;
 
@@ -39,9 +42,15 @@ namespace CourseGuard.Frontend.UserControls.Student
                 _pollTimer.Dispose();
             };
 
-            // Bo góc buttons
             RoundedButtonHelper.Apply(btnSend, 10);
             lstContacts.SelectedIndexChanged += async (_, _) => await OnCourseChangedAsync();
+            _messageList.TopReached += async (_, _) => await LoadOlderMessagesAsync();
+            _messageList.PollVoteRequested += async (_, args) => await VotePollAsync(args);
+            _messageList.PollCloseRequested += (_, args) =>
+            {
+                _messageList.SetPollActionPending(args.MessageId, false);
+                MetaTheme.ShowModernDialog("Chỉ giảng viên mới được đóng vote.", "Vote", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            };
 
             btnSend.Click += async (_, _) => await SendTextAsync();
 
@@ -119,9 +128,9 @@ namespace CourseGuard.Frontend.UserControls.Student
                 Text = "Nội dung trao đổi",
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             }, 0, 0);
-            txtMessages.Dock = DockStyle.Fill;
-            txtMessages.Margin = Padding.Empty;
-            messageGrid.Controls.Add(txtMessages, 0, 1);
+            _messageList.Dock = DockStyle.Fill;
+            _messageList.Margin = Padding.Empty;
+            messageGrid.Controls.Add(_messageList, 0, 1);
 
             var composer = new TableLayoutPanel
             {
@@ -155,9 +164,8 @@ namespace CourseGuard.Frontend.UserControls.Student
             lstContacts.BorderStyle = BorderStyle.None;
             lstContacts.BackColor = AppColors.BgCard;
             lstContacts.ForeColor = AppColors.TextPrimary;
-            txtMessages.BorderStyle = BorderStyle.None;
-            txtMessages.BackColor = AppColors.BgCard;
-            txtMessages.ForeColor = AppColors.TextPrimary;
+            _messageList.BackColor = AppColors.BgCard;
+            txtMessages.Visible = false;
             txtInput.BackColor = AppColors.BgCard;
             txtInput.ForeColor = AppColors.TextPrimary;
         }
@@ -169,12 +177,11 @@ namespace CourseGuard.Frontend.UserControls.Student
             {
                 // Xóa dữ liệu mock trên designer để tránh hiển thị sai trước khi query DB xong.
                 lstContacts.Items.Clear();
-                txtMessages.Text = "Đang tải danh sách chat...";
+                _messageList.ClearMessages();
 
                 int userId = UserSessionContext.CurrentUserId ?? 0;
                 if (userId <= 0)
                 {
-                    txtMessages.Text = "Bạn cần đăng nhập để sử dụng chat.";
                     return;
                 }
 
@@ -199,11 +206,14 @@ namespace CourseGuard.Frontend.UserControls.Student
                 {
                     lstContacts.ClearSelected();
                     _selectedCourseId = 0;
-                    txtMessages.Text = "Chọn khóa học để xem tin nhắn.";
+                    _hasLoadedInitialMessages = false;
+                    _messageList.ClearMessages();
                 }
                 else
                 {
-                    txtMessages.Text = "Bạn chưa có khóa học nào để chat.";
+                    _selectedCourseId = 0;
+                    _hasLoadedInitialMessages = false;
+                    _messageList.ClearMessages();
                 }
             }
             finally
@@ -227,6 +237,8 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
 
             _selectedCourseId = _courses[idx].CourseId;
+            _hasLoadedInitialMessages = false;
+            _messageList.ClearMessages();
             await RefreshMessagesAsync();
         }
 
@@ -237,7 +249,14 @@ namespace CourseGuard.Frontend.UserControls.Student
                 return;
             }
 
-            if (_isLoadingMessages || _selectedCourseId <= 0 || _hasPendingLocalSend)
+            if (_isLoadingMessages || _selectedCourseId <= 0)
+            {
+                return;
+            }
+
+            int userId = UserSessionContext.CurrentUserId ?? 0;
+            int courseId = _selectedCourseId;
+            if (userId <= 0)
             {
                 return;
             }
@@ -245,40 +264,33 @@ namespace CourseGuard.Frontend.UserControls.Student
             try
             {
                 _isLoadingMessages = true;
-                int userId = UserSessionContext.CurrentUserId ?? 0;
-                int courseId = _selectedCourseId;
-                List<ChatMessageModel> messages = await _chatController.GetMessagesAsync(userId, courseId, 200);
+                List<ChatMessageModel> messages;
+                int newestMessageId = _messageList.NewestMessageId ?? 0;
+                if (!_hasLoadedInitialMessages || newestMessageId <= 0)
+                {
+                    messages = await _chatController.GetMessagesAsync(userId, courseId, 20);
+                }
+                else
+                {
+                    messages = await _chatController.GetMessagesAfterAsync(userId, courseId, newestMessageId, 50);
+                }
 
                 // Có thể control đã bị đóng/đổi course trong lúc chờ DB xong.
-                if (!_uiAlive || IsDisposed || txtMessages.IsDisposed || _selectedCourseId != courseId)
+                if (!_uiAlive || IsDisposed || _messageList.IsDisposed || _selectedCourseId != courseId)
                 {
                     return;
                 }
 
-                txtMessages.Clear();
-                foreach (ChatMessageModel msg in messages.OrderBy(m => m.SentAt))
+                if (!_hasLoadedInitialMessages)
                 {
-                    string when = msg.SentAt.ToString("HH:mm");
-                    if (string.Equals(msg.MessageType, "FILE", StringComparison.OrdinalIgnoreCase))
-                    {
-                        string sizeText = msg.FileSize <= 0 ? "-" : $"{Math.Round(msg.FileSize / 1024.0, 1)} KB";
-                        txtMessages.AppendText($"[{when}] {msg.SenderName}: [FILE] {msg.FileName} ({sizeText}){Environment.NewLine}");
-                        if (!string.IsNullOrWhiteSpace(msg.Content))
-                        {
-                            txtMessages.AppendText($"  Ghi chú: {msg.Content}{Environment.NewLine}");
-                        }
-                        txtMessages.AppendText($"  Lưu tại: {msg.FileUrl}{Environment.NewLine}");
-                    }
-                    else
-                    {
-                        txtMessages.AppendText($"[{when}] {msg.SenderName}: {msg.Content}{Environment.NewLine}");
-                    }
+                    _messageList.SetMessages(messages, userId);
+                    _hasLoadedInitialMessages = true;
+                }
+                else
+                {
+                    _messageList.AppendMessages(messages, userId);
                 }
 
-                if (messages.Count == 0)
-                {
-                    txtMessages.Text = "Chưa có tin nhắn nào trong phòng chat này.";
-                }
                 MarkDisplayedMessagesReadAsync(courseId).FireAndForgetSafe(this);
             }
             catch (ObjectDisposedException)
@@ -289,6 +301,43 @@ namespace CourseGuard.Frontend.UserControls.Student
             finally
             {
                 _isLoadingMessages = false;
+            }
+        }
+
+        private async Task LoadOlderMessagesAsync()
+        {
+            if (!_uiAlive || IsDisposed || _isLoadingOlderMessages || _selectedCourseId <= 0)
+            {
+                return;
+            }
+
+            int? oldestMessageId = _messageList.OldestMessageId;
+            if (!oldestMessageId.HasValue || oldestMessageId.Value <= 0)
+            {
+                return;
+            }
+
+            int userId = UserSessionContext.CurrentUserId ?? 0;
+            int courseId = _selectedCourseId;
+            if (userId <= 0)
+            {
+                return;
+            }
+
+            try
+            {
+                _isLoadingOlderMessages = true;
+                List<ChatMessageModel> olderMessages = await _chatController.GetMessagesBeforeAsync(userId, courseId, oldestMessageId.Value, 20);
+                if (!_uiAlive || IsDisposed || _messageList.IsDisposed || _selectedCourseId != courseId)
+                {
+                    return;
+                }
+
+                _messageList.PrependOlderMessages(olderMessages, userId);
+            }
+            finally
+            {
+                _isLoadingOlderMessages = false;
             }
         }
 
@@ -341,7 +390,6 @@ namespace CourseGuard.Frontend.UserControls.Student
                 }
 
                 txtInput.Clear();
-                AppendLocalSendStatus("TEXT", "SENT", content);
                 await RefreshMessagesAsync();
             }
             finally
@@ -387,7 +435,6 @@ namespace CourseGuard.Frontend.UserControls.Student
                     return;
                 }
 
-                AppendLocalSendStatus("FILE", "SENT", fileName);
                 await RefreshMessagesAsync();
             }
             finally
@@ -396,18 +443,72 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
         }
 
+        private async Task VotePollAsync(PollVoteEventArgs args)
+        {
+            int userId = UserSessionContext.CurrentUserId ?? 0;
+            int courseId = _selectedCourseId;
+            if (userId <= 0 || courseId <= 0)
+            {
+                _messageList.SetPollActionPending(args.MessageId, false);
+                MetaTheme.ShowModernDialog("Không tìm thấy phòng chat hợp lệ.", "Vote", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                bool success = await _chatController.VotePollAsync(userId, args.PollId, args.OptionId);
+                if (!_uiAlive || IsDisposed || _messageList.IsDisposed || _selectedCourseId != courseId)
+                {
+                    return;
+                }
+
+                if (!success)
+                {
+                    MetaTheme.ShowModernDialog(_chatController.LastErrorMessage, "Vote thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                await RefreshSinglePollBubbleAsync(args.MessageId, userId, courseId);
+            }
+            catch (Exception ex)
+            {
+                if (_uiAlive && !IsDisposed)
+                {
+                    MetaTheme.ShowModernDialog($"Không thể gửi vote lúc này.\n{ex.Message}", "Lỗi mạng", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            finally
+            {
+                if (_uiAlive && !IsDisposed && !_messageList.IsDisposed)
+                {
+                    _messageList.SetPollActionPending(args.MessageId, false);
+                }
+            }
+        }
+
+        private async Task RefreshSinglePollBubbleAsync(int messageId, int userId, int courseId)
+        {
+            List<ChatMessageModel> latestMessages = await _chatController.GetMessagesAsync(userId, courseId, 50);
+            if (!_uiAlive || IsDisposed || _messageList.IsDisposed || _selectedCourseId != courseId)
+            {
+                return;
+            }
+
+            ChatMessageModel? updatedMessage = latestMessages.FirstOrDefault(message => message.Id == messageId);
+            if (updatedMessage?.Poll != null)
+            {
+                _messageList.RefreshPollBubble(updatedMessage);
+            }
+        }
+
         private void AppendLocalSendStatus(string messageType, string status, string preview, string? errorMessage = null)
         {
-            if (!_uiAlive || IsDisposed || txtMessages.IsDisposed)
+            if (!_uiAlive || IsDisposed || !string.Equals(status, "FAILED", StringComparison.OrdinalIgnoreCase))
+            {
                 return;
+            }
 
-            _hasPendingLocalSend = string.Equals(status, "PENDING", StringComparison.OrdinalIgnoreCase);
-            if (ShouldClearBeforeLocalStatus(txtMessages.Text))
-                txtMessages.Clear();
-
-            txtMessages.AppendText(ChatSendStatusLineFormatter.Render("Bạn", preview, messageType, status, errorMessage) + Environment.NewLine);
-            txtMessages.SelectionStart = txtMessages.TextLength;
-            txtMessages.ScrollToCaret();
+            MetaTheme.ShowModernDialog(errorMessage ?? "Gửi tin nhắn thất bại.", "Chat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         private void SetComposerSending(bool sending)
@@ -417,18 +518,6 @@ namespace CourseGuard.Frontend.UserControls.Student
             txtInput.Enabled = !sending;
         }
 
-        private static bool ShouldClearBeforeLocalStatus(string currentText)
-        {
-            if (string.IsNullOrWhiteSpace(currentText))
-                return false;
 
-            string trimmed = currentText.TrimStart();
-            return trimmed.StartsWith("Đang tải", StringComparison.OrdinalIgnoreCase)
-                || trimmed.StartsWith("Chọn khóa", StringComparison.OrdinalIgnoreCase)
-                || trimmed.StartsWith("Chưa có", StringComparison.OrdinalIgnoreCase)
-                || trimmed.StartsWith("Bạn cần", StringComparison.OrdinalIgnoreCase)
-                || trimmed.StartsWith("Bạn chưa", StringComparison.OrdinalIgnoreCase)
-                || trimmed.StartsWith("Không tìm", StringComparison.OrdinalIgnoreCase);
-        }
     }
 }

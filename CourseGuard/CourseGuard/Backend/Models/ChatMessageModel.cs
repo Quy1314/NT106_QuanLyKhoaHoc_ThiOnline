@@ -8,6 +8,7 @@ namespace CourseGuard.Backend.Models
         public int CourseId { get; set; }
         public int SenderId { get; set; }
         public string SenderName { get; set; } = string.Empty;
+        public string SenderAvatar { get; set; } = string.Empty;
         public string SenderRole { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
         public string MessageType { get; set; } = "TEXT";
@@ -16,5 +17,12 @@ namespace CourseGuard.Backend.Models
         public long FileSize { get; set; }
         public string MimeType { get; set; } = string.Empty;
         public DateTime SentAt { get; set; }
+        public int? PollId { get; set; }
+        public PollModel? Poll { get; set; }
+        public DateTime CreatedAt
+        {
+            get => SentAt;
+            set => SentAt = value;
+        }
     }
 }

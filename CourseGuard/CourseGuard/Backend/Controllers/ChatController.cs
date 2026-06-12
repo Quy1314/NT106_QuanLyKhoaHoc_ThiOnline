@@ -86,7 +86,31 @@ namespace CourseGuard.Backend.Controllers
                 return new List<ChatMessageModel>();
             }
 
-            return await _dbContext.GetChatMessagesAsync(courseId, limit, cancellationToken);
+            return await _dbContext.GetChatMessagesForUserAsync(userId, courseId, limit, cancellationToken);
+        }
+
+        public async Task<List<ChatMessageModel>> GetMessagesBeforeAsync(int userId, int courseId, int beforeMessageId, int limit = 20, CancellationToken cancellationToken = default)
+        {
+            LastErrorMessage = string.Empty;
+            if (!_dbContext.CanAccessCourseChat(userId, courseId))
+            {
+                LastErrorMessage = "Bạn không có quyền truy cập phòng chat này.";
+                return new List<ChatMessageModel>();
+            }
+
+            return await _dbContext.GetChatMessagesBeforeForUserAsync(userId, courseId, beforeMessageId, limit, cancellationToken);
+        }
+
+        public async Task<List<ChatMessageModel>> GetMessagesAfterAsync(int userId, int courseId, int afterMessageId, int limit = 50, CancellationToken cancellationToken = default)
+        {
+            LastErrorMessage = string.Empty;
+            if (!_dbContext.CanAccessCourseChat(userId, courseId))
+            {
+                LastErrorMessage = "Bạn không có quyền truy cập phòng chat này.";
+                return new List<ChatMessageModel>();
+            }
+
+            return await _dbContext.GetChatMessagesAfterForUserAsync(userId, courseId, afterMessageId, limit, cancellationToken);
         }
 
         public bool SendMessage(int userId, int courseId, string content)
@@ -177,10 +201,119 @@ namespace CourseGuard.Backend.Controllers
             return true;
         }
 
-        public Task<bool> SendFileMessageAsync(int userId, int courseId, string sourceFilePath, string caption = "", CancellationToken cancellationToken = default)
+        public async Task<bool> SendFileMessageAsync(int userId, int courseId, string sourceFilePath, string caption = "", CancellationToken cancellationToken = default)
         {
             // Keep implementation simple and stable for WinForms flow.
-            return Task.Run(() => SendFileMessage(userId, courseId, sourceFilePath, caption), cancellationToken);
+            return await Task.Run(() => SendFileMessage(userId, courseId, sourceFilePath, caption), cancellationToken);
+        }
+
+        public async Task<int> CreatePollAsync(int teacherId, int courseId, string question, IReadOnlyList<string> options, CancellationToken cancellationToken = default)
+        {
+            LastErrorMessage = string.Empty;
+            if (teacherId <= 0 || courseId <= 0)
+            {
+                LastErrorMessage = "Thông tin người tạo hoặc khóa học không hợp lệ.";
+                return 0;
+            }
+
+            if (string.IsNullOrWhiteSpace(question))
+            {
+                LastErrorMessage = "Câu hỏi vote không được để trống.";
+                return 0;
+            }
+
+            var cleanedOptions = (options ?? Array.Empty<string>())
+                .Where(option => !string.IsNullOrWhiteSpace(option))
+                .Select(option => option.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(6)
+                .ToList();
+
+            if (cleanedOptions.Count < 2)
+            {
+                LastErrorMessage = "Vote cần ít nhất 2 đáp án khác nhau.";
+                return 0;
+            }
+
+            if (!_dbContext.CanCreateCoursePoll(teacherId, courseId))
+            {
+                LastErrorMessage = "Chỉ giảng viên phụ trách khóa học mới được tạo vote.";
+                return 0;
+            }
+
+            int messageId = await _dbContext.CreatePollMessageAsync(teacherId, courseId, question.Trim(), cleanedOptions, cancellationToken);
+            if (messageId <= 0)
+            {
+                LastErrorMessage = "Tạo vote thất bại.";
+                return 0;
+            }
+
+            await _dbContext.LogUserActivityAsync(teacherId, "CHAT_USE", $"Tạo vote trong khóa học ID={courseId}", string.Empty, cancellationToken);
+            return messageId;
+        }
+
+        public async Task<bool> VotePollAsync(int userId, int pollId, int optionId, CancellationToken cancellationToken = default)
+        {
+            LastErrorMessage = string.Empty;
+            if (userId <= 0 || pollId <= 0 || optionId <= 0)
+            {
+                LastErrorMessage = "Lựa chọn vote không hợp lệ.";
+                return false;
+            }
+
+            bool success = await _dbContext.VotePollAsync(userId, pollId, optionId, cancellationToken);
+            if (!success)
+            {
+                LastErrorMessage = "Không thể ghi nhận vote. Vote có thể đã đóng hoặc bạn không có quyền tham gia.";
+                return false;
+            }
+
+            try
+            {
+                string displayName = await _dbContext.GetUserDisplayNameAsync(userId, cancellationToken);
+                string caption = string.IsNullOrWhiteSpace(displayName)
+                    ? "Một người vừa bình chọn"
+                    : $"{displayName} vừa bình chọn";
+                await _dbContext.TryCreatePollBumpMessageAsync(userId, pollId, caption, cancellationToken);
+            }
+            catch
+            {
+                // Poll bump is a UX side-effect. Never rollback or fail the main vote action
+                // if the automated bump is blocked by cooldown or a transient database issue.
+            }
+
+            await _dbContext.LogUserActivityAsync(userId, "CHAT_USE", $"Tham gia vote ID={pollId}", string.Empty, cancellationToken);
+            return true;
+        }
+
+        public async Task<bool> ClosePollAsync(int teacherId, int pollId, CancellationToken cancellationToken = default)
+        {
+            LastErrorMessage = string.Empty;
+            if (teacherId <= 0 || pollId <= 0)
+            {
+                LastErrorMessage = "Thông tin vote không hợp lệ.";
+                return false;
+            }
+
+            bool success = await _dbContext.ClosePollAsync(teacherId, pollId, cancellationToken);
+            if (!success)
+            {
+                LastErrorMessage = "Không thể đóng vote. Chỉ giảng viên phụ trách khóa học mới được đóng vote đang mở.";
+                return false;
+            }
+
+            try
+            {
+                await _dbContext.TryCreatePollBumpMessageAsync(teacherId, pollId, "Giảng viên đã đóng bình chọn", cancellationToken);
+            }
+            catch
+            {
+                // Closing the poll is the primary business action. Bump creation is best-effort
+                // and must not make the successful close look like a failure to the teacher.
+            }
+
+            await _dbContext.LogUserActivityAsync(teacherId, "CHAT_USE", $"Đóng vote ID={pollId}", string.Empty, cancellationToken);
+            return true;
         }
 
         private static bool ValidateFile(string sourceFilePath, out string error)

@@ -8,8 +8,10 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
+using CourseGuard.Frontend.Forms.Teacher;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Frontend.UserControls.Shared.Chat;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
 {
@@ -20,13 +22,15 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private readonly List<ChatCourseModel> _courses = new();
         private readonly System.Windows.Forms.Timer _pollTimer = new() { Interval = 3000 };
         private readonly ListBox _courseList = new();
-        private readonly TextBox _messages = new();
+        private readonly ChatMessageListControl _messageList = new();
         private readonly TextBox _input = new();
         private readonly Button _send = TeacherTabChrome.PrimaryButton("Gửi");
         private readonly Button _attach = TeacherTabChrome.SecondaryButton("File");
+        private readonly Button _createPoll = TeacherTabChrome.SecondaryButton("Vote");
         private int _selectedCourseId;
         private bool _isLoadingMessages;
-        private bool _hasPendingLocalSend;
+        private bool _isLoadingOlderMessages;
+        private bool _hasLoadedInitialMessages;
         private bool _isSending;
         private bool _uiAlive = true;
 
@@ -38,8 +42,12 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             ApplyStyles();
 
             _courseList.SelectedIndexChanged += async (_, _) => await OnCourseChangedAsync();
+            _messageList.TopReached += async (_, _) => await LoadOlderMessagesAsync();
+            _messageList.PollVoteRequested += async (_, args) => await VotePollAsync(args);
+            _messageList.PollCloseRequested += async (_, args) => await ClosePollAsync(args);
             _send.Click += async (_, _) => await SendTextAsync();
             _attach.Click += async (_, _) => await SendFileAsync();
+            _createPoll.Click += async (_, _) => await CreatePollAsync();
             _input.KeyDown += (sender, e) =>
             {
                 if (e.KeyCode == Keys.Enter)
@@ -74,6 +82,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             root.Controls.Add(TeacherTabChrome.CreateHeader(
                 "Tin nhắn",
                 "Trao đổi với học viên trong các phòng chat khóa học.",
+                _createPoll,
                 _attach,
                 _send), 0, 0);
 
@@ -84,66 +93,71 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 ColumnCount = 2,
                 RowCount = 1
             };
-            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32f));
-            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 68f));
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24f));
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 76f));
             content.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
             var courseCard = TeacherTabChrome.CreateDataCard("Khóa học", _courseList);
-            courseCard.Margin = new Padding(0, 0, 12, 0);
+            courseCard.Margin = new Padding(0, 0, 8, 0);
             content.Controls.Add(courseCard, 0, 0);
 
             var chatCard = TeacherTabChrome.CreateCard();
-            chatCard.Padding = new Padding(18);
-            chatCard.Margin = new Padding(12, 0, 0, 0);
+            chatCard.Padding = new Padding(12);
+            chatCard.Margin = new Padding(8, 0, 0, 0);
 
             var chatGrid = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.Transparent,
+                BackColor = AppColors.BgCard,
                 ColumnCount = 1,
                 RowCount = 3
             };
-            chatGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 44f));
+            chatGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36f));
             chatGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-            chatGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 48f));
+            chatGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));
             chatGrid.Controls.Add(new Label
             {
                 Dock = DockStyle.Fill,
                 AutoSize = false,
-                BackColor = Color.Transparent,
+                BackColor = AppColors.BgCard,
                 Font = AppFonts.Semibold(12f),
                 ForeColor = AppColors.TextPrimary,
                 Text = "Nội dung trao đổi",
                 TextAlign = ContentAlignment.MiddleLeft
             }, 0, 0);
 
-            _messages.Multiline = true;
-            _messages.ReadOnly = true;
-            _messages.ScrollBars = ScrollBars.Vertical;
-            chatGrid.Controls.Add(_messages, 0, 1);
+            _messageList.Dock = DockStyle.Fill;
+            _messageList.Margin = new Padding(0);
+            chatGrid.Controls.Add(_messageList, 0, 1);
 
             var composer = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.Transparent,
-                ColumnCount = 3,
+                BackColor = AppColors.BgCard,
+                ColumnCount = 4,
                 RowCount = 1,
                 Margin = new Padding(0, 12, 0, 0)
             };
             composer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             composer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92f));
             composer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92f));
+            composer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92f));
 
             _input.PlaceholderText = "Nhập tin nhắn...";
             _input.Dock = DockStyle.Fill;
             _input.Margin = new Padding(0, 0, 10, 0);
+            _input.Multiline = true;
+            _input.ScrollBars = ScrollBars.Vertical;
+            _createPoll.Dock = DockStyle.Fill;
+            _createPoll.Margin = new Padding(0, 0, 10, 0);
             _attach.Dock = DockStyle.Fill;
             _attach.Margin = new Padding(0, 0, 10, 0);
             _send.Dock = DockStyle.Fill;
             _send.Margin = Padding.Empty;
             composer.Controls.Add(_input, 0, 0);
-            composer.Controls.Add(_attach, 1, 0);
-            composer.Controls.Add(_send, 2, 0);
+            composer.Controls.Add(_createPoll, 1, 0);
+            composer.Controls.Add(_attach, 2, 0);
+            composer.Controls.Add(_send, 3, 0);
             chatGrid.Controls.Add(composer, 0, 2);
 
             chatCard.Controls.Add(chatGrid);
@@ -159,10 +173,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _courseList.BackColor = AppColors.BgCard;
             _courseList.ForeColor = AppColors.TextPrimary;
             _courseList.Font = AppFonts.Body;
-            _messages.BorderStyle = BorderStyle.None;
-            _messages.BackColor = AppColors.BgCard;
-            _messages.ForeColor = AppColors.TextPrimary;
-            _messages.Font = AppFonts.Body;
+            _messageList.BackColor = AppColors.BgCard;
             _input.BackColor = AppColors.BgCard;
             _input.ForeColor = AppColors.TextPrimary;
             _input.Font = AppFonts.Body;
@@ -171,11 +182,10 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private async Task LoadCoursesAsync()
         {
             _courseList.Items.Clear();
-            _messages.Text = "Đang tải danh sách chat...";
+            _messageList.ClearMessages();
 
             if (_teacherId <= 0)
             {
-                _messages.Text = "Không tìm thấy tài khoản giáo viên.";
                 return;
             }
 
@@ -197,13 +207,15 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             if (_courseList.Items.Count == 0)
             {
                 _selectedCourseId = 0;
-                _messages.Text = "Chưa có khóa học nào để chat.";
+                _hasLoadedInitialMessages = false;
+                _messageList.ClearMessages();
                 return;
             }
 
             _courseList.ClearSelected();
             _selectedCourseId = 0;
-            _messages.Text = "Chọn khóa học để xem tin nhắn.";
+            _hasLoadedInitialMessages = false;
+            _messageList.ClearMessages();
         }
 
         private async Task OnCourseChangedAsync()
@@ -216,45 +228,72 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             }
 
             _selectedCourseId = _courses[index].CourseId;
+            _hasLoadedInitialMessages = false;
+            _messageList.ClearMessages();
             await RefreshMessagesAsync();
         }
 
         private async Task RefreshMessagesAsync()
         {
-            if (!_uiAlive || IsDisposed || _isLoadingMessages || _selectedCourseId <= 0 || _hasPendingLocalSend)
+            if (!_uiAlive || IsDisposed || _isLoadingMessages || _selectedCourseId <= 0)
                 return;
 
+            int courseId = _selectedCourseId;
             try
             {
                 _isLoadingMessages = true;
-                List<ChatMessageModel> messages = await Task.Run(() => _chat.GetMessages(_teacherId, _selectedCourseId, 200));
-                if (!_uiAlive || IsDisposed || _messages.IsDisposed)
-                    return;
-
-                _messages.Clear();
-                foreach (ChatMessageModel message in messages.OrderBy(m => m.SentAt))
+                List<ChatMessageModel> messages;
+                int newestMessageId = _messageList.NewestMessageId ?? 0;
+                if (!_hasLoadedInitialMessages || newestMessageId <= 0)
                 {
-                    string when = message.SentAt.ToString("HH:mm");
-                    if (string.Equals(message.MessageType, "FILE", StringComparison.OrdinalIgnoreCase))
-                    {
-                        string sizeText = message.FileSize <= 0 ? "-" : $"{Math.Round(message.FileSize / 1024.0, 1)} KB";
-                        _messages.AppendText($"[{when}] {message.SenderName}: [FILE] {message.FileName} ({sizeText}){Environment.NewLine}");
-                        if (!string.IsNullOrWhiteSpace(message.Content))
-                            _messages.AppendText($"  Ghi chú: {message.Content}{Environment.NewLine}");
-                        _messages.AppendText($"  Lưu tại: {message.FileUrl}{Environment.NewLine}");
-                    }
-                    else
-                    {
-                        _messages.AppendText($"[{when}] {message.SenderName}: {message.Content}{Environment.NewLine}");
-                    }
+                    messages = await _chat.GetMessagesAsync(_teacherId, courseId, 20);
+                }
+                else
+                {
+                    messages = await _chat.GetMessagesAfterAsync(_teacherId, courseId, newestMessageId, 50);
                 }
 
-                if (messages.Count == 0)
-                    _messages.Text = "Chưa có tin nhắn nào trong phòng chat này.";
+                if (!_uiAlive || IsDisposed || _messageList.IsDisposed || _selectedCourseId != courseId)
+                    return;
+
+                if (!_hasLoadedInitialMessages)
+                {
+                    _messageList.SetMessages(messages, _teacherId);
+                    _hasLoadedInitialMessages = true;
+                }
+                else
+                {
+                    _messageList.AppendMessages(messages, _teacherId);
+                }
             }
             finally
             {
                 _isLoadingMessages = false;
+            }
+        }
+
+        private async Task LoadOlderMessagesAsync()
+        {
+            if (!_uiAlive || IsDisposed || _isLoadingOlderMessages || _selectedCourseId <= 0)
+                return;
+
+            int? oldestMessageId = _messageList.OldestMessageId;
+            if (!oldestMessageId.HasValue || oldestMessageId.Value <= 0)
+                return;
+
+            int courseId = _selectedCourseId;
+            try
+            {
+                _isLoadingOlderMessages = true;
+                List<ChatMessageModel> olderMessages = await _chat.GetMessagesBeforeAsync(_teacherId, courseId, oldestMessageId.Value, 20);
+                if (!_uiAlive || IsDisposed || _messageList.IsDisposed || _selectedCourseId != courseId)
+                    return;
+
+                _messageList.PrependOlderMessages(olderMessages, _teacherId);
+            }
+            finally
+            {
+                _isLoadingOlderMessages = false;
             }
         }
 
@@ -286,7 +325,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 }
 
                 _input.Clear();
-                AppendLocalSendStatus("TEXT", "SENT", content);
                 await RefreshMessagesAsync();
             }
             finally
@@ -329,7 +367,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     return;
                 }
 
-                AppendLocalSendStatus("FILE", "SENT", fileName);
                 await RefreshMessagesAsync();
             }
             finally
@@ -338,18 +375,170 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             }
         }
 
-        private void AppendLocalSendStatus(string messageType, string status, string preview, string? errorMessage = null)
+        private async Task CreatePollAsync()
         {
-            if (!_uiAlive || IsDisposed || _messages.IsDisposed)
+            if (_isSending)
                 return;
 
-            _hasPendingLocalSend = string.Equals(status, "PENDING", StringComparison.OrdinalIgnoreCase);
-            if (ShouldClearBeforeLocalStatus(_messages.Text))
-                _messages.Clear();
+            if (_teacherId <= 0 || _selectedCourseId <= 0)
+            {
+                MetaTheme.ShowModernDialog("Vui lòng chọn phòng chat hợp lệ trước khi tạo vote.", "Vote", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
-            _messages.AppendText(ChatSendStatusLineFormatter.Render("Bạn", preview, messageType, status, errorMessage) + Environment.NewLine);
-            _messages.SelectionStart = _messages.TextLength;
-            _messages.ScrollToCaret();
+            using var dialog = new CreatePollDialog();
+            if (dialog.ShowDialog(FindForm()) != DialogResult.OK)
+            {
+                return;
+            }
+
+            int courseId = _selectedCourseId;
+            SetComposerSending(true);
+            try
+            {
+                int messageId = await _chat.CreatePollAsync(_teacherId, courseId, dialog.PollQuestion, dialog.PollOptions);
+                if (!_uiAlive || IsDisposed || _messageList.IsDisposed || _selectedCourseId != courseId)
+                {
+                    return;
+                }
+
+                if (messageId <= 0)
+                {
+                    MetaTheme.ShowModernDialog(_chat.LastErrorMessage, "Tạo vote thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                await RefreshMessagesAsync();
+            }
+            catch (Exception ex)
+            {
+                if (_uiAlive && !IsDisposed)
+                {
+                    MetaTheme.ShowModernDialog($"Không thể tạo vote lúc này.\n{ex.Message}", "Lỗi mạng", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            finally
+            {
+                SetComposerSending(false);
+            }
+        }
+
+        private async Task VotePollAsync(PollVoteEventArgs args)
+        {
+            if (_teacherId <= 0 || _selectedCourseId <= 0)
+            {
+                _messageList.SetPollActionPending(args.MessageId, false);
+                MetaTheme.ShowModernDialog("Vui lòng chọn phòng chat hợp lệ.", "Vote", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int courseId = _selectedCourseId;
+            try
+            {
+                bool success = await _chat.VotePollAsync(_teacherId, args.PollId, args.OptionId);
+                if (!_uiAlive || IsDisposed || _messageList.IsDisposed || _selectedCourseId != courseId)
+                {
+                    return;
+                }
+
+                if (!success)
+                {
+                    MetaTheme.ShowModernDialog(_chat.LastErrorMessage, "Vote thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                await RefreshSinglePollBubbleAsync(args.MessageId, _teacherId, courseId);
+            }
+            catch (Exception ex)
+            {
+                if (_uiAlive && !IsDisposed)
+                {
+                    MetaTheme.ShowModernDialog($"Không thể gửi vote lúc này.\n{ex.Message}", "Lỗi mạng", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            finally
+            {
+                if (_uiAlive && !IsDisposed && !_messageList.IsDisposed)
+                {
+                    _messageList.SetPollActionPending(args.MessageId, false);
+                }
+            }
+        }
+
+        private async Task ClosePollAsync(PollCloseEventArgs args)
+        {
+            if (_teacherId <= 0 || _selectedCourseId <= 0)
+            {
+                _messageList.SetPollActionPending(args.MessageId, false);
+                MetaTheme.ShowModernDialog("Vui lòng chọn phòng chat hợp lệ.", "Vote", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            DialogResult confirm = MetaTheme.ShowModernDialog(
+                "Bạn chắc chắn muốn đóng vote này? Sau khi đóng, mọi người sẽ không thể vote thêm.",
+                "Đóng vote",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes)
+            {
+                _messageList.SetPollActionPending(args.MessageId, false);
+                return;
+            }
+
+            int courseId = _selectedCourseId;
+            try
+            {
+                bool success = await _chat.ClosePollAsync(_teacherId, args.PollId);
+                if (!_uiAlive || IsDisposed || _messageList.IsDisposed || _selectedCourseId != courseId)
+                {
+                    return;
+                }
+
+                if (!success)
+                {
+                    MetaTheme.ShowModernDialog(_chat.LastErrorMessage, "Đóng vote thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                await RefreshSinglePollBubbleAsync(args.MessageId, _teacherId, courseId);
+            }
+            catch (Exception ex)
+            {
+                if (_uiAlive && !IsDisposed)
+                {
+                    MetaTheme.ShowModernDialog($"Không thể đóng vote lúc này.\n{ex.Message}", "Lỗi mạng", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            finally
+            {
+                if (_uiAlive && !IsDisposed && !_messageList.IsDisposed)
+                {
+                    _messageList.SetPollActionPending(args.MessageId, false);
+                }
+            }
+        }
+
+        private async Task RefreshSinglePollBubbleAsync(int messageId, int userId, int courseId)
+        {
+            List<ChatMessageModel> latestMessages = await _chat.GetMessagesAsync(userId, courseId, 50);
+            if (!_uiAlive || IsDisposed || _messageList.IsDisposed || _selectedCourseId != courseId)
+            {
+                return;
+            }
+
+            ChatMessageModel? updatedMessage = latestMessages.FirstOrDefault(message => message.Id == messageId);
+            if (updatedMessage?.Poll != null)
+            {
+                _messageList.RefreshPollBubble(updatedMessage);
+            }
+        }
+
+        private void AppendLocalSendStatus(string messageType, string status, string preview, string? errorMessage = null)
+        {
+            if (!_uiAlive || IsDisposed || !string.Equals(status, "FAILED", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            MetaTheme.ShowModernDialog(errorMessage ?? "Gửi tin nhắn thất bại.", "Chat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         private void SetComposerSending(bool sending)
@@ -357,19 +546,10 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _isSending = sending;
             _send.Enabled = !sending;
             _attach.Enabled = !sending;
+            _createPoll.Enabled = !sending;
             _input.Enabled = !sending;
         }
 
-        private static bool ShouldClearBeforeLocalStatus(string currentText)
-        {
-            if (string.IsNullOrWhiteSpace(currentText))
-                return false;
 
-            string trimmed = currentText.TrimStart();
-            return trimmed.StartsWith("Đang tải", StringComparison.OrdinalIgnoreCase)
-                || trimmed.StartsWith("Chọn khóa", StringComparison.OrdinalIgnoreCase)
-                || trimmed.StartsWith("Chưa có", StringComparison.OrdinalIgnoreCase)
-                || trimmed.StartsWith("Không tìm", StringComparison.OrdinalIgnoreCase);
-        }
     }
 }
