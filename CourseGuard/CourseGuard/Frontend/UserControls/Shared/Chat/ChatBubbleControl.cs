@@ -1,6 +1,9 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Models;
 using CourseGuard.Frontend.Extensions;
@@ -16,14 +19,18 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
 
         private readonly ChatMessageModel _message;
         private readonly bool _isMine;
+        private readonly AvatarImageLoader _avatarImageLoader;
+        private readonly CancellationTokenSource _avatarLoadCts = new();
         private readonly ToolTip _timeToolTip = new();
+        private InitialsAvatarControl? _avatarControl;
 
         public int MessageId => _message.Id;
         public DateTime SentAt => _message.SentAt;
 
-        public ChatBubbleControl(ChatMessageModel message, int currentUserId)
+        public ChatBubbleControl(ChatMessageModel message, int currentUserId, AvatarImageLoader avatarImageLoader)
         {
             _message = message ?? throw new ArgumentNullException(nameof(message));
+            _avatarImageLoader = avatarImageLoader ?? throw new ArgumentNullException(nameof(avatarImageLoader));
             _isMine = message.SenderId == currentUserId;
 
             DoubleBuffered = true;
@@ -178,7 +185,27 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
                 Margin = new Padding(0, 20, 8, 0),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left
             };
+
+            _avatarControl = avatar;
+
+            if (!avatar.SetAvatarImage(LoadLocalAvatarImage(_message.SenderAvatar)))
+            {
+                _ = LoadRemoteAvatarAsync(_message.SenderAvatar);
+            }
+
             return avatar;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _avatarLoadCts.Cancel();
+                _avatarLoadCts.Dispose();
+                _timeToolTip.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
 
         private int CalculatePreferredHeight(int safeWidth)
@@ -229,6 +256,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
         private sealed class InitialsAvatarControl : Control
         {
             private readonly string _initials;
+            private Image? _avatarImage;
 
             public InitialsAvatarControl(string name)
             {
@@ -239,6 +267,19 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
                 Font = AppFonts.Semibold(9f);
             }
 
+            public bool SetAvatarImage(Image? image)
+            {
+                Image? oldImage = _avatarImage;
+                _avatarImage = image;
+                oldImage?.Dispose();
+                if (!IsDisposed)
+                {
+                    Invalidate();
+                }
+
+                return image != null;
+            }
+
             protected override void OnPaint(PaintEventArgs e)
             {
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -246,10 +287,117 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
                 using SolidBrush fill = new(AppColors.AccentSoft);
                 using Pen border = new(AppColors.AccentBlue);
                 e.Graphics.FillEllipse(fill, rect);
+
+                if (_avatarImage != null)
+                {
+                    using GraphicsPath clipPath = new();
+                    clipPath.AddEllipse(rect);
+                    e.Graphics.SetClip(clipPath);
+                    e.Graphics.DrawImage(_avatarImage, GetCoverRectangle(_avatarImage.Size, rect));
+                    e.Graphics.ResetClip();
+                }
+                else
+                {
+                    TextRenderer.DrawText(e.Graphics, _initials, Font, rect, AppColors.AccentBlue, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                }
+
                 e.Graphics.DrawEllipse(border, rect);
-                TextRenderer.DrawText(e.Graphics, _initials, Font, rect, AppColors.AccentBlue, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            }
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                {
+                    Image? oldImage = _avatarImage;
+                    _avatarImage = null;
+                    oldImage?.Dispose();
+                }
+
+                base.Dispose(disposing);
             }
         }
+
+        private static Rectangle GetCoverRectangle(Size sourceSize, Rectangle target)
+        {
+            if (sourceSize.Width <= 0 || sourceSize.Height <= 0)
+            {
+                return target;
+            }
+
+            float scale = Math.Max((float)target.Width / sourceSize.Width, (float)target.Height / sourceSize.Height);
+            int width = (int)Math.Ceiling(sourceSize.Width * scale);
+            int height = (int)Math.Ceiling(sourceSize.Height * scale);
+            return new Rectangle(target.Left + (target.Width - width) / 2, target.Top + (target.Height - height) / 2, width, height);
+        }
+
+        private static Image? LoadLocalAvatarImage(string avatarPath)
+        {
+            if (string.IsNullOrWhiteSpace(avatarPath) || IsHttpUrl(avatarPath) || !File.Exists(avatarPath))
+            {
+                return null;
+            }
+
+            try
+            {
+                byte[] fileBytes = File.ReadAllBytes(avatarPath);
+                using var fileStream = new MemoryStream(fileBytes);
+                using Image localSource = Image.FromStream(fileStream);
+                return new Bitmap(localSource);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private async Task LoadRemoteAvatarAsync(string avatarUrl)
+        {
+            if (string.IsNullOrWhiteSpace(avatarUrl) || !IsHttpUrl(avatarUrl))
+            {
+                return;
+            }
+
+            Image? image = await _avatarImageLoader.LoadAsync(avatarUrl, _avatarLoadCts.Token).ConfigureAwait(true);
+            if (image == null || _avatarLoadCts.IsCancellationRequested || IsDisposed || _avatarControl == null || _avatarControl.IsDisposed)
+            {
+                image?.Dispose();
+                return;
+            }
+
+            if (InvokeRequired)
+            {
+                try
+                {
+                    BeginInvoke(new Action(() => ApplyRemoteAvatar(image)));
+                }
+                catch
+                {
+                    image.Dispose();
+                }
+
+                return;
+            }
+
+            ApplyRemoteAvatar(image);
+        }
+
+        private void ApplyRemoteAvatar(Image image)
+        {
+            if (_avatarLoadCts.IsCancellationRequested || IsDisposed || _avatarControl == null || _avatarControl.IsDisposed)
+            {
+                image.Dispose();
+                return;
+            }
+
+            _avatarControl.SetAvatarImage(image);
+        }
+
+        private static bool IsHttpUrl(string value)
+        {
+            return Uri.TryCreate(value.Trim(), UriKind.Absolute, out Uri? uri)
+                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+        }
+
 
         private static GraphicsPath CreateRoundRect(Rectangle bounds, int radius)
         {

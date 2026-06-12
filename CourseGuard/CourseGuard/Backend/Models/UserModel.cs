@@ -18,5 +18,6 @@ namespace CourseGuard.Backend.Models
         public string Email { get; set; } = string.Empty;
         public string Role { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
+        public string AvatarPath { get; set; } = string.Empty;
     }
 }

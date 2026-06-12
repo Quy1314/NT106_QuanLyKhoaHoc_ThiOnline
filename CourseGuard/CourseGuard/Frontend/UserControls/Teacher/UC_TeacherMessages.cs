@@ -268,10 +268,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 return;
             }
 
-            _courseList.ClearSelected();
-            _selectedCourseId = 0;
-            _hasLoadedInitialMessages = false;
-            _messageList.ClearMessages();
+            _courseList.SelectedIndex = 0;
         }
 
         private async Task OnCourseChangedAsync()

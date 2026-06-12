@@ -10,9 +10,13 @@ using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.UserControls.Shared.Chat;
 
 namespace CourseGuard.Frontend.Theme
 {
@@ -92,6 +96,9 @@ namespace CourseGuard.Frontend.Theme
         private FloatingTopbarLabel? _floatingLabel;
         private string _floatingLabelText = string.Empty;
         private Image? _avatarImage;
+        private readonly AvatarImageLoader _avatarImageLoader = new();
+        private CancellationTokenSource? _avatarLoadCts;
+        private string _currentAvatarPath = string.Empty;
 
         public event EventHandler? LogoutRequested;
 
@@ -783,7 +790,7 @@ namespace CourseGuard.Frontend.Theme
             if (!string.IsNullOrWhiteSpace(displayName))
                 _userName = displayName;
 
-            AvatarImage = LoadAvatarImage(UserSessionContext.CurrentAvatarPath);
+            LoadAvatarFromSessionPath(UserSessionContext.CurrentAvatarPath);
             Invalidate();
         }
 
@@ -801,20 +808,91 @@ namespace CourseGuard.Frontend.Theme
             RefreshUserFromSession();
         }
 
-        private static Image? LoadAvatarImage(string avatarPath)
+        private void LoadAvatarFromSessionPath(string avatarPath)
         {
-            if (string.IsNullOrWhiteSpace(avatarPath) || !System.IO.File.Exists(avatarPath))
+            _currentAvatarPath = avatarPath ?? string.Empty;
+
+            _avatarLoadCts?.Cancel();
+            _avatarLoadCts?.Dispose();
+            _avatarLoadCts = new CancellationTokenSource();
+
+            if (string.IsNullOrWhiteSpace(_currentAvatarPath))
+            {
+                AvatarImage = null;
+                return;
+            }
+
+            if (IsHttpUrl(_currentAvatarPath))
+            {
+                AvatarImage = null;
+                _ = LoadRemoteAvatarAsync(_currentAvatarPath, _avatarLoadCts.Token);
+                return;
+            }
+
+            AvatarImage = LoadLocalAvatarImage(_currentAvatarPath);
+        }
+
+        private async Task LoadRemoteAvatarAsync(string avatarUrl, CancellationToken cancellationToken)
+        {
+            Image? image = await _avatarImageLoader.LoadAsync(avatarUrl, cancellationToken).ConfigureAwait(false);
+
+            if (image == null || cancellationToken.IsCancellationRequested || IsDisposed)
+            {
+                image?.Dispose();
+                return;
+            }
+
+            try
+            {
+                if (InvokeRequired)
+                {
+                    BeginInvoke(new Action(() => ApplyLoadedAvatar(avatarUrl, image, cancellationToken)));
+                    return;
+                }
+
+                ApplyLoadedAvatar(avatarUrl, image, cancellationToken);
+            }
+            catch (InvalidOperationException)
+            {
+                image.Dispose();
+            }
+        }
+
+        private void ApplyLoadedAvatar(string avatarUrl, Image image, CancellationToken cancellationToken)
+        {
+            if (cancellationToken.IsCancellationRequested
+                || IsDisposed
+                || !string.Equals(_currentAvatarPath, avatarUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                image.Dispose();
+                return;
+            }
+
+            AvatarImage = image;
+        }
+
+        private static Image? LoadLocalAvatarImage(string avatarPath)
+        {
+            if (string.IsNullOrWhiteSpace(avatarPath) || !File.Exists(avatarPath))
                 return null;
 
             try
             {
-                using Image source = Image.FromFile(avatarPath);
+                byte[] bytes = File.ReadAllBytes(avatarPath);
+                using var stream = new MemoryStream(bytes);
+                using Image source = Image.FromStream(stream);
                 return new Bitmap(source);
             }
             catch
             {
                 return null;
             }
+        }
+
+        private static bool IsHttpUrl(string value)
+        {
+            return Uri.TryCreate(value.Trim(), UriKind.Absolute, out Uri? uri)
+                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
         }
 
         private string GetInitials()
@@ -1060,8 +1138,11 @@ namespace CourseGuard.Frontend.Theme
                     _floatingLabel = null;
                 }
 
-                _avatarImage?.Dispose();
-                _avatarImage = null;
+                _avatarLoadCts?.Cancel();
+                _avatarLoadCts?.Dispose();
+                _avatarLoadCts = null;
+                _avatarImageLoader.Dispose();
+                AvatarImage = null;
                 _notificationMenu.Dispose();
                 _accountMenu.Dispose();
                 _searchMenu.Dispose();
