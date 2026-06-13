@@ -12,6 +12,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
     {
         private readonly DoubleBufferedFlowLayoutPanel _panel = new();
         private readonly AvatarImageLoader _avatarImageLoader = new();
+        private readonly ChatImageLoader _chatImageLoader = new();
         private bool _suppressTopReached;
 
         public event EventHandler? TopReached;
@@ -286,7 +287,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
                 return pollBubble;
             }
 
-            var bubble = new ChatBubbleControl(message, currentUserId, _avatarImageLoader);
+            var bubble = new ChatBubbleControl(message, currentUserId, _avatarImageLoader, _chatImageLoader);
             bubble.UpdateContainerWidth(_panel.ClientSize.Width);
             return bubble;
         }
@@ -405,6 +406,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             if (disposing)
             {
                 _avatarImageLoader.Dispose();
+                _chatImageLoader.Dispose();
             }
 
             base.Dispose(disposing);

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Models;
 using CourseGuard.Frontend.Extensions;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Shared.Chat
@@ -20,9 +21,12 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
         private readonly ChatMessageModel _message;
         private readonly bool _isMine;
         private readonly AvatarImageLoader _avatarImageLoader;
+        private readonly ChatImageLoader _chatImageLoader;
         private readonly CancellationTokenSource _avatarLoadCts = new();
+        private readonly CancellationTokenSource _imageLoadCts = new();
         private readonly ToolTip _timeToolTip = new();
         private InitialsAvatarControl? _avatarControl;
+        private Image? _thumbnailImage;
 
         public int MessageId => _message.Id;
         public DateTime SentAt => _message.SentAt;
@@ -35,10 +39,11 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             UpdateContainerWidth(Width);
         }
 
-        public ChatBubbleControl(ChatMessageModel message, int currentUserId, AvatarImageLoader avatarImageLoader)
+        public ChatBubbleControl(ChatMessageModel message, int currentUserId, AvatarImageLoader avatarImageLoader, ChatImageLoader chatImageLoader)
         {
             _message = message ?? throw new ArgumentNullException(nameof(message));
             _avatarImageLoader = avatarImageLoader ?? throw new ArgumentNullException(nameof(avatarImageLoader));
+            _chatImageLoader = chatImageLoader ?? throw new ArgumentNullException(nameof(chatImageLoader));
             _isMine = message.SenderId == currentUserId;
 
             DoubleBuffered = true;
@@ -97,10 +102,11 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
         private Control CreateContentStack()
         {
             string senderName = _isMine ? "Bạn" : _message.SenderName.GetShortName();
-            string body = BuildBodyText(_message);
+            bool isImage = ChatImageHelper.IsImageMessage(_message.MessageType, _message.MimeType, _message.FileName, _message.FileUrl);
+            string body = isImage ? BuildImageCaption(_message) : BuildBodyText(_message);
             Size textSize = TextRenderer.MeasureText(body, AppFonts.Body, new Size(MaxBubbleWidth - 28, int.MaxValue), TextFormatFlags.WordBreak);
-            int bubbleWidth = Math.Min(MaxBubbleWidth, Math.Max(MinBubbleWidth, textSize.Width + 30));
-            int bubbleHeight = Math.Max(38, textSize.Height + 22);
+            int bubbleWidth = isImage ? 260 : Math.Min(MaxBubbleWidth, Math.Max(MinBubbleWidth, textSize.Width + 30));
+            int bubbleHeight = isImage ? (string.IsNullOrWhiteSpace(body) ? 198 : 238) : Math.Max(38, textSize.Height + 22);
 
             var stack = new FlowLayoutPanel
             {
@@ -126,14 +132,16 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
                 Margin = new Padding(0, 0, 0, 2)
             };
 
-            var bubble = new RoundedBubblePanel(_isMine, body)
-            {
-                Width = bubbleWidth,
-                Height = bubbleHeight,
-                Margin = Padding.Empty,
-                Padding = new Padding(14, 10, 14, 10),
-                Font = AppFonts.Body
-            };
+            Control bubble = isImage
+                ? CreateImageBubble(bubbleWidth, bubbleHeight)
+                : new RoundedBubblePanel(_isMine, body)
+                {
+                    Width = bubbleWidth,
+                    Height = bubbleHeight,
+                    Margin = Padding.Empty,
+                    Padding = new Padding(14, 10, 14, 10),
+                    Font = AppFonts.Body
+                };
 
             string tooltip = _message.SentAt.ToString("HH:mm dd/MM/yyyy");
             _timeToolTip.SetToolTip(this, tooltip);
@@ -192,6 +200,130 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             return string.IsNullOrWhiteSpace(message.Content) ? "(Tin nhắn trống)" : message.Content;
         }
 
+        private static string BuildImageCaption(ChatMessageModel message)
+        {
+            return string.IsNullOrWhiteSpace(message.Content) ? string.Empty : message.Content.Trim();
+        }
+
+        private Control CreateImageBubble(int width, int height)
+        {
+            var bubble = new Panel
+            {
+                Width = width,
+                Height = height,
+                Margin = Padding.Empty,
+                Padding = new Padding(8),
+                BackColor = _isMine ? AppColors.AccentBlue : Color.White,
+                Cursor = Cursors.Hand
+            };
+
+            var picture = new PictureBox
+            {
+                Width = width - 16,
+                Height = 174,
+                SizeMode = PictureBoxSizeMode.CenterImage,
+                BackColor = _isMine ? Color.FromArgb(235, 242, 255) : AppColors.BgInput,
+                Image = null,
+                Cursor = Cursors.Hand,
+                Dock = DockStyle.Top
+            };
+            picture.Paint += (_, e) =>
+            {
+                if (picture.Image != null)
+                {
+                    return;
+                }
+
+                TextRenderer.DrawText(e.Graphics, "Đang tải ảnh...", AppFonts.Caption, picture.ClientRectangle, AppColors.TextSecondary, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            };
+
+            bubble.Controls.Add(picture);
+            string caption = BuildImageCaption(_message);
+            if (!string.IsNullOrWhiteSpace(caption))
+            {
+                var captionLabel = new Label
+                {
+                    Dock = DockStyle.Bottom,
+                    Height = 40,
+                    Text = caption,
+                    Font = AppFonts.Body,
+                    ForeColor = _isMine ? Color.White : AppColors.TextPrimary,
+                    BackColor = Color.Transparent,
+                    AutoEllipsis = true
+                };
+                bubble.Controls.Add(captionLabel);
+            }
+
+            EventHandler openPreview = (_, _) => OpenImagePreview();
+            bubble.Click += openPreview;
+            picture.Click += openPreview;
+            _ = LoadThumbnailIntoAsync(picture);
+            return bubble;
+        }
+
+        private async Task LoadThumbnailIntoAsync(PictureBox picture)
+        {
+            Image? thumbnail = null;
+            try
+            {
+                thumbnail = await _chatImageLoader.LoadThumbnailAsync(_message.FileUrl, new Size(244, 174), _imageLoadCts.Token);
+                if (thumbnail == null || IsDisposed || picture.IsDisposed)
+                {
+                    thumbnail?.Dispose();
+                    return;
+                }
+
+                if (picture.InvokeRequired)
+                {
+                    picture.BeginInvoke(new Action(() => ApplyThumbnail(picture, thumbnail)));
+                }
+                else
+                {
+                    ApplyThumbnail(picture, thumbnail);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                thumbnail?.Dispose();
+            }
+            catch
+            {
+                thumbnail?.Dispose();
+                if (!picture.IsDisposed)
+                {
+                    picture.Invalidate();
+                }
+            }
+        }
+
+        private void ApplyThumbnail(PictureBox picture, Image thumbnail)
+        {
+            if (IsDisposed || picture.IsDisposed)
+            {
+                thumbnail.Dispose();
+                return;
+            }
+
+            _thumbnailImage?.Dispose();
+            _thumbnailImage = thumbnail;
+            picture.SizeMode = PictureBoxSizeMode.Zoom;
+            picture.Image = _thumbnailImage;
+        }
+
+        private void OpenImagePreview()
+        {
+            if (string.IsNullOrWhiteSpace(_message.FileUrl) || !File.Exists(_message.FileUrl))
+            {
+                MessageBox.Show("Không tìm thấy ảnh để xem trước.", "Ảnh", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            using (var dialog = new ImagePreviewDialog(_message.FileUrl, string.IsNullOrWhiteSpace(_message.FileName) ? "Ảnh chat" : _message.FileName))
+            {
+                dialog.ShowDialog(this);
+            }
+        }
+
         private Control CreateLeftHost(Control content)
         {
             return new Panel
@@ -242,7 +374,10 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             if (disposing)
             {
                 _avatarLoadCts.Cancel();
+                _imageLoadCts.Cancel();
                 _avatarLoadCts.Dispose();
+                _imageLoadCts.Dispose();
+                _thumbnailImage?.Dispose();
                 _timeToolTip.Dispose();
             }
 
@@ -251,9 +386,18 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
 
         private int CalculatePreferredHeight(int safeWidth)
         {
+            bool isImage = ChatImageHelper.IsImageMessage(_message.MessageType, _message.MimeType, _message.FileName, _message.FileUrl);
+            int statusHeight = string.Equals(_message.DeliveryStatus, "SENT", StringComparison.OrdinalIgnoreCase) ? 0 : 22;
+
+            if (isImage)
+            {
+                string caption = BuildImageCaption(_message);
+                int imageBubbleHeight = string.IsNullOrWhiteSpace(caption) ? 198 : 238;
+                return Math.Max(238, 18 + imageBubbleHeight + statusHeight + 18);
+            }
+
             int available = Math.Min(MaxBubbleWidth - 28, Math.Max(120, safeWidth - 160));
             Size textSize = TextRenderer.MeasureText(BuildBodyText(_message), AppFonts.Body, new Size(available, int.MaxValue), TextFormatFlags.WordBreak);
-            int statusHeight = string.Equals(_message.DeliveryStatus, "SENT", StringComparison.OrdinalIgnoreCase) ? 0 : 22;
             return Math.Max(58, textSize.Height + 48 + statusHeight);
         }
 
