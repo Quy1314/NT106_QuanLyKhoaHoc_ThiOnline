@@ -18,6 +18,8 @@ namespace CourseGuard.Backend.Models
         public string MimeType { get; set; } = string.Empty;
         public DateTime SentAt { get; set; }
         public int? PollId { get; set; }
+        public string DeliveryStatus { get; set; } = "SENT";
+        public string DeliveryError { get; set; } = string.Empty;
         public PollModel? Poll { get; set; }
         public DateTime CreatedAt
         {

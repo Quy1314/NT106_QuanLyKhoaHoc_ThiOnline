@@ -136,6 +136,75 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             }
         }
 
+        public void AppendTemporaryMessage(ChatMessageModel message, int currentUserId)
+        {
+            if (message == null)
+            {
+                return;
+            }
+
+            _panel.SuspendLayout();
+            try
+            {
+                _panel.Controls.Add(CreateBubble(message, currentUserId));
+            }
+            finally
+            {
+                _panel.ResumeLayout(true);
+                ResizeBubbles();
+                ScrollToBottom();
+            }
+        }
+
+        public void ReplaceMessage(int temporaryMessageId, ChatMessageModel replacement, int currentUserId)
+        {
+            if (replacement == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _panel.Controls.Count; i++)
+            {
+                if (GetMessageId(_panel.Controls[i]) != temporaryMessageId)
+                {
+                    continue;
+                }
+
+                Control oldBubble = _panel.Controls[i];
+                Control newBubble = CreateBubble(replacement, currentUserId);
+                _panel.SuspendLayout();
+                try
+                {
+                    _panel.Controls.RemoveAt(i);
+                    oldBubble.Dispose();
+                    _panel.Controls.Add(newBubble);
+                    _panel.Controls.SetChildIndex(newBubble, i);
+                }
+                finally
+                {
+                    _panel.ResumeLayout(true);
+                    ResizeBubbles();
+                    ScrollToBottom();
+                }
+
+                return;
+            }
+
+            AppendTemporaryMessage(replacement, currentUserId);
+        }
+
+        public void MarkMessageFailed(int temporaryMessageId, string errorMessage)
+        {
+            foreach (ChatBubbleControl bubble in _panel.Controls.OfType<ChatBubbleControl>())
+            {
+                if (bubble.MessageId == temporaryMessageId)
+                {
+                    bubble.MarkFailed(errorMessage);
+                    return;
+                }
+            }
+        }
+
         public void PrependOlderMessages(IEnumerable<ChatMessageModel> messages, int currentUserId)
         {
             if (messages == null)
@@ -145,7 +214,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
 
             var existing = LoadedMessageIds.ToHashSet();
             var ordered = messages
-                .Where(message => !existing.Contains(message.Id))
+                .Where(message => message.Id <= 0 || !existing.Contains(message.Id))
                 .OrderBy(message => message.SentAt)
                 .ThenBy(message => message.Id)
                 .ToList();

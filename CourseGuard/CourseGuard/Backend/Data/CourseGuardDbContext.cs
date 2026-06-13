@@ -3024,23 +3024,44 @@ namespace CourseGuard.Backend.Data
             return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
         }
 
-        public async Task<int> SendChatMessageAsync(int courseId, int senderId, string content, CancellationToken cancellationToken = default)
+        public async Task<ChatMessageModel?> SendChatMessageAsync(int courseId, int senderId, string content, CancellationToken cancellationToken = default)
         {
             await using var connection = CreateConnection();
             await connection.OpenAsync(cancellationToken);
             EnsureChatSchema(connection);
 
             const string query = @"
-                INSERT INTO MESSAGES (COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, SENT_AT)
-                VALUES (@course_id, @sender_id, @content, 'TEXT', CURRENT_TIMESTAMP)
-                RETURNING ID";
+                WITH inserted AS (
+                    INSERT INTO MESSAGES (COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, SENT_AT)
+                    VALUES (@course_id, @sender_id, @content, 'TEXT', CURRENT_TIMESTAMP)
+                    RETURNING ID, COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, FILE_URL, FILE_NAME, FILE_SIZE, MIME_TYPE, POLL_ID, SENT_AT
+                )
+                SELECT i.ID,
+                       i.COURSE_ID,
+                       i.SENDER_ID,
+                       COALESCE(u.FULL_NAME, u.USERNAME, 'Unknown') AS SENDER_NAME,
+                       COALESCE(r.NAME, '') AS SENDER_ROLE,
+                       COALESCE(i.CONTENT, '') AS CONTENT,
+                       COALESCE(i.MESSAGE_TYPE, 'TEXT') AS MESSAGE_TYPE,
+                       COALESCE(i.FILE_URL, '') AS FILE_URL,
+                       COALESCE(i.FILE_NAME, '') AS FILE_NAME,
+                       COALESCE(i.FILE_SIZE, 0) AS FILE_SIZE,
+                       COALESCE(i.MIME_TYPE, '') AS MIME_TYPE,
+                       i.POLL_ID,
+                       COALESCE(tp.avatar_path, sp.avatar_path, '') AS SENDER_AVATAR,
+                       i.SENT_AT
+                FROM inserted i
+                JOIN USERS u ON u.ID = i.SENDER_ID
+                LEFT JOIN ROLES r ON r.ID = u.ROLE_ID
+                LEFT JOIN student_profiles sp ON sp.user_id = u.ID
+                LEFT JOIN teacher_profiles tp ON tp.user_id = u.ID";
 
             await using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@course_id", courseId);
             command.Parameters.AddWithValue("@sender_id", senderId);
             command.Parameters.AddWithValue("@content", content);
-            object? result = await command.ExecuteScalarAsync(cancellationToken);
-            return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            return await reader.ReadAsync(cancellationToken) ? ReadChatMessage(reader) : null;
         }
 
         public async Task<int> SendChatFileMessageAsync(

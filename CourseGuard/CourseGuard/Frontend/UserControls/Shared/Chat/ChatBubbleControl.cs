@@ -27,6 +27,14 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
         public int MessageId => _message.Id;
         public DateTime SentAt => _message.SentAt;
 
+        public void MarkFailed(string errorMessage)
+        {
+            _message.DeliveryStatus = "FAILED";
+            _message.DeliveryError = errorMessage ?? string.Empty;
+            BuildLayout();
+            UpdateContainerWidth(Width);
+        }
+
         public ChatBubbleControl(ChatMessageModel message, int currentUserId, AvatarImageLoader avatarImageLoader)
         {
             _message = message ?? throw new ArgumentNullException(nameof(message));
@@ -135,7 +143,40 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
 
             stack.Controls.Add(nameLabel);
             stack.Controls.Add(bubble);
+
+            Label? statusLabel = CreateStatusLabel(bubbleWidth);
+            if (statusLabel != null)
+            {
+                stack.Controls.Add(statusLabel);
+            }
+
             return stack;
+        }
+
+        private Label? CreateStatusLabel(int bubbleWidth)
+        {
+            if (string.Equals(_message.DeliveryStatus, "SENT", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            bool failed = string.Equals(_message.DeliveryStatus, "FAILED", StringComparison.OrdinalIgnoreCase);
+            string text = failed
+                ? $"⚠ Lỗi gửi{(string.IsNullOrWhiteSpace(_message.DeliveryError) ? string.Empty : $": {_message.DeliveryError}")}"
+                : "⏳ Đang gửi...";
+
+            return new Label
+            {
+                AutoSize = false,
+                Width = bubbleWidth,
+                Height = 18,
+                Text = text,
+                TextAlign = _isMine ? ContentAlignment.MiddleRight : ContentAlignment.MiddleLeft,
+                Font = AppFonts.Caption,
+                ForeColor = failed ? AppColors.Danger : AppColors.TextSecondary,
+                BackColor = AppColors.BgCard,
+                Margin = new Padding(0, 3, 0, 0)
+            };
         }
 
         private static string BuildBodyText(ChatMessageModel message)
@@ -212,7 +253,8 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
         {
             int available = Math.Min(MaxBubbleWidth - 28, Math.Max(120, safeWidth - 160));
             Size textSize = TextRenderer.MeasureText(BuildBodyText(_message), AppFonts.Body, new Size(available, int.MaxValue), TextFormatFlags.WordBreak);
-            return Math.Max(58, textSize.Height + 48);
+            int statusHeight = string.Equals(_message.DeliveryStatus, "SENT", StringComparison.OrdinalIgnoreCase) ? 0 : 22;
+            return Math.Max(58, textSize.Height + 48 + statusHeight);
         }
 
         private sealed class RoundedBubblePanel : Panel
