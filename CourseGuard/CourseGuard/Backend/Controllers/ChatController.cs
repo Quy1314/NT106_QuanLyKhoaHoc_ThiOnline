@@ -139,30 +139,38 @@ namespace CourseGuard.Backend.Controllers
             return true;
         }
 
-        public async Task<bool> SendMessageAsync(int userId, int courseId, string content, CancellationToken cancellationToken = default)
+        public async Task<ChatMessageModel?> SendMessageAsync(int userId, int courseId, string content, CancellationToken cancellationToken = default)
         {
             LastErrorMessage = string.Empty;
             if (string.IsNullOrWhiteSpace(content))
             {
                 LastErrorMessage = "Nội dung tin nhắn không được để trống.";
-                return false;
+                return null;
             }
 
             if (!_dbContext.CanAccessCourseChat(userId, courseId))
             {
                 LastErrorMessage = "Bạn không có quyền gửi tin nhắn trong phòng chat này.";
-                return false;
+                return null;
             }
 
-            int messageId = await _dbContext.SendChatMessageAsync(courseId, userId, content.Trim(), cancellationToken);
-            if (messageId <= 0)
+            ChatMessageModel? createdMessage = await _dbContext.SendChatMessageAsync(courseId, userId, content.Trim(), cancellationToken);
+            if (createdMessage == null || createdMessage.Id <= 0)
             {
                 LastErrorMessage = "Gửi tin nhắn thất bại.";
-                return false;
+                return null;
             }
 
-            await _dbContext.LogUserActivityAsync(userId, "CHAT_USE", $"Gửi tin nhắn chat trong khóa học ID={courseId}", string.Empty, cancellationToken);
-            return true;
+            try
+            {
+                await Task.Run(() => _dbContext.LogUserActivity(userId, "CHAT_USE", $"Gửi tin nhắn chat trong khóa học ID={courseId}", string.Empty), cancellationToken);
+            }
+            catch
+            {
+                // Logging failure must not roll back or delay the already-created chat message.
+            }
+
+            return createdMessage;
         }
 
         public bool SendFileMessage(int userId, int courseId, string sourceFilePath, string caption = "")

@@ -28,6 +28,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         private bool _hasLoadedInitialMessages;
         private bool _isSending;
         private bool _uiAlive = true;
+        private int _nextTemporaryMessageId = -1;
 
         public UC_Chat()
         {
@@ -418,9 +419,6 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private async Task SendTextAsync()
         {
-            if (_isSending)
-                return;
-
             string content = txtInput.Text.Trim();
             if (string.IsNullOrWhiteSpace(content))
                 return;
@@ -432,24 +430,47 @@ namespace CourseGuard.Frontend.UserControls.Student
                 return;
             }
 
-            SetComposerSending(true);
-            AppendLocalSendStatus("TEXT", "PENDING", content);
+            int courseId = _selectedCourseId;
+            int temporaryMessageId = _nextTemporaryMessageId--;
+            var temporaryMessage = new ChatMessageModel
+            {
+                Id = temporaryMessageId,
+                CourseId = courseId,
+                SenderId = userId,
+                SenderName = "Bạn",
+                SenderRole = "Student",
+                Content = content,
+                MessageType = "TEXT",
+                SentAt = DateTime.Now,
+                DeliveryStatus = "PENDING"
+            };
+
+            txtInput.Clear();
+            _messageList.AppendTemporaryMessage(temporaryMessage, userId);
+
             try
             {
-                bool sent = await _chatController.SendMessageAsync(userId, _selectedCourseId, content);
-                if (!sent)
+                ChatMessageModel? sentMessage = await _chatController.SendMessageAsync(userId, courseId, content);
+                if (!_uiAlive || IsDisposed || _messageList.IsDisposed || _selectedCourseId != courseId)
                 {
-                    AppendLocalSendStatus("TEXT", "FAILED", content, _chatController.LastErrorMessage);
-                    MetaTheme.ShowModernDialog(_chatController.LastErrorMessage, "Gửi tin nhắn thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
-                txtInput.Clear();
-                await RefreshMessagesAsync();
+                if (sentMessage == null)
+                {
+                    _messageList.MarkMessageFailed(temporaryMessageId, _chatController.LastErrorMessage);
+                    return;
+                }
+
+                sentMessage.DeliveryStatus = "SENT";
+                _messageList.ReplaceMessage(temporaryMessageId, sentMessage, userId);
             }
-            finally
+            catch (Exception ex)
             {
-                SetComposerSending(false);
+                if (_uiAlive && !IsDisposed && !_messageList.IsDisposed)
+                {
+                    _messageList.MarkMessageFailed(temporaryMessageId, ex.Message);
+                }
             }
         }
 
