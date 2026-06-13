@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CourseGuard.Backend.Data;
@@ -271,6 +272,99 @@ namespace CourseGuard.Backend.Controllers
             catch
             {
                 // Logging failure must not block a successful image message.
+            }
+
+            return message;
+        }
+
+        public async Task<ChatMessageModel?> SendImageGroupMessageAsync(
+            int userId,
+            int courseId,
+            IReadOnlyList<CompressedChatImageResult> compressedImages,
+            string caption = "",
+            CancellationToken cancellationToken = default)
+        {
+            LastErrorMessage = string.Empty;
+            if (!_dbContext.CanAccessCourseChat(userId, courseId))
+            {
+                LastErrorMessage = "Bạn không có quyền gửi ảnh trong phòng chat này.";
+                return null;
+            }
+
+            var images = (compressedImages ?? Array.Empty<CompressedChatImageResult>())
+                .Where(image => image != null)
+                .ToList();
+
+            if (images.Count == 0)
+            {
+                LastErrorMessage = "Vui lòng chọn ít nhất một ảnh để gửi.";
+                return null;
+            }
+
+            if (images.Count > ChatImageHelper.MaxImageCountPerMessage)
+            {
+                LastErrorMessage = $"Chỉ được gửi tối đa {ChatImageHelper.MaxImageCountPerMessage} ảnh trong một tin nhắn.";
+                return null;
+            }
+
+            foreach (var image in images)
+            {
+                if (string.IsNullOrWhiteSpace(image.FilePath) || !File.Exists(image.FilePath))
+                {
+                    LastErrorMessage = "Không tìm thấy ảnh đã xử lý để gửi.";
+                    return null;
+                }
+
+                if (!ChatImageHelper.IsSupportedImage(image.OriginalFileName) && !ChatImageHelper.IsSupportedImage(image.FilePath))
+                {
+                    LastErrorMessage = "Chỉ hỗ trợ gửi ảnh JPG, JPEG hoặc PNG.";
+                    return null;
+                }
+            }
+
+            var saveTasks = images.Select(image => Task.Run(() =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var saved = _fileStorageService.SaveChatImage(courseId, userId, image.FilePath, image.OriginalFileName);
+                return new ChatImageAttachmentModel
+                {
+                    Url = saved.SavedPath,
+                    Name = saved.SavedFileName,
+                    Size = saved.FileSize,
+                    Mime = ChatImageHelper.GetMimeType(saved.SavedPath)
+                };
+            }, cancellationToken)).ToArray();
+
+            ChatImageAttachmentModel[] attachments = await Task.WhenAll(saveTasks);
+            string attachmentJson = ChatImageHelper.SerializeImageAttachments(attachments);
+            long totalFileSize = attachments.Sum(item => item.Size);
+            string fileName = attachments.Length == 1 ? attachments[0].Name : $"{attachments.Length} ảnh";
+
+            ChatMessageModel? message = await _dbContext.SendChatImageGroupMessageAsync(
+                courseId,
+                userId,
+                caption ?? string.Empty,
+                attachmentJson,
+                fileName,
+                totalFileSize,
+                ChatImageHelper.ImageGroupMimeType,
+                cancellationToken);
+
+            if (message == null)
+            {
+                LastErrorMessage = "Gửi ảnh thất bại.";
+                return null;
+            }
+
+            message.ImageAttachments = attachments.ToList();
+
+            try
+            {
+                await Task.Run(() => _dbContext.LogUserActivity(userId, "CHAT_USE", $"Gửi {attachments.Length} ảnh chat trong khóa học ID={courseId}", string.Empty), cancellationToken);
+            }
+            catch
+            {
+                // Logging failure must not block a successful image group message.
             }
 
             return message;

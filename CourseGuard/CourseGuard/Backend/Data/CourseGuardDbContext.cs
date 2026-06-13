@@ -3074,6 +3074,51 @@ namespace CourseGuard.Backend.Data
             string mimeType,
             CancellationToken cancellationToken = default)
         {
+            return await SendChatFileMessageAsync(
+                courseId,
+                senderId,
+                content,
+                fileUrl,
+                fileName,
+                fileSize,
+                mimeType,
+                "FILE",
+                cancellationToken);
+        }
+
+        public async Task<ChatMessageModel?> SendChatImageGroupMessageAsync(
+            int courseId,
+            int senderId,
+            string content,
+            string attachmentJson,
+            string fileName,
+            long totalFileSize,
+            string mimeType,
+            CancellationToken cancellationToken = default)
+        {
+            return await SendChatFileMessageAsync(
+                courseId,
+                senderId,
+                content,
+                attachmentJson,
+                fileName,
+                totalFileSize,
+                mimeType,
+                ChatMessageModel.ImageGroupMessageType,
+                cancellationToken);
+        }
+
+        private async Task<ChatMessageModel?> SendChatFileMessageAsync(
+            int courseId,
+            int senderId,
+            string content,
+            string fileUrl,
+            string fileName,
+            long fileSize,
+            string mimeType,
+            string messageType,
+            CancellationToken cancellationToken)
+        {
             await using var connection = CreateConnection();
             await connection.OpenAsync(cancellationToken);
             EnsureChatSchema(connection);
@@ -3081,7 +3126,7 @@ namespace CourseGuard.Backend.Data
             const string query = @"
                 WITH inserted AS (
                     INSERT INTO MESSAGES (COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, FILE_URL, FILE_NAME, FILE_SIZE, MIME_TYPE, SENT_AT)
-                    VALUES (@course_id, @sender_id, @content, 'FILE', @file_url, @file_name, @file_size, @mime_type, CURRENT_TIMESTAMP)
+                    VALUES (@course_id, @sender_id, @content, @message_type, @file_url, @file_name, @file_size, @mime_type, CURRENT_TIMESTAMP)
                     RETURNING ID, COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, FILE_URL, FILE_NAME, FILE_SIZE, MIME_TYPE, POLL_ID, SENT_AT
                 )
                 SELECT i.ID,
@@ -3108,6 +3153,7 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@course_id", courseId);
             command.Parameters.AddWithValue("@sender_id", senderId);
             command.Parameters.AddWithValue("@content", content ?? string.Empty);
+            command.Parameters.AddWithValue("@message_type", string.IsNullOrWhiteSpace(messageType) ? "FILE" : messageType);
             command.Parameters.AddWithValue("@file_url", fileUrl ?? string.Empty);
             command.Parameters.AddWithValue("@file_name", fileName ?? string.Empty);
             command.Parameters.AddWithValue("@file_size", fileSize);
@@ -3345,7 +3391,7 @@ namespace CourseGuard.Backend.Data
 
         private static ChatMessageModel ReadChatMessage(NpgsqlDataReader reader)
         {
-            return new ChatMessageModel
+            var message = new ChatMessageModel
             {
                 Id = reader.GetInt32(0),
                 CourseId = reader.GetInt32(1),
@@ -3362,6 +3408,13 @@ namespace CourseGuard.Backend.Data
                 SenderAvatar = reader.IsDBNull(12) ? string.Empty : reader.GetString(12),
                 SentAt = reader.GetDateTime(13)
             };
+
+            if (CourseGuard.Frontend.Helpers.ChatImageHelper.TryParseImageAttachments(message.FileUrl, out var attachments))
+            {
+                message.ImageAttachments = attachments;
+            }
+
+            return message;
         }
 
         public async Task<int> CreatePollMessageAsync(int teacherId, int courseId, string question, IReadOnlyList<string> options, CancellationToken cancellationToken = default)

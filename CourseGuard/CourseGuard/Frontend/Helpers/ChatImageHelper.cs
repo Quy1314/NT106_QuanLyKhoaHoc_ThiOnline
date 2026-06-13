@@ -1,21 +1,31 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using CourseGuard.Backend.Models;
 
 namespace CourseGuard.Frontend.Helpers
 {
     public static class ChatImageHelper
     {
         public const long MaxImageSizeBytes = 5 * 1024 * 1024;
+        public const int MaxImageCountPerMessage = 5;
         public const int MaxImageDimension = 1600;
         public const long TargetCompressedBytes = 950 * 1024;
+        public const string ImageGroupMimeType = "application/vnd.courseguard.chat-images+json";
 
         private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png" };
+        private static readonly JsonSerializerOptions AttachmentJsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = false
+        };
 
         public static bool IsSupportedImage(string? filePath)
         {
@@ -31,9 +41,18 @@ namespace CourseGuard.Frontend.Helpers
         public static bool IsImageMessage(string? messageType, string? mimeType, string? fileName, string? fileUrl)
         {
             return string.Equals(messageType, "IMAGE", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(messageType, ChatMessageModel.ImageGroupMessageType, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(mimeType, ImageGroupMimeType, StringComparison.OrdinalIgnoreCase)
                 || (!string.IsNullOrWhiteSpace(mimeType) && mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
                 || IsSupportedImage(fileName)
                 || IsSupportedImage(fileUrl);
+        }
+
+        public static bool IsImageGroupMessage(string? messageType, string? mimeType, string? fileUrl)
+        {
+            return string.Equals(messageType, ChatMessageModel.ImageGroupMessageType, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(mimeType, ImageGroupMimeType, StringComparison.OrdinalIgnoreCase)
+                || TryParseImageAttachments(fileUrl, out var attachments) && attachments.Count > 1;
         }
 
         public static string GetMimeType(string filePath)
@@ -58,6 +77,92 @@ namespace CourseGuard.Frontend.Helpers
             if (length > MaxImageSizeBytes)
             {
                 throw new InvalidOperationException("Ảnh gốc vượt quá giới hạn 5MB. Vui lòng chọn ảnh nhỏ hơn.");
+            }
+        }
+
+        public static List<string> NormalizeAndValidateImagePaths(IEnumerable<string> filePaths)
+        {
+            if (filePaths == null)
+            {
+                return new List<string>();
+            }
+
+            var normalizedPaths = filePaths
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(Path.GetFullPath)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (normalizedPaths.Count > MaxImageCountPerMessage)
+            {
+                throw new InvalidOperationException($"Chỉ được gửi tối đa {MaxImageCountPerMessage} ảnh trong một tin nhắn.");
+            }
+
+            foreach (string path in normalizedPaths)
+            {
+                ValidateImageForUpload(path);
+            }
+
+            return normalizedPaths;
+        }
+
+        public static string FormatFileSize(long bytes)
+        {
+            if (bytes < 1024)
+            {
+                return $"{bytes} B";
+            }
+
+            double kb = bytes / 1024d;
+            if (kb < 1024)
+            {
+                return $"{kb:0.#} KB";
+            }
+
+            return $"{kb / 1024d:0.##} MB";
+        }
+
+        public static string SerializeImageAttachments(IEnumerable<ChatImageAttachmentModel> attachments)
+        {
+            var safeAttachments = (attachments ?? Array.Empty<ChatImageAttachmentModel>())
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.Url))
+                .ToList();
+
+            return JsonSerializer.Serialize(safeAttachments, AttachmentJsonOptions);
+        }
+
+        public static bool TryParseImageAttachments(string? json, out List<ChatImageAttachmentModel> attachments)
+        {
+            attachments = new List<ChatImageAttachmentModel>();
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return false;
+            }
+
+            try
+            {
+                string trimmed = json.Trim();
+                if (!trimmed.StartsWith("[", StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                var parsed = JsonSerializer.Deserialize<List<ChatImageAttachmentModel>>(trimmed, AttachmentJsonOptions);
+                if (parsed == null || parsed.Count == 0)
+                {
+                    return false;
+                }
+
+                attachments = parsed
+                    .Where(item => item != null && !string.IsNullOrWhiteSpace(item.Url))
+                    .ToList();
+
+                return attachments.Count > 0;
+            }
+            catch
+            {
+                attachments = new List<ChatImageAttachmentModel>();
+                return false;
             }
         }
 

@@ -1,9 +1,20 @@
 using System;
+using System.Collections.Generic;
 
 namespace CourseGuard.Backend.Models
 {
+    public class ChatImageAttachmentModel
+    {
+        public string Url { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public long Size { get; set; }
+        public string Mime { get; set; } = string.Empty;
+    }
+
     public class ChatMessageModel
     {
+        public const string ImageGroupMessageType = "IMAGE_GROUP";
+
         public int Id { get; set; }
         public int CourseId { get; set; }
         public int SenderId { get; set; }
@@ -21,6 +32,7 @@ namespace CourseGuard.Backend.Models
         public string DeliveryStatus { get; set; } = "SENT";
         public string DeliveryError { get; set; } = string.Empty;
         public PollModel? Poll { get; set; }
+        public List<ChatImageAttachmentModel> ImageAttachments { get; set; } = new List<ChatImageAttachmentModel>();
         public DateTime CreatedAt
         {
             get => SentAt;

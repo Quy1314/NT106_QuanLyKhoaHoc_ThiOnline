@@ -22,7 +22,9 @@ namespace CourseGuard.Frontend.UserControls.Student
         private readonly System.Windows.Forms.Timer _pollTimer;
         private readonly List<ChatCourseModel> _courses = new();
         private readonly ChatMessageListControl _messageList = new();
+        private readonly ChatImagePreviewStripControl _imagePreviewStrip = new();
         private readonly Button _imageButton = new() { Text = "Ảnh" };
+        private TableLayoutPanel? _messageGrid;
         private int _selectedCourseId;
         private bool _isLoadingMessages;
         private bool _isLoadingOlderMessages;
@@ -63,15 +65,20 @@ namespace CourseGuard.Frontend.UserControls.Student
                 MetaTheme.ShowModernDialog("Chỉ giảng viên mới được đóng vote.", "Vote", MessageBoxButtons.OK, MessageBoxIcon.Information);
             };
 
-            btnSend.Click += async (_, _) => await SendTextAsync();
+            btnSend.Click += async (_, _) => await SendComposerAsync();
             _imageButton.Click += async (_, _) => await PickAndSendImageAsync();
 
             txtInput.KeyDown += (s, e) =>
             {
                 if (e.KeyCode == Keys.Enter)
                 {
+                    if (e.Shift)
+                    {
+                        return;
+                    }
+
                     e.SuppressKeyPress = true;
-                    btnSend.PerformClick();
+                    SendComposerAsync().FireAndForgetSafe(this);
                 }
                 else if (e.Control && e.KeyCode == Keys.O)
                 {
@@ -79,6 +86,8 @@ namespace CourseGuard.Frontend.UserControls.Student
                     PickAndSendImageAsync().FireAndForgetSafe(this);
                 }
             };
+            _imagePreviewStrip.ImagesChanged += (_, _) => UpdateImagePreviewVisibility();
+            _imagePreviewStrip.RequestInputFocus += (_, _) => txtInput.Focus();
 
             Load += async (_, _) =>
             {
@@ -118,10 +127,12 @@ namespace CourseGuard.Frontend.UserControls.Student
                 Dock = DockStyle.Fill,
                 BackColor = Color.Transparent,
                 ColumnCount = 1,
-                RowCount = 3
+                RowCount = 4
             };
+            _messageGrid = messageGrid;
             messageGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 38f));
             messageGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            messageGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 0f));
             messageGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 46f));
             messageGrid.Controls.Add(new Label
             {
@@ -157,12 +168,15 @@ namespace CourseGuard.Frontend.UserControls.Student
             composer.Controls.Add(txtInput, 0, 0);
             composer.Controls.Add(_imageButton, 1, 0);
             composer.Controls.Add(btnSend, 2, 0);
-            messageGrid.Controls.Add(composer, 0, 2);
+            _imagePreviewStrip.Margin = new Padding(0, 8, 0, 0);
+            messageGrid.Controls.Add(_imagePreviewStrip, 0, 2);
+            messageGrid.Controls.Add(composer, 0, 3);
             messageShell.Controls.Add(messageGrid);
 
             content.Controls.Add(contactsCard, 0, 0);
             content.Controls.Add(messageShell, 1, 0);
             root.Controls.Add(content, 0, 1);
+            UpdateImagePreviewVisibility(focusInput: false);
             StudentTabChrome.EnableNaturalFocusClear(this);
         }
 
@@ -184,6 +198,42 @@ namespace CourseGuard.Frontend.UserControls.Student
             txtMessages.Visible = false;
             txtInput.BackColor = AppColors.BgCard;
             txtInput.ForeColor = AppColors.TextPrimary;
+        }
+
+        private void UpdateImagePreviewVisibility(bool focusInput = true)
+        {
+            if (!_uiAlive || IsDisposed)
+            {
+                return;
+            }
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(() => UpdateImagePreviewVisibility(focusInput)));
+                return;
+            }
+
+            if (_messageGrid == null || _messageGrid.IsDisposed)
+            {
+                return;
+            }
+
+            bool hasImages = _imagePreviewStrip.HasImages;
+            _messageGrid.SuspendLayout();
+            try
+            {
+                _imagePreviewStrip.Visible = hasImages;
+                _messageGrid.RowStyles[2].Height = hasImages ? 104f : 0f;
+            }
+            finally
+            {
+                _messageGrid.ResumeLayout(true);
+            }
+
+            if (focusInput && !txtInput.IsDisposed)
+            {
+                txtInput.Focus();
+            }
         }
 
         private void DrawCourseItem(object? sender, DrawItemEventArgs e)
@@ -510,7 +560,19 @@ namespace CourseGuard.Frontend.UserControls.Student
                 return;
             }
 
-            await SendImageAsync(files[0]);
+            AddImagesToPreview(files);
+        }
+
+        private void AddImagesToPreview(IEnumerable<string> files)
+        {
+            try
+            {
+                _imagePreviewStrip.AddImages(files.Where(ChatImageHelper.IsSupportedImage));
+            }
+            catch (Exception ex)
+            {
+                MetaTheme.ShowModernDialog(ex.Message, "Ảnh không hợp lệ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private async Task PickAndSendImageAsync()
@@ -519,18 +581,30 @@ namespace CourseGuard.Frontend.UserControls.Student
             {
                 Title = "Chọn ảnh để gửi",
                 Filter = "Ảnh JPG/PNG|*.jpg;*.jpeg;*.png",
-                Multiselect = false
+                Multiselect = true
             };
 
-            if (dialog.ShowDialog() != DialogResult.OK || string.IsNullOrWhiteSpace(dialog.FileName))
+            if (dialog.ShowDialog() != DialogResult.OK || dialog.FileNames.Length == 0)
             {
                 return;
             }
 
-            await SendImageAsync(dialog.FileName);
+            AddImagesToPreview(dialog.FileNames);
         }
 
-        private async Task SendImageAsync(string imagePath)
+        private async Task SendComposerAsync()
+        {
+            if (_imagePreviewStrip.SelectedImages.Count > 0)
+            {
+                await SendImageGroupAsync(_imagePreviewStrip.SelectedImages);
+            }
+            else
+            {
+                await SendTextAsync();
+            }
+        }
+
+        private async Task SendImageGroupAsync(IReadOnlyList<string> imagePaths)
         {
             if (_isSending)
                 return;
@@ -542,9 +616,10 @@ namespace CourseGuard.Frontend.UserControls.Student
                 return;
             }
 
+            List<string> normalized;
             try
             {
-                ChatImageHelper.ValidateImageForUpload(imagePath);
+                normalized = ChatImageHelper.NormalizeAndValidateImagePaths(imagePaths);
             }
             catch (Exception ex)
             {
@@ -552,10 +627,17 @@ namespace CourseGuard.Frontend.UserControls.Student
                 return;
             }
 
-            string fileName = Path.GetFileName(imagePath);
             string caption = string.IsNullOrWhiteSpace(txtInput.Text) ? string.Empty : txtInput.Text.Trim();
             int courseId = _selectedCourseId;
             int temporaryMessageId = _nextTemporaryMessageId--;
+            var temporaryAttachments = normalized.Select(path => new ChatImageAttachmentModel
+            {
+                Url = path,
+                Name = Path.GetFileName(path),
+                Size = new FileInfo(path).Length,
+                Mime = ChatImageHelper.GetMimeType(path)
+            }).ToList();
+
             var temporaryMessage = new ChatMessageModel
             {
                 Id = temporaryMessageId,
@@ -564,23 +646,25 @@ namespace CourseGuard.Frontend.UserControls.Student
                 SenderName = "Bạn",
                 SenderRole = "Student",
                 Content = caption,
-                MessageType = "FILE",
-                FileUrl = imagePath,
-                FileName = fileName,
-                FileSize = new FileInfo(imagePath).Length,
-                MimeType = ChatImageHelper.GetMimeType(imagePath),
+                MessageType = ChatMessageModel.ImageGroupMessageType,
+                FileUrl = ChatImageHelper.SerializeImageAttachments(temporaryAttachments),
+                FileName = temporaryAttachments.Count == 1 ? temporaryAttachments[0].Name : $"{temporaryAttachments.Count} ảnh",
+                FileSize = temporaryAttachments.Sum(item => item.Size),
+                MimeType = ChatImageHelper.ImageGroupMimeType,
+                ImageAttachments = temporaryAttachments,
                 SentAt = DateTime.Now,
                 DeliveryStatus = "PENDING"
             };
 
             txtInput.Clear();
             _messageList.AppendTemporaryMessage(temporaryMessage, userId);
-            SetComposerSending(true, "Đang xử lý...");
+            SetComposerSending(true, "Đang nén ảnh...");
+            List<CompressedChatImageResult> compressedImages = new();
             try
             {
-                using CompressedChatImageResult compressed = await ChatImageHelper.CompressImageAsync(imagePath);
+                compressedImages = (await Task.WhenAll(normalized.Select(path => ChatImageHelper.CompressImageAsync(path)))).ToList();
                 SetComposerSending(true, "Đang tải ảnh...");
-                ChatMessageModel? sentMessage = await _chatController.SendImageMessageAsync(userId, courseId, compressed.FilePath, compressed.OriginalFileName, caption);
+                ChatMessageModel? sentMessage = await _chatController.SendImageGroupMessageAsync(userId, courseId, compressedImages, caption);
                 if (!_uiAlive || IsDisposed || _messageList.IsDisposed || _selectedCourseId != courseId)
                 {
                     return;
@@ -594,10 +678,24 @@ namespace CourseGuard.Frontend.UserControls.Student
 
                 sentMessage.DeliveryStatus = "SENT";
                 _messageList.ReplaceMessage(temporaryMessageId, sentMessage, userId);
+                _imagePreviewStrip.ClearImages();
+            }
+            catch (Exception ex)
+            {
+                if (_uiAlive && !IsDisposed && !_messageList.IsDisposed)
+                {
+                    _messageList.MarkMessageFailed(temporaryMessageId, ex.Message);
+                }
             }
             finally
             {
+                foreach (CompressedChatImageResult compressed in compressedImages)
+                {
+                    compressed.Dispose();
+                }
+
                 SetComposerSending(false);
+                txtInput.Focus();
             }
         }
 
