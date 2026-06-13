@@ -64,7 +64,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             _panel.SuspendLayout();
             try
             {
-                _panel.Controls.Clear();
+                DisposePanelChildren();
             }
             finally
             {
@@ -89,7 +89,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             _panel.SuspendLayout();
             try
             {
-                _panel.Controls.Clear();
+                DisposePanelChildren();
                 AddBubbleRange(ordered, currentUserId, insertAtTop: false);
             }
             finally
@@ -401,10 +401,21 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             _panel.PerformLayout();
         }
 
+        private void DisposePanelChildren()
+        {
+            var children = _panel.Controls.Cast<Control>().ToArray();
+            _panel.Controls.Clear();
+            foreach (Control child in children)
+            {
+                child.Dispose();
+            }
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
+                DisposePanelChildren();
                 _avatarImageLoader.Dispose();
                 _chatImageLoader.Dispose();
             }

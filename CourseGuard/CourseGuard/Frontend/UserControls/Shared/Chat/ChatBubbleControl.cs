@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -27,6 +29,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
         private readonly ToolTip _timeToolTip = new();
         private InitialsAvatarControl? _avatarControl;
         private Image? _thumbnailImage;
+        private readonly List<Image> _attachmentThumbnails = new();
 
         public int MessageId => _message.Id;
         public DateTime SentAt => _message.SentAt;
@@ -67,6 +70,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
 
         private void BuildLayout()
         {
+            DisposeImageResources();
             Controls.Clear();
 
             var row = new TableLayoutPanel
@@ -104,9 +108,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             string senderName = _isMine ? "Bạn" : _message.SenderName.GetShortName();
             bool isImage = ChatImageHelper.IsImageMessage(_message.MessageType, _message.MimeType, _message.FileName, _message.FileUrl);
             string body = isImage ? BuildImageCaption(_message) : BuildBodyText(_message);
-            Size textSize = TextRenderer.MeasureText(body, AppFonts.Body, new Size(MaxBubbleWidth - 28, int.MaxValue), TextFormatFlags.WordBreak);
-            int bubbleWidth = isImage ? 260 : Math.Min(MaxBubbleWidth, Math.Max(MinBubbleWidth, textSize.Width + 30));
-            int bubbleHeight = isImage ? (string.IsNullOrWhiteSpace(body) ? 198 : 238) : Math.Max(38, textSize.Height + 22);
+            int bubbleWidth = CalculateContentWidth(isImage, body);
 
             var stack = new FlowLayoutPanel
             {
@@ -132,25 +134,36 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
                 Margin = new Padding(0, 0, 0, 2)
             };
 
-            Control bubble = isImage
-                ? CreateImageBubble(bubbleWidth, bubbleHeight)
-                : new RoundedBubblePanel(_isMine, body)
-                {
-                    Width = bubbleWidth,
-                    Height = bubbleHeight,
-                    Margin = Padding.Empty,
-                    Padding = new Padding(14, 10, 14, 10),
-                    Font = AppFonts.Body
-                };
-
             string tooltip = _message.SentAt.ToString("HH:mm dd/MM/yyyy");
             _timeToolTip.SetToolTip(this, tooltip);
             _timeToolTip.SetToolTip(stack, tooltip);
             _timeToolTip.SetToolTip(nameLabel, tooltip);
-            _timeToolTip.SetToolTip(bubble, tooltip);
 
             stack.Controls.Add(nameLabel);
-            stack.Controls.Add(bubble);
+
+            if (isImage)
+            {
+                Control imageSurface = CreateImageSurface(bubbleWidth);
+                _timeToolTip.SetToolTip(imageSurface, tooltip);
+                stack.Controls.Add(imageSurface);
+
+                if (!string.IsNullOrWhiteSpace(body))
+                {
+                    int captionWidth = Math.Min(bubbleWidth, CalculateContentWidth(isImage: false, body));
+                    Control textBubble = CreateTextBubble(body, captionWidth, CalculateTextBubbleHeight(body, captionWidth));
+                    textBubble.Margin = _isMine
+                        ? new Padding(Math.Max(0, bubbleWidth - captionWidth), 6, 0, 0)
+                        : new Padding(0, 6, 0, 0);
+                    _timeToolTip.SetToolTip(textBubble, tooltip);
+                    stack.Controls.Add(textBubble);
+                }
+            }
+            else
+            {
+                Control bubble = CreateTextBubble(body, bubbleWidth, CalculateTextBubbleHeight(body, bubbleWidth));
+                _timeToolTip.SetToolTip(bubble, tooltip);
+                stack.Controls.Add(bubble);
+            }
 
             Label? statusLabel = CreateStatusLabel(bubbleWidth);
             if (statusLabel != null)
@@ -159,6 +172,36 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             }
 
             return stack;
+        }
+
+        private int CalculateContentWidth(bool isImage, string body)
+        {
+            if (isImage)
+            {
+                int attachmentCount = Math.Max(1, GetImageAttachments().Count);
+                return attachmentCount <= 1 ? 260 : 336;
+            }
+
+            Size textSize = TextRenderer.MeasureText(body, AppFonts.Body, new Size(MaxBubbleWidth - 28, int.MaxValue), TextFormatFlags.WordBreak);
+            return Math.Min(MaxBubbleWidth, Math.Max(MinBubbleWidth, textSize.Width + 30));
+        }
+
+        private int CalculateTextBubbleHeight(string body, int bubbleWidth)
+        {
+            Size textSize = TextRenderer.MeasureText(body, AppFonts.Body, new Size(Math.Max(80, bubbleWidth - 28), int.MaxValue), TextFormatFlags.WordBreak);
+            return Math.Max(38, textSize.Height + 22);
+        }
+
+        private Control CreateTextBubble(string body, int width, int height)
+        {
+            return new RoundedBubblePanel(_isMine, body)
+            {
+                Width = width,
+                Height = height,
+                Margin = Padding.Empty,
+                Padding = new Padding(14, 10, 14, 10),
+                Font = AppFonts.Body
+            };
         }
 
         private Label? CreateStatusLabel(int bubbleWidth)
@@ -205,68 +248,82 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             return string.IsNullOrWhiteSpace(message.Content) ? string.Empty : message.Content.Trim();
         }
 
-        private Control CreateImageBubble(int width, int height)
+        private Control CreateImageSurface(int width)
         {
-            var bubble = new Panel
+            return ChatImageHelper.IsImageGroupMessage(_message.MessageType, _message.MimeType, _message.FileUrl)
+                ? CreateImageGroupSurface(width)
+                : CreateSingleImageSurface(width);
+        }
+
+        private Control CreateSingleImageSurface(int width)
+        {
+            int imageHeight = 174;
+            var picture = CreateRoundedImageBox(width, imageHeight);
+            picture.Margin = Padding.Empty;
+
+            EventHandler openPreview = (_, _) => OpenImagePreview();
+            picture.Click += openPreview;
+            _ = LoadThumbnailIntoAsync(picture, _message.FileUrl, new Size(width, imageHeight), isGroupAttachment: false);
+            return picture;
+        }
+
+        private Control CreateImageGroupSurface(int width)
+        {
+            var attachments = GetImageAttachments();
+            int count = Math.Max(1, attachments.Count);
+            int columns = count <= 1 ? 1 : Math.Min(3, count);
+            int gap = count <= 1 ? 0 : 6;
+            int thumbSize = count <= 1 ? 214 : Math.Max(72, (width - gap * columns) / columns);
+            int rows = count <= 1 ? 1 : (int)Math.Ceiling(count / (double)columns);
+
+            var grid = new FlowLayoutPanel
+            {
+                Width = width,
+                Height = rows * thumbSize + Math.Max(0, rows - 1) * gap,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                AutoScroll = false,
+                BackColor = AppColors.BgCard,
+                Padding = Padding.Empty,
+                Margin = Padding.Empty
+            };
+
+            foreach (var attachment in attachments)
+            {
+                var picture = CreateRoundedImageBox(thumbSize, thumbSize);
+                picture.Margin = new Padding(0, 0, gap, gap);
+
+                string imagePath = attachment.Url;
+                string imageName = string.IsNullOrWhiteSpace(attachment.Name) ? "Ảnh chat" : attachment.Name;
+                picture.Click += (_, _) => OpenImagePreview(imagePath, imageName);
+                grid.Controls.Add(picture);
+                _ = LoadThumbnailIntoAsync(picture, imagePath, new Size(thumbSize, thumbSize), isGroupAttachment: true);
+            }
+
+            return grid;
+        }
+
+        private RoundedImageBox CreateRoundedImageBox(int width, int height)
+        {
+            var picture = new RoundedImageBox
             {
                 Width = width,
                 Height = height,
-                Margin = Padding.Empty,
-                Padding = new Padding(8),
-                BackColor = _isMine ? AppColors.AccentBlue : Color.White,
+                SizeMode = PictureBoxSizeMode.Zoom,
+                BackColor = _isMine ? Color.FromArgb(235, 242, 255) : AppColors.BgInput,
                 Cursor = Cursors.Hand
             };
+            picture.SetPlaceholderText("Đang tải ảnh...");
 
-            var picture = new PictureBox
-            {
-                Width = width - 16,
-                Height = 174,
-                SizeMode = PictureBoxSizeMode.CenterImage,
-                BackColor = _isMine ? Color.FromArgb(235, 242, 255) : AppColors.BgInput,
-                Image = null,
-                Cursor = Cursors.Hand,
-                Dock = DockStyle.Top
-            };
-            picture.Paint += (_, e) =>
-            {
-                if (picture.Image != null)
-                {
-                    return;
-                }
-
-                TextRenderer.DrawText(e.Graphics, "Đang tải ảnh...", AppFonts.Caption, picture.ClientRectangle, AppColors.TextSecondary, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-            };
-
-            bubble.Controls.Add(picture);
-            string caption = BuildImageCaption(_message);
-            if (!string.IsNullOrWhiteSpace(caption))
-            {
-                var captionLabel = new Label
-                {
-                    Dock = DockStyle.Bottom,
-                    Height = 40,
-                    Text = caption,
-                    Font = AppFonts.Body,
-                    ForeColor = _isMine ? Color.White : AppColors.TextPrimary,
-                    BackColor = Color.Transparent,
-                    AutoEllipsis = true
-                };
-                bubble.Controls.Add(captionLabel);
-            }
-
-            EventHandler openPreview = (_, _) => OpenImagePreview();
-            bubble.Click += openPreview;
-            picture.Click += openPreview;
-            _ = LoadThumbnailIntoAsync(picture);
-            return bubble;
+            return picture;
         }
 
-        private async Task LoadThumbnailIntoAsync(PictureBox picture)
+        private async Task LoadThumbnailIntoAsync(PictureBox picture, string imagePath, Size targetSize, bool isGroupAttachment)
         {
             Image? thumbnail = null;
             try
             {
-                thumbnail = await _chatImageLoader.LoadThumbnailAsync(_message.FileUrl, new Size(244, 174), _imageLoadCts.Token);
+                thumbnail = await _chatImageLoader.LoadThumbnailAsync(imagePath, targetSize, _imageLoadCts.Token);
                 if (thumbnail == null || IsDisposed || picture.IsDisposed)
                 {
                     thumbnail?.Dispose();
@@ -275,11 +332,18 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
 
                 if (picture.InvokeRequired)
                 {
-                    picture.BeginInvoke(new Action(() => ApplyThumbnail(picture, thumbnail)));
+                    try
+                    {
+                        picture.BeginInvoke(new Action(() => ApplyThumbnail(picture, thumbnail, isGroupAttachment)));
+                    }
+                    catch
+                    {
+                        thumbnail.Dispose();
+                    }
                 }
                 else
                 {
-                    ApplyThumbnail(picture, thumbnail);
+                    ApplyThumbnail(picture, thumbnail, isGroupAttachment);
                 }
             }
             catch (OperationCanceledException)
@@ -291,37 +355,105 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
                 thumbnail?.Dispose();
                 if (!picture.IsDisposed)
                 {
-                    picture.Invalidate();
+                    if (picture.InvokeRequired)
+                    {
+                        try { picture.BeginInvoke(new Action(picture.Invalidate)); } catch { }
+                    }
+                    else
+                    {
+                        picture.Invalidate();
+                    }
                 }
             }
         }
 
-        private void ApplyThumbnail(PictureBox picture, Image thumbnail)
+        private void ApplyThumbnail(PictureBox picture, Image thumbnail, bool isGroupAttachment)
         {
-            if (IsDisposed || picture.IsDisposed)
+            if (_imageLoadCts.IsCancellationRequested || IsDisposed || picture.IsDisposed)
             {
                 thumbnail.Dispose();
                 return;
             }
 
-            _thumbnailImage?.Dispose();
-            _thumbnailImage = thumbnail;
+            Image? oldImage = picture.Image;
             picture.SizeMode = PictureBoxSizeMode.Zoom;
-            picture.Image = _thumbnailImage;
+            picture.Image = thumbnail;
+            oldImage?.Dispose();
+
+            if (isGroupAttachment)
+            {
+                _attachmentThumbnails.Add(thumbnail);
+            }
+            else
+            {
+                _thumbnailImage?.Dispose();
+                _thumbnailImage = thumbnail;
+            }
         }
 
         private void OpenImagePreview()
         {
-            if (string.IsNullOrWhiteSpace(_message.FileUrl) || !File.Exists(_message.FileUrl))
+            OpenImagePreview(_message.FileUrl, string.IsNullOrWhiteSpace(_message.FileName) ? "Ảnh chat" : _message.FileName);
+        }
+
+        private void OpenImagePreview(string imagePath, string title)
+        {
+            if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath))
             {
                 MessageBox.Show("Không tìm thấy ảnh để xem trước.", "Ảnh", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            using (var dialog = new ImagePreviewDialog(_message.FileUrl, string.IsNullOrWhiteSpace(_message.FileName) ? "Ảnh chat" : _message.FileName))
+            using (var dialog = new ImagePreviewDialog(imagePath, string.IsNullOrWhiteSpace(title) ? "Ảnh chat" : title))
             {
                 dialog.ShowDialog(this);
             }
+        }
+
+        private List<ChatImageAttachmentModel> GetImageAttachments()
+        {
+            if (_message.ImageAttachments != null && _message.ImageAttachments.Count > 0)
+            {
+                return _message.ImageAttachments;
+            }
+
+            if (ChatImageHelper.TryParseImageAttachments(_message.FileUrl, out var attachments))
+            {
+                return attachments;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_message.FileUrl))
+            {
+                return new List<ChatImageAttachmentModel>
+                {
+                    new ChatImageAttachmentModel
+                    {
+                        Url = _message.FileUrl,
+                        Name = _message.FileName,
+                        Size = _message.FileSize,
+                        Mime = _message.MimeType
+                    }
+                };
+            }
+
+            return new List<ChatImageAttachmentModel>();
+        }
+
+        private int CalculateImageSurfaceHeight()
+        {
+            int count = Math.Max(1, GetImageAttachments().Count);
+            bool isImageGroup = ChatImageHelper.IsImageGroupMessage(_message.MessageType, _message.MimeType, _message.FileUrl);
+            if (count <= 1)
+            {
+                return isImageGroup ? 214 : 174;
+            }
+
+            int width = CalculateContentWidth(isImage: true, body: string.Empty);
+            int columns = Math.Min(3, count);
+            int gap = 6;
+            int thumbSize = Math.Max(72, (width - gap * columns) / columns);
+            int rows = (int)Math.Ceiling(count / (double)columns);
+            return rows * thumbSize + Math.Max(0, rows - 1) * gap;
         }
 
         private Control CreateLeftHost(Control content)
@@ -377,7 +509,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
                 _imageLoadCts.Cancel();
                 _avatarLoadCts.Dispose();
                 _imageLoadCts.Dispose();
-                _thumbnailImage?.Dispose();
+                DisposeImageResources();
                 _timeToolTip.Dispose();
             }
 
@@ -392,13 +524,68 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             if (isImage)
             {
                 string caption = BuildImageCaption(_message);
-                int imageBubbleHeight = string.IsNullOrWhiteSpace(caption) ? 198 : 238;
-                return Math.Max(238, 18 + imageBubbleHeight + statusHeight + 18);
+                int contentWidth = CalculateContentWidth(isImage: true, caption);
+                int captionHeight = string.IsNullOrWhiteSpace(caption) ? 0 : CalculateTextBubbleHeight(caption, contentWidth) + 6;
+                return Math.Max(218, 18 + CalculateImageSurfaceHeight() + captionHeight + statusHeight + 18);
             }
 
             int available = Math.Min(MaxBubbleWidth - 28, Math.Max(120, safeWidth - 160));
             Size textSize = TextRenderer.MeasureText(BuildBodyText(_message), AppFonts.Body, new Size(available, int.MaxValue), TextFormatFlags.WordBreak);
             return Math.Max(58, textSize.Height + 48 + statusHeight);
+        }
+
+        private void DisposeImageResources()
+        {
+            _thumbnailImage?.Dispose();
+            _thumbnailImage = null;
+            foreach (Image image in _attachmentThumbnails)
+            {
+                image.Dispose();
+            }
+
+            _attachmentThumbnails.Clear();
+        }
+
+        private sealed class RoundedImageBox : PictureBox
+        {
+            private string _placeholderText = "Ảnh";
+
+            public RoundedImageBox()
+            {
+                DoubleBuffered = true;
+                SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint, true);
+            }
+
+            public void SetPlaceholderText(string placeholderText)
+            {
+                _placeholderText = string.IsNullOrWhiteSpace(placeholderText) ? "Ảnh" : placeholderText;
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                Rectangle rect = new(0, 0, Width - 1, Height - 1);
+                using GraphicsPath path = CreateRoundRect(rect, 18);
+                using SolidBrush background = new(BackColor);
+                e.Graphics.FillPath(background, path);
+                e.Graphics.SetClip(path);
+
+                if (Image != null)
+                {
+                    Rectangle imageRect = GetZoomRectangle(Image.Size, ClientRectangle);
+                    e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    e.Graphics.DrawImage(Image, imageRect);
+                }
+                else
+                {
+                    TextRenderer.DrawText(e.Graphics, _placeholderText, AppFonts.Caption, ClientRectangle, AppColors.TextSecondary, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                }
+
+                e.Graphics.ResetClip();
+                using Pen border = new(Color.FromArgb(40, AppColors.BorderStrong));
+                e.Graphics.DrawPath(border, path);
+            }
         }
 
         private sealed class RoundedBubblePanel : Panel
@@ -513,6 +700,19 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             float scale = Math.Max((float)target.Width / sourceSize.Width, (float)target.Height / sourceSize.Height);
             int width = (int)Math.Ceiling(sourceSize.Width * scale);
             int height = (int)Math.Ceiling(sourceSize.Height * scale);
+            return new Rectangle(target.Left + (target.Width - width) / 2, target.Top + (target.Height - height) / 2, width, height);
+        }
+
+        private static Rectangle GetZoomRectangle(Size sourceSize, Rectangle target)
+        {
+            if (sourceSize.Width <= 0 || sourceSize.Height <= 0 || target.Width <= 0 || target.Height <= 0)
+            {
+                return target;
+            }
+
+            float scale = Math.Min((float)target.Width / sourceSize.Width, (float)target.Height / sourceSize.Height);
+            int width = Math.Max(1, (int)Math.Round(sourceSize.Width * scale));
+            int height = Math.Max(1, (int)Math.Round(sourceSize.Height * scale));
             return new Rectangle(target.Left + (target.Width - width) / 2, target.Top + (target.Height - height) / 2, width, height);
         }
 
