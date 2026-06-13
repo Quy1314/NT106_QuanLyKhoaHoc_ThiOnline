@@ -26,7 +26,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private readonly ChatMessageListControl _messageList = new();
         private readonly TextBox _input = new();
         private readonly Button _send = TeacherTabChrome.PrimaryButton("Gửi");
-        private readonly Button _attach = TeacherTabChrome.SecondaryButton("File");
+        private readonly Button _attach = TeacherTabChrome.SecondaryButton("Ảnh");
         private readonly Button _createPoll = TeacherTabChrome.SecondaryButton("Vote");
         private int _selectedCourseId;
         private bool _isLoadingMessages;
@@ -42,6 +42,13 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             InitializeComponent();
             BuildLayout();
             ApplyStyles();
+            AllowDrop = true;
+            _messageList.AllowDrop = true;
+
+            DragEnter += OnChatDragEnter;
+            DragDrop += async (_, e) => await OnChatDragDropAsync(e);
+            _messageList.DragEnter += OnChatDragEnter;
+            _messageList.DragDrop += async (_, e) => await OnChatDragDropAsync(e);
 
             _courseList.SelectedIndexChanged += async (_, _) => await OnCourseChangedAsync();
             _messageList.TopReached += async (_, _) => await LoadOlderMessagesAsync();
@@ -49,7 +56,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _messageList.PollCloseRequested += async (_, args) => await ClosePollAsync(args);
             _courseList.DrawItem += DrawCourseItem;
             _send.Click += async (_, _) => await SendTextAsync();
-            _attach.Click += async (_, _) => await SendFileAsync();
+            _attach.Click += async (_, _) => await PickAndSendImageAsync();
             _createPoll.Click += async (_, _) => await CreatePollAsync();
             _input.KeyDown += (sender, e) =>
             {
@@ -61,7 +68,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 else if (e.Control && e.KeyCode == Keys.O)
                 {
                     e.SuppressKeyPress = true;
-                    SendFileAsync().FireAndForgetSafe(this);
+                    PickAndSendImageAsync().FireAndForgetSafe(this);
                 }
             };
 
@@ -407,7 +414,50 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             }
         }
 
-        private async Task SendFileAsync()
+        private void OnChatDragEnter(object? sender, DragEventArgs e)
+        {
+            if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true)
+            {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
+                e.Effect = files.Length > 0 && ChatImageHelper.IsSupportedImage(files[0]) ? DragDropEffects.Copy : DragDropEffects.None;
+                return;
+            }
+
+            e.Effect = DragDropEffects.None;
+        }
+
+        private async Task OnChatDragDropAsync(DragEventArgs e)
+        {
+            if (e.Data?.GetDataPresent(DataFormats.FileDrop) != true)
+            {
+                return;
+            }
+
+            string[] files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
+            if (files.Length == 0)
+            {
+                return;
+            }
+
+            await SendImageAsync(files[0]);
+        }
+
+        private async Task PickAndSendImageAsync()
+        {
+            using var dialog = new OpenFileDialog
+            {
+                Title = "Chọn ảnh để gửi",
+                Filter = "Ảnh JPG/PNG|*.jpg;*.jpeg;*.png",
+                Multiselect = false
+            };
+
+            if (dialog.ShowDialog(FindForm()) != DialogResult.OK || string.IsNullOrWhiteSpace(dialog.FileName))
+                return;
+
+            await SendImageAsync(dialog.FileName);
+        }
+
+        private async Task SendImageAsync(string imagePath)
         {
             if (_isSending)
                 return;
@@ -418,30 +468,58 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 return;
             }
 
-            using var dialog = new OpenFileDialog
-            {
-                Title = "Chọn file để gửi",
-                Filter = "Supported files|*.pdf;*.doc;*.docx;*.xls;*.xlsx;*.ppt;*.pptx;*.png;*.jpg;*.jpeg;*.txt;*.zip;*.rar|All files|*.*"
-            };
-
-            if (dialog.ShowDialog(FindForm()) != DialogResult.OK || string.IsNullOrWhiteSpace(dialog.FileName))
-                return;
-
-            string fileName = Path.GetFileName(dialog.FileName);
-            string caption = $"Gửi file: {fileName}";
-            SetComposerSending(true);
-            AppendLocalSendStatus("FILE", "PENDING", fileName);
             try
             {
-                bool sent = await Task.Run(() => _chat.SendFileMessage(_teacherId, _selectedCourseId, dialog.FileName, caption));
-                if (!sent)
+                ChatImageHelper.ValidateImageForUpload(imagePath);
+            }
+            catch (Exception ex)
+            {
+                MetaTheme.ShowModernDialog(ex.Message, "Ảnh không hợp lệ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string fileName = Path.GetFileName(imagePath);
+            string caption = string.IsNullOrWhiteSpace(_input.Text) ? string.Empty : _input.Text.Trim();
+            int courseId = _selectedCourseId;
+            int temporaryMessageId = _nextTemporaryMessageId--;
+            var temporaryMessage = new ChatMessageModel
+            {
+                Id = temporaryMessageId,
+                CourseId = courseId,
+                SenderId = _teacherId,
+                SenderName = "Bạn",
+                SenderRole = "Teacher",
+                Content = caption,
+                MessageType = "FILE",
+                FileUrl = imagePath,
+                FileName = fileName,
+                FileSize = new FileInfo(imagePath).Length,
+                MimeType = ChatImageHelper.GetMimeType(imagePath),
+                SentAt = DateTime.Now,
+                DeliveryStatus = "PENDING"
+            };
+
+            _input.Clear();
+            _messageList.AppendTemporaryMessage(temporaryMessage, _teacherId);
+            SetComposerSending(true, "Đang xử lý...");
+            try
+            {
+                using CompressedChatImageResult compressed = await ChatImageHelper.CompressImageAsync(imagePath);
+                SetComposerSending(true, "Đang tải ảnh...");
+                ChatMessageModel? sentMessage = await _chat.SendImageMessageAsync(_teacherId, courseId, compressed.FilePath, compressed.OriginalFileName, caption);
+                if (!_uiAlive || IsDisposed || _messageList.IsDisposed || _selectedCourseId != courseId)
                 {
-                    AppendLocalSendStatus("FILE", "FAILED", fileName, _chat.LastErrorMessage);
-                    MetaTheme.ShowModernDialog(_chat.LastErrorMessage, "Gửi file thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
-                await RefreshMessagesAsync();
+                if (sentMessage == null)
+                {
+                    _messageList.MarkMessageFailed(temporaryMessageId, _chat.LastErrorMessage);
+                    return;
+                }
+
+                sentMessage.DeliveryStatus = "SENT";
+                _messageList.ReplaceMessage(temporaryMessageId, sentMessage, _teacherId);
             }
             finally
             {
@@ -615,13 +693,14 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             MetaTheme.ShowModernDialog(errorMessage ?? "Gửi tin nhắn thất bại.", "Chat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
-        private void SetComposerSending(bool sending)
+        private void SetComposerSending(bool sending, string? statusText = null)
         {
             _isSending = sending;
             _send.Enabled = !sending;
             _attach.Enabled = !sending;
             _createPoll.Enabled = !sending;
             _input.Enabled = !sending;
+            _attach.Text = sending ? (statusText ?? "Đang gửi...") : "Ảnh";
         }
 
 
