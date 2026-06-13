@@ -20,17 +20,18 @@ namespace CourseGuard.Frontend.UserControls.Student
         private readonly NotificationRepository _notificationRepository = new();
 
         private TableLayoutPanel _rootGrid = null!;
-        private TableLayoutPanel _statsGrid = null!;
+        private FlowLayoutPanel _indicatorStrip = null!;
         private TableLayoutPanel _contentGrid = null!;
+        private FlowLayoutPanel _nextActionList = null!;
+        private RoundedPanel _actionPanel = null!;
+        private RoundedPanel _contextPanel = null!;
         private RoundedPanel _noticePanel = null!;
         private RoundedPanel _activityPanel = null!;
         private RoundedPanel _noticeBody = null!;
         private Label _noticeEmptyLabel = null!;
         private FlowLayoutPanel _activityList = null!;
-        private StatCard _courseCard = null!;
-        private StatCard _examCard = null!;
-        private StatCard _notificationCard = null!;
-        private StatCard _averageScoreCard = null!;
+
+        public event EventHandler<string>? ActionNavigationRequested;
 
         public UC_StudentDashboard()
         {
@@ -77,6 +78,18 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             List<RecentUserActivityModel> logs = ActivityDisplayHelper.SafeList(() => _dbContext.GetRecentUserActivitiesByUser(userId, 8));
             List<EnrollmentModel> enrollments = ActivityDisplayHelper.SafeList(() => _dbContext.GetEnrollmentsByStudent(userId));
+            DateTime now = DateTime.Now;
+            DateTime tomorrow = now.AddHours(24);
+            List<DeadlineReminderItem> urgentDeadlines = ActivityDisplayHelper.SafeList(() => _dbContext.GetUpcomingDeadlines(userId, now, tomorrow));
+            List<StudentScheduleItemModel> todayClasses = ActivityDisplayHelper.SafeList(() => _dbContext.GetStudentOnlineSessions(userId)
+                .Where(s => s.StartTime.HasValue && s.StartTime.Value.Date == now.Date)
+                .OrderBy(s => s.StartTime)
+                .ToList());
+            int unreadChatCount = ActivityDisplayHelper.SafeMetricCount(() => _dbContext.GetUnreadChatCount(userId));
+            bool hasOpenExam = ActivityDisplayHelper.SafeMetricCount(() => _dbContext.CountOpenExamsForStudent(userId)) > 0;
+            bool hasDeadlineSoon = urgentDeadlines.Count > 0;
+            bool hasClassToday = todayClasses.Count > 0;
+            bool hasUnreadCommunication = unreadChatCount + unreadNotificationCount > 0;
 
             List<ActivityRow> activities = logs
                 .Select(ToActivityRow)
@@ -93,7 +106,22 @@ namespace CourseGuard.Frontend.UserControls.Student
                 NotificationCount = unreadNotificationCount,
                 AverageScore = averageScore,
                 Notifications = notifications,
-                Activities = activities
+                Activities = activities,
+                NextActions = OverviewActionBuilder.BuildStudentActions(
+                    hasOpenExam,
+                    hasDeadlineSoon,
+                    hasClassToday,
+                    unreadChatCount > 0,
+                    unreadNotificationCount > 0).ToList(),
+                Indicators = new List<OverviewIndicatorItem>
+                {
+                    new() { Label = "Việc gấp", Value = (urgentDeadlines.Count + (hasOpenExam ? 1 : 0)).ToString(CultureInfo.InvariantCulture), Tone = hasOpenExam || hasDeadlineSoon ? "Warning" : "Neutral" },
+                    new() { Label = "Tin mới", Value = (unreadChatCount + unreadNotificationCount).ToString(CultureInfo.InvariantCulture), Tone = hasUnreadCommunication ? "Warning" : "Neutral" },
+                    new() { Label = "Lớp hôm nay", Value = todayClasses.FirstOrDefault()?.StartTime?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "-", Tone = hasClassToday ? "Neutral" : "Muted" }
+                },
+                NearestDeadline = urgentDeadlines.OrderBy(d => d.DueAt).FirstOrDefault(),
+                NextClassToday = todayClasses.FirstOrDefault(),
+                UnreadCommunicationCount = unreadChatCount + unreadNotificationCount
             };
         }
 
@@ -115,7 +143,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             };
             _rootGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             _rootGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 112f));
-            _rootGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 168f));
+            _rootGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 64f));
             _rootGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
             lblTitle.AutoSize = false;
@@ -126,22 +154,15 @@ namespace CourseGuard.Frontend.UserControls.Student
             lblTitle.Font = MetaTheme.Fonts.HeadingLg();
             lblTitle.ForeColor = AppColors.TextPrimary;
 
-            _statsGrid = new TableLayoutPanel
+            _indicatorStrip = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 4,
-                RowCount = 1,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
                 BackColor = AppColors.BgBase,
-                Margin = new Padding(0, 8, 0, 16)
+                Margin = new Padding(0, 4, 0, 12),
+                Padding = new Padding(0)
             };
-            for (int i = 0; i < 4; i++)
-                _statsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
-            _statsGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-
-            _courseCard = AddStatCard(0, "Khóa học", "0", "course", "Đang tham gia");
-            _examCard = AddStatCard(1, "Bài thi", "0", "exam", "Đang/sắp mở");
-            _notificationCard = AddStatCard(2, "Thông báo", "0", "notice", "Chưa đọc");
-            _averageScoreCard = AddStatCard(3, "Điểm TB", "N/A", "score", "Bài đã chấm");
 
             _contentGrid = new TableLayoutPanel
             {
@@ -155,21 +176,21 @@ namespace CourseGuard.Frontend.UserControls.Student
             _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32f));
             _contentGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
-            _noticePanel = CreatePanelCard();
-            _noticePanel.Margin = new Padding(0, 0, 12, 0);
-            BuildNoticePanel();
+            _actionPanel = CreatePanelCard();
+            _actionPanel.Margin = new Padding(0, 0, 12, 0);
+            BuildActionPanel();
 
-            _activityPanel = CreatePanelCard();
-            _activityPanel.Margin = new Padding(12, 0, 0, 0);
-            BuildActivityPanel();
+            _contextPanel = CreatePanelCard();
+            _contextPanel.Margin = new Padding(12, 0, 0, 0);
+            BuildContextPanel();
 
-            _contentGrid.Controls.Add(_noticePanel, 0, 0);
-            _contentGrid.Controls.Add(_activityPanel, 1, 0);
+            _contentGrid.Controls.Add(_actionPanel, 0, 0);
+            _contentGrid.Controls.Add(_contextPanel, 1, 0);
 
             _rootGrid.Controls.Add(StudentTabChrome.CreateHeader(
                 "Tổng quan cá nhân",
-                "Theo dõi khóa học đang tham gia, bài kiểm tra, thông báo và hoạt động gần đây."), 0, 0);
-            _rootGrid.Controls.Add(_statsGrid, 0, 1);
+                "Ưu tiên việc cần làm tiếp theo, rồi xem nhanh thông báo và hoạt động gần đây."), 0, 0);
+            _rootGrid.Controls.Add(_indicatorStrip, 0, 1);
             _rootGrid.Controls.Add(_contentGrid, 0, 2);
             Controls.Add(_rootGrid);
 
@@ -178,24 +199,64 @@ namespace CourseGuard.Frontend.UserControls.Student
             ResumeLayout(true);
         }
 
-        private StatCard AddStatCard(int column, string title, string value, string icon, string caption)
+        private void BuildActionPanel()
         {
-            var card = new StatCard
+            _actionPanel.Padding = new Padding(18);
+
+            var panelGrid = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                Margin = new Padding(8, 0, 8, 0),
-                Title = title,
-                Value = value,
-                IconChar = icon,
-                TrendPercent = caption,
-                ShowStatusArrow = false,
-                StatusTone = StatCardStatusTone.Neutral,
-                Caption = string.Empty,
-                MiniChartValues = null
+                ColumnCount = 1,
+                RowCount = 2,
+                BackColor = Color.Transparent
             };
+            panelGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            panelGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42f));
+            panelGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            panelGrid.Controls.Add(CreateSectionTitle("Việc cần làm tiếp theo"), 0, 0);
 
-            _statsGrid.Controls.Add(card, column, 0);
-            return card;
+            _nextActionList = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoScroll = true,
+                BackColor = Color.Transparent,
+                Padding = new Padding(0)
+            };
+            _nextActionList.Resize += (_, _) => ResizeActionItems();
+
+            panelGrid.Controls.Add(_nextActionList, 0, 1);
+            _actionPanel.Controls.Add(panelGrid);
+        }
+
+        private void BuildContextPanel()
+        {
+            _contextPanel.Padding = new Padding(0);
+
+            var contextGrid = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                BackColor = Color.Transparent,
+                Padding = Padding.Empty
+            };
+            contextGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            contextGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 56f));
+            contextGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 44f));
+
+            _noticePanel = CreatePanelCard();
+            _noticePanel.Margin = new Padding(0, 0, 0, 10);
+            BuildNoticePanel();
+
+            _activityPanel = CreatePanelCard();
+            _activityPanel.Margin = new Padding(0, 10, 0, 0);
+            BuildActivityPanel();
+
+            contextGrid.Controls.Add(_noticePanel, 0, 0);
+            contextGrid.Controls.Add(_activityPanel, 0, 1);
+            _contextPanel.Controls.Add(contextGrid);
         }
 
         private void BuildNoticePanel()
@@ -283,39 +344,216 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private void ApplyDashboardData(DashboardData data)
         {
-            _courseCard.Value = data.CourseCount.ToString(CultureInfo.InvariantCulture);
-            ApplyCardState(_courseCard, "Đang tham gia", data.CourseCount > 0 ? StatCardStatusTone.Positive : StatCardStatusTone.Neutral);
-
-            _examCard.Value = data.ExamCount.ToString(CultureInfo.InvariantCulture);
-            string examStatus = data.ExamCount <= 0
-                ? "Không có bài mở"
-                : data.HasOpenOrUpcomingExams ? "Sắp tới" : "Đã làm";
-            ApplyCardState(_examCard, examStatus, data.HasOpenOrUpcomingExams ? StatCardStatusTone.Warning : data.ExamCount > 0 ? StatCardStatusTone.Positive : StatCardStatusTone.Neutral);
-
-            _notificationCard.Value = data.NotificationCount.ToString(CultureInfo.InvariantCulture);
-            ApplyCardState(_notificationCard,
-                data.NotificationCount > 0 ? $"Có {data.NotificationCount} thông báo mới" : "Không có thông báo mới",
-                data.NotificationCount > 0 ? StatCardStatusTone.Warning : StatCardStatusTone.Neutral);
-
-            _averageScoreCard.Value = data.AverageScore.HasValue
-                ? data.AverageScore.Value.ToString("0.0", CultureInfo.InvariantCulture)
-                : "N/A";
-            ApplyCardState(_averageScoreCard,
-                data.AverageScore.HasValue ? "Bài đã chấm" : "Chưa có điểm",
-                data.AverageScore.HasValue ? StatCardStatusTone.Positive : StatCardStatusTone.Neutral);
-
+            BindIndicators(data.Indicators);
+            BindNextActions(data.NextActions);
             BindNotifications(data);
             BindActivities(data);
             ApplyAcademicStyle();
         }
 
-        private static void ApplyCardState(StatCard card, string statusText, StatCardStatusTone tone)
+        private void BindIndicators(IEnumerable<OverviewIndicatorItem> indicators)
         {
-            card.TrendPercent = statusText;
-            card.ShowStatusArrow = false;
-            card.StatusTone = tone;
-            card.Caption = string.Empty;
-            card.MiniChartValues = null;
+            _indicatorStrip.Controls.Clear();
+            foreach (OverviewIndicatorItem item in indicators)
+                _indicatorStrip.Controls.Add(CreateIndicatorPill(item));
+        }
+
+        private Control CreateIndicatorPill(OverviewIndicatorItem item)
+        {
+            var pill = new RoundedPanel
+            {
+                Width = 180,
+                Height = 44,
+                CornerRadius = 10,
+                FillColor = AppColors.BgCard,
+                BorderColor = GetToneColor(item.Tone),
+                Margin = new Padding(0, 0, 10, 0),
+                Padding = new Padding(12, 6, 12, 6)
+            };
+            pill.Controls.Add(new Label
+            {
+                Dock = DockStyle.Left,
+                Width = 92,
+                Text = item.Label,
+                Font = AppFonts.Caption,
+                ForeColor = AppColors.TextSecondary,
+                TextAlign = ContentAlignment.MiddleLeft,
+                BackColor = Color.Transparent,
+                UseCompatibleTextRendering = false
+            });
+            pill.Controls.Add(new Label
+            {
+                Dock = DockStyle.Fill,
+                Text = item.Value,
+                Font = AppFonts.Semibold(11f),
+                ForeColor = AppColors.TextPrimary,
+                TextAlign = ContentAlignment.MiddleRight,
+                BackColor = Color.Transparent,
+                UseCompatibleTextRendering = false
+            });
+            return pill;
+        }
+
+        private void BindNextActions(IEnumerable<OverviewActionItem> actions)
+        {
+            _nextActionList.SuspendLayout();
+            _nextActionList.Controls.Clear();
+
+            foreach (OverviewActionItem item in actions.Take(4))
+                _nextActionList.Controls.Add(CreateActionRow(item));
+
+            if (_nextActionList.Controls.Count == 0)
+                _nextActionList.Controls.Add(CreateEmptyActionRow("Không có việc cần xử lý ngay."));
+
+            _nextActionList.ResumeLayout(true);
+            ResizeActionItems();
+        }
+
+        private Control CreateActionRow(OverviewActionItem item)
+        {
+            int itemWidth = Math.Max(320, _nextActionList.ClientSize.Width - 18);
+            var row = new RoundedPanel
+            {
+                Width = itemWidth,
+                Height = 76,
+                CornerRadius = 12,
+                FillColor = AppColors.IsDarkMode ? AppColors.BgCardHover : ColorTranslator.FromHtml("#F8FAFC"),
+                BorderColor = GetToneColor(item.Tone),
+                Margin = new Padding(0, 0, 0, 12),
+                Padding = new Padding(14, 10, 14, 10)
+            };
+
+            var actionButton = new Label
+            {
+                Dock = DockStyle.Right,
+                Width = GetActionLabelWidth(item.ActionText),
+                Text = item.ActionText,
+                Font = AppFonts.Semibold(9.5f),
+                ForeColor = item.Tone == "Warning" ? AppColors.Warning : AppColors.AccentBlue,
+                TextAlign = ContentAlignment.MiddleRight,
+                BackColor = Color.Transparent,
+                AutoEllipsis = true,
+                UseCompatibleTextRendering = false
+            };
+
+            var textStack = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                BackColor = Color.Transparent,
+                Padding = Padding.Empty,
+                Margin = Padding.Empty
+            };
+            textStack.RowStyles.Add(new RowStyle(SizeType.Percent, 55f));
+            textStack.RowStyles.Add(new RowStyle(SizeType.Percent, 45f));
+            textStack.Controls.Add(new Label
+            {
+                Dock = DockStyle.Fill,
+                Text = item.Title,
+                Font = AppFonts.Semibold(10.5f),
+                ForeColor = AppColors.TextPrimary,
+                TextAlign = ContentAlignment.BottomLeft,
+                BackColor = Color.Transparent,
+                AutoEllipsis = true,
+                UseCompatibleTextRendering = false
+            }, 0, 0);
+            textStack.Controls.Add(new Label
+            {
+                Dock = DockStyle.Fill,
+                Text = BuildActionSubtitle(item),
+                Font = AppFonts.Caption,
+                ForeColor = AppColors.TextSecondary,
+                TextAlign = ContentAlignment.TopLeft,
+                BackColor = Color.Transparent,
+                AutoEllipsis = true,
+                UseCompatibleTextRendering = false
+            }, 0, 1);
+
+            row.Controls.Add(actionButton);
+            row.Controls.Add(textStack);
+            WireActionNavigation(row, item.PageName);
+            return row;
+        }
+
+        private Control CreateEmptyActionRow(string message)
+        {
+            var row = new RoundedPanel
+            {
+                Width = Math.Max(320, _nextActionList.ClientSize.Width - 18),
+                Height = 64,
+                CornerRadius = 12,
+                FillColor = AppColors.IsDarkMode ? AppColors.BgCardHover : ColorTranslator.FromHtml("#F8FAFC"),
+                BorderColor = AppColors.Border,
+                Margin = new Padding(0, 0, 0, 12),
+                Padding = new Padding(14)
+            };
+            row.Controls.Add(new Label
+            {
+                Dock = DockStyle.Fill,
+                Text = message,
+                Font = AppFonts.Body,
+                ForeColor = AppColors.TextMuted,
+                TextAlign = ContentAlignment.MiddleLeft,
+                BackColor = Color.Transparent,
+                UseCompatibleTextRendering = false
+            });
+            return row;
+        }
+
+        private void ResizeActionItems()
+        {
+            if (_nextActionList == null)
+                return;
+
+            int itemWidth = Math.Max(320, _nextActionList.ClientSize.Width - 18);
+            foreach (Control item in _nextActionList.Controls)
+                item.Width = itemWidth;
+        }
+
+        private void WireActionNavigation(Control control, string pageName)
+        {
+            if (string.IsNullOrWhiteSpace(pageName))
+                return;
+
+            control.Cursor = Cursors.Hand;
+            control.Click += (_, _) => ActionNavigationRequested?.Invoke(this, pageName);
+            foreach (Control child in control.Controls)
+                WireActionNavigation(child, pageName);
+        }
+
+        private static int GetActionLabelWidth(string text)
+        {
+            int measuredWidth = TextRenderer.MeasureText(text ?? string.Empty, AppFonts.Semibold(9.5f)).Width + 24;
+            return Math.Min(150, Math.Max(118, measuredWidth));
+        }
+
+        private static Label CreateSectionTitle(string text)
+        {
+            return new Label
+            {
+                Dock = DockStyle.Fill,
+                Text = text,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = MetaTheme.Fonts.HeadingSm(),
+                ForeColor = AppColors.TextPrimary,
+                BackColor = Color.Transparent,
+                UseCompatibleTextRendering = false
+            };
+        }
+
+        private static string BuildActionSubtitle(OverviewActionItem item)
+        {
+            if (!string.IsNullOrWhiteSpace(item.Subtitle))
+                return item.Subtitle;
+            if (!string.IsNullOrWhiteSpace(item.PageName))
+                return $"Mở mục {item.PageName}";
+            return string.Empty;
+        }
+
+        private static Color GetToneColor(string? tone)
+        {
+            return tone == "Warning" ? AppColors.Warning : AppColors.Border;
         }
 
         private void BindNotifications(DashboardData data)
@@ -459,12 +697,12 @@ namespace CourseGuard.Frontend.UserControls.Student
             BackColor = AppColors.BgBase;
             if (_rootGrid != null)
                 _rootGrid.BackColor = AppColors.BgBase;
-            if (_statsGrid != null)
-                _statsGrid.BackColor = AppColors.BgBase;
+            if (_indicatorStrip != null)
+                _indicatorStrip.BackColor = AppColors.BgBase;
             if (_contentGrid != null)
                 _contentGrid.BackColor = AppColors.BgBase;
 
-            foreach (RoundedPanel panel in new[] { _noticePanel, _activityPanel })
+            foreach (RoundedPanel panel in new[] { _actionPanel, _contextPanel, _noticePanel, _activityPanel })
             {
                 panel.FillColor = AppColors.BgCard;
                 panel.BorderColor = AppColors.Border;
@@ -490,12 +728,11 @@ namespace CourseGuard.Frontend.UserControls.Student
         private void UC_StudentDashboard_Resize(object? sender, EventArgs e)
         {
             bool compact = Width < 980;
-            _statsGrid.ColumnCount = compact ? 2 : 4;
             _contentGrid.ColumnCount = compact ? 1 : 2;
-            _rootGrid.RowStyles[1].Height = compact ? 336f : 168f;
+            _rootGrid.RowStyles[1].Height = 64f;
 
-            RebuildColumnStyles(_statsGrid, compact ? 2 : 4);
             RebuildContentGrid(compact);
+            ResizeActionItems();
             ResizeActivityItems();
         }
 
@@ -510,12 +747,12 @@ namespace CourseGuard.Frontend.UserControls.Student
             {
                 _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
                 _contentGrid.RowCount = 2;
-                _contentGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 58f));
-                _contentGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 42f));
-                _noticePanel.Margin = new Padding(0, 0, 0, 12);
-                _activityPanel.Margin = new Padding(0, 12, 0, 0);
-                _contentGrid.Controls.Add(_noticePanel, 0, 0);
-                _contentGrid.Controls.Add(_activityPanel, 0, 1);
+                _contentGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 54f));
+                _contentGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 46f));
+                _actionPanel.Margin = new Padding(0, 0, 0, 12);
+                _contextPanel.Margin = new Padding(0, 12, 0, 0);
+                _contentGrid.Controls.Add(_actionPanel, 0, 0);
+                _contentGrid.Controls.Add(_contextPanel, 0, 1);
             }
             else
             {
@@ -523,36 +760,13 @@ namespace CourseGuard.Frontend.UserControls.Student
                 _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 68f));
                 _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32f));
                 _contentGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-                _noticePanel.Margin = new Padding(0, 0, 12, 0);
-                _activityPanel.Margin = new Padding(12, 0, 0, 0);
-                _contentGrid.Controls.Add(_noticePanel, 0, 0);
-                _contentGrid.Controls.Add(_activityPanel, 1, 0);
+                _actionPanel.Margin = new Padding(0, 0, 12, 0);
+                _contextPanel.Margin = new Padding(12, 0, 0, 0);
+                _contentGrid.Controls.Add(_actionPanel, 0, 0);
+                _contentGrid.Controls.Add(_contextPanel, 1, 0);
             }
 
             _contentGrid.ResumeLayout(true);
-        }
-
-        private static void RebuildColumnStyles(TableLayoutPanel grid, int columns)
-        {
-            grid.SuspendLayout();
-            grid.ColumnStyles.Clear();
-            for (int i = 0; i < columns; i++)
-                grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / columns));
-
-            for (int i = 0; i < grid.Controls.Count; i++)
-            {
-                Control control = grid.Controls[i];
-                int column = i % columns;
-                int row = i / columns;
-                grid.SetColumn(control, column);
-                grid.SetRow(control, row);
-            }
-
-            grid.RowCount = columns == 2 ? 2 : 1;
-            grid.RowStyles.Clear();
-            for (int i = 0; i < grid.RowCount; i++)
-                grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f / grid.RowCount));
-            grid.ResumeLayout(true);
         }
 
         private static List<ActivityRow> DeriveActivities(
@@ -635,6 +849,11 @@ namespace CourseGuard.Frontend.UserControls.Student
             public double? AverageScore { get; set; }
             public List<NotificationModel> Notifications { get; set; } = new();
             public List<ActivityRow> Activities { get; set; } = new();
+            public List<OverviewIndicatorItem> Indicators { get; set; } = new();
+            public List<OverviewActionItem> NextActions { get; set; } = new();
+            public int UnreadCommunicationCount { get; set; }
+            public DeadlineReminderItem? NearestDeadline { get; set; }
+            public StudentScheduleItemModel? NextClassToday { get; set; }
             public string ErrorMessage { get; set; } = string.Empty;
 
             public static DashboardData Error(string message)

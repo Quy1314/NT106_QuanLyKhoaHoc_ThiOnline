@@ -68,10 +68,25 @@ namespace CourseGuard.Frontend.Forms.Student
             // ── 1. Build layout skeleton (Skill 01) ──────────────────
             // Sidebar docks Left on Form
             _sidebar = new SidebarPanel { Dock = DockStyle.Left };
-            _sidebar.SetNavItems(
-                new[] { "Tổng quan", "Tìm khóa học", "Khóa học của tôi", "Bài kiểm tra", "Bài tập", "Kết quả", "Tài liệu", "Lịch học", ChatPage, NotificationPage, "Hồ sơ" },
-                new[] { "home", "search", "folder-check", "clipboard-check", "document-text", "chart", "document", "calendar", "message", "bell", "user" }
-            );
+            _sidebar.SetNavItems(new[]
+            {
+                new SidebarNavItem("Tổng quan", string.Empty, isHeading: true),
+                new SidebarNavItem("Tổng quan", "home"),
+                new SidebarNavItem("Học tập", string.Empty, isHeading: true),
+                new SidebarNavItem("Tìm khóa học", "search"),
+                new SidebarNavItem("Khóa học của tôi", "folder-check"),
+                new SidebarNavItem("Tài liệu", "document"),
+                new SidebarNavItem("Lịch học", "calendar"),
+                new SidebarNavItem("Kiểm tra", string.Empty, isHeading: true),
+                new SidebarNavItem("Bài kiểm tra", "clipboard-check"),
+                new SidebarNavItem("Bài tập", "document"),
+                new SidebarNavItem("Kết quả", "chart"),
+                new SidebarNavItem("Cộng đồng", string.Empty, isHeading: true),
+                new SidebarNavItem(ChatPage, "message"),
+                new SidebarNavItem(NotificationPage, "bell"),
+                new SidebarNavItem("Tài khoản", string.Empty, isHeading: true),
+                new SidebarNavItem("Hồ sơ", "user")
+            });
             _sidebar.NavItemClicked += Sidebar_NavItemClicked;
             LoadChatUnreadCountAsync().FireAndForgetSafe(this);
 
@@ -237,7 +252,7 @@ namespace CourseGuard.Frontend.Forms.Student
         {
             _nav = new Dictionary<string, Func<UserControl>>
             {
-                { "Tổng quan",    () => new UC_StudentDashboard() },
+                { "Tổng quan",    CreateStudentOverviewPage },
                 { "Tìm khóa học", () => new UC_CourseList() },
                 { "Khóa học của tôi", () => new UC_MyCourses() },
                 { "Bài kiểm tra", () => new UC_TakeExam() },
@@ -249,6 +264,13 @@ namespace CourseGuard.Frontend.Forms.Student
                 { NotificationPage,    () => new UC_Notification() },
                 { "Hồ sơ",        () => new UC_Profile() }
             };
+        }
+
+        private UserControl CreateStudentOverviewPage()
+        {
+            var overview = new UC_StudentDashboard();
+            overview.ActionNavigationRequested += (_, pageName) => NavigateToPage(pageName);
+            return overview;
         }
 
         private void Sidebar_NavItemClicked(object? sender, string pageName)

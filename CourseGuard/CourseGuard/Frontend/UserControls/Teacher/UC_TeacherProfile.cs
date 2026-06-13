@@ -89,6 +89,11 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             };
         }
 
+        public void FocusSecuritySection()
+        {
+            _oldPassword.Focus();
+        }
+
         private async Task LoadDataAsync(bool showSkeleton)
         {
             if (showSkeleton)
@@ -445,6 +450,18 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             var title = CreateCardTitle("Bảo mật tài khoản");
             card.Controls.Add(title);
 
+            var hint = new Label
+            {
+                Text = "Dùng để đổi mật khẩu tạm thời sau khi admin cấp lại, hoặc cập nhật mật khẩu định kỳ.",
+                Dock = DockStyle.Top,
+                Height = 34,
+                Font = AppFonts.Caption,
+                ForeColor = AppColors.TextSecondary,
+                BackColor = Color.Transparent,
+                UseCompatibleTextRendering = false
+            };
+            card.Controls.Add(hint);
+
             var grid = new TableLayoutPanel
             {
                 Dock = DockStyle.Top,
@@ -490,6 +507,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             grid.SetColumnSpan(sessionInfo, 2);
 
             card.Controls.Add(grid);
+            hint.SendToBack();
             title.SendToBack();
             return card;
         }
