@@ -167,6 +167,15 @@ namespace CourseGuard.Frontend.Theme
         public static Color SidebarTextMuted => _isDarkMode
             ? TextMuted
             : ColorTranslator.FromHtml("#BFDBFE");
+        public static Color SidebarHeadingText => _isDarkMode
+            ? ColorTranslator.FromHtml("#E0F2FE")
+            : Color.White;
+        public static Color SidebarHeadingAccent => _isDarkMode
+            ? AccentBlue
+            : Color.White;
+        public static Color SidebarHeadingBg => _isDarkMode
+            ? Color.FromArgb(28, 96, 165, 250)
+            : Color.FromArgb(36, 255, 255, 255);
         public static Color SidebarItemHover => _isDarkMode
             ? BgCardHover
             : Color.FromArgb(38, 255, 255, 255);

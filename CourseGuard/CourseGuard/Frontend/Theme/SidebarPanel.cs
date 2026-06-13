@@ -5,14 +5,30 @@
  * Animated collapsible sidebar with custom-painted navigation items.
  */
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace CourseGuard.Frontend.Theme
 {
+    public sealed class SidebarNavItem
+    {
+        public SidebarNavItem(string label, string icon, bool isHeading = false)
+        {
+            Label = label;
+            Icon = icon;
+            IsHeading = isHeading;
+        }
+
+        public string Label { get; }
+        public string Icon { get; }
+        public bool IsHeading { get; }
+    }
+
     public class SidebarPanel : UserControl
     {
         public event EventHandler<string>? NavItemClicked;
@@ -28,8 +44,12 @@ namespace CourseGuard.Frontend.Theme
         private string _floatingLabelText = string.Empty;
         
         // Data
-        private string[] _navItems = { "Overview", "Orders", "Products", "Customers", "Analytics", "Marketing", "Reports" };
-        private string[] _navIcons = { "⊞", "📦", "🏷", "👥", "📈", "📢", "📊" }; // Standard unicode symbols
+        private List<SidebarNavItem> _navItems = new()
+        {
+            new SidebarNavItem("Overview", "home"),
+            new SidebarNavItem("Orders", "document"),
+            new SidebarNavItem("Products", "folder-check")
+        };
         
         // State
         private int _activeIndex = 0;
@@ -120,9 +140,18 @@ namespace CourseGuard.Frontend.Theme
             if (labels == null || icons == null || labels.Length != icons.Length)
                 throw new ArgumentException("Labels and icons arrays must be non-null and equal length.");
 
-            _navItems = labels;
-            _navIcons = icons;
-            _activeIndex = 0;
+            SetNavItems(labels.Select((label, index) => new SidebarNavItem(label, icons[index])));
+        }
+
+        public void SetNavItems(IEnumerable<SidebarNavItem> items)
+        {
+            if (items == null)
+                throw new ArgumentNullException(nameof(items));
+
+            _navItems = items.ToList();
+            _activeIndex = _navItems.FindIndex(item => !item.IsHeading);
+            if (_activeIndex < 0)
+                _activeIndex = 0;
             _hoverIndex = -1;
             Invalidate();
         }
@@ -142,9 +171,9 @@ namespace CourseGuard.Frontend.Theme
         /// </summary>
         public void SetActiveByName(string label)
         {
-            for (int i = 0; i < _navItems.Length; i++)
+            for (int i = 0; i < _navItems.Count; i++)
             {
-                if (_navItems[i] == label)
+                if (IsClickableNavIndex(i) && _navItems[i].Label == label)
                 {
                     _activeIndex = i;
                     Invalidate();
@@ -161,7 +190,7 @@ namespace CourseGuard.Frontend.Theme
             bool newHoverToggle = GetToggleBounds().Contains(e.Location);
 
             // Always update cursor for immediate feedback
-            this.Cursor = (newHoverIndex >= 0 || newHoverLogout || newHoverToggle)
+            this.Cursor = (IsClickableNavIndex(newHoverIndex) || newHoverLogout || newHoverToggle)
                 ? Cursors.Hand : Cursors.Default;
 
             if (newHoverIndex != _hoverIndex || newHoverLogout != _hoverLogout || newHoverToggle != _hoverToggle)
@@ -196,12 +225,12 @@ namespace CourseGuard.Frontend.Theme
             {
                 ToggleCollapsed();
             }
-            else if (clickedIndex >= 0 && clickedIndex < _navItems.Length)
+            else if (IsClickableNavIndex(clickedIndex))
             {
                 _activeIndex = clickedIndex;
                 HideFloatingLabel();
                 Invalidate();
-                NavItemClicked?.Invoke(this, _navItems[_activeIndex]);
+                NavItemClicked?.Invoke(this, _navItems[_activeIndex].Label);
             }
             else if (GetLogoutBounds().Contains(e.Location))
             {
@@ -257,6 +286,8 @@ namespace CourseGuard.Frontend.Theme
             using (SolidBrush textPrimary = new SolidBrush(AppColors.SidebarTextPrimary))
             using (SolidBrush textSecondary = new SolidBrush(AppColors.SidebarTextSecondary))
             using (SolidBrush textMuted = new SolidBrush(AppColors.SidebarTextMuted))
+            using (SolidBrush headingText = new SolidBrush(AppColors.SidebarHeadingText))
+            using (SolidBrush headingAccent = new SolidBrush(AppColors.SidebarHeadingAccent))
             using (SolidBrush activeIndicatorBrush = new SolidBrush(AppColors.SidebarActiveIndicator))
             using (SolidBrush logoutHoverTextBrush = new SolidBrush(AppColors.SidebarLogoutHoverText))
             {
@@ -278,31 +309,43 @@ namespace CourseGuard.Frontend.Theme
                     g.DrawString(toggleIcon, AppFonts.Body, textSecondary, new RectangleF(0, 15, Width, 30), sfCenter);
                 }
 
-                // 2. MENU label
-                if (drawLabels)
+                // 2. Nav Items
+                int navY = _itemStartY;
+                for (int i = 0; i < _navItems.Count; i++)
                 {
-                    g.DrawString("MENU", AppFonts.Caption, textMuted, new PointF(15, 60));
-                }
-
-                // 3. Nav Items
-                for (int i = 0; i < _navItems.Length; i++)
-                {
-                    int y = _itemStartY + i * _itemHeight;
-                    if (_submenuIndex >= 0 && i > _submenuIndex)
+                    if (_submenuIndex >= 0 && i == _submenuIndex + 1)
                     {
-                        y += _submenuHeight;
+                        navY += _submenuHeight;
                     }
-                    Rectangle itemRect = new Rectangle(10, y, Width - 20, _itemHeight);
-                    
-                    bool isActive = (i == _activeIndex);
-                    bool isHover = (i == _hoverIndex);
+                    SidebarNavItem item = _navItems[i];
+                    int itemHeight = GetItemHeight(item, isCollapsed);
+                    Rectangle itemRect = new Rectangle(10, navY, Width - 20, itemHeight);
+
+                    if (item.IsHeading)
+                    {
+                        if (drawLabels)
+                        {
+                            Rectangle headingBgRect = new Rectangle(10, itemRect.Y + 2, Width - 20, itemHeight - 4);
+                            GraphicsHelpers.FillRoundedRect(g, headingBgRect, 7, AppColors.SidebarHeadingBg);
+                            g.FillRectangle(headingAccent, headingBgRect.X, headingBgRect.Y + 7, 3, Math.Max(8, headingBgRect.Height - 14));
+
+                            Rectangle headingRect = new Rectangle(20, itemRect.Y, Width - 32, itemHeight);
+                            using Font headingFont = AppFonts.Semibold(10f);
+                            g.DrawString(item.Label.ToUpperInvariant(), headingFont, headingText, headingRect, sfLeft);
+                        }
+                        navY += itemHeight;
+                        continue;
+                    }
+
+                    bool isActive = i == _activeIndex;
+                    bool isHover = i == _hoverIndex;
 
                     // Background & Active Border
                     if (isActive)
                     {
                         GraphicsHelpers.FillRoundedRect(g, itemRect, 8, AppColors.SidebarItemActive);
                         // Left active indicator
-                        g.FillRectangle(activeIndicatorBrush, 0, itemRect.Y + 8, 3, _itemHeight - 16);
+                        g.FillRectangle(activeIndicatorBrush, 0, itemRect.Y + 8, 3, itemHeight - 16);
                     }
                     else if (isHover)
                     {
@@ -311,18 +354,18 @@ namespace CourseGuard.Frontend.Theme
 
                     // Content
                     Brush labelBrush = isActive ? textPrimary : textSecondary;
-                    
+                     
                     // Draw Icon
-                    Rectangle iconRect = new Rectangle(itemRect.X, itemRect.Y, 40, _itemHeight);
-                    if (isCollapsed) iconRect = new Rectangle(0, itemRect.Y, Width, _itemHeight);
-                    string iconKey = i < _navIcons.Length ? _navIcons[i] : string.Empty;
+                    Rectangle iconRect = new Rectangle(itemRect.X, itemRect.Y, 40, itemHeight);
+                    if (isCollapsed) iconRect = new Rectangle(0, itemRect.Y, Width, itemHeight);
+                    string iconKey = item.Icon;
                     DrawNavIcon(g, iconRect, iconKey, isActive ? AppColors.SidebarIconActive : AppColors.SidebarTextSecondary);
 
                     // Draw Text
                     if (drawLabels)
                     {
-                        Rectangle textRect = new Rectangle(iconRect.Right, itemRect.Y, Width - iconRect.Right, _itemHeight);
-                        g.DrawString(_navItems[i], AppFonts.Button, labelBrush, textRect, sfLeft);
+                        Rectangle textRect = new Rectangle(iconRect.Right, itemRect.Y, Width - iconRect.Right, itemHeight);
+                        g.DrawString(item.Label, AppFonts.Button, labelBrush, textRect, sfLeft);
                     }
 
                     if (IsChatNavItem(iconKey) && _chatUnreadCount > 0)
@@ -336,9 +379,11 @@ namespace CourseGuard.Frontend.Theme
                             badgeSize);
                         CountBadgePainter.Draw(g, badgeRect, _chatUnreadCount);
                     }
+
+                    navY += itemHeight;
                 }
 
-                // 4. Logout Button
+                // 3. Logout Button
                 int logoutY = Height - 60;
                 Rectangle logoutRect = new Rectangle(10, logoutY, Width - 20, _itemHeight);
                 if (_hoverLogout) GraphicsHelpers.FillRoundedRect(g, logoutRect, 8, AppColors.SidebarLogoutHoverBg);
@@ -372,8 +417,8 @@ namespace CourseGuard.Frontend.Theme
             }
 
             string label = string.Empty;
-            if (_hoverIndex >= 0 && _hoverIndex < _navItems.Length)
-                label = _navItems[_hoverIndex];
+            if (IsClickableNavIndex(_hoverIndex))
+                label = _navItems[_hoverIndex].Label;
             else if (_hoverLogout)
                 label = "Đăng xuất";
             else if (_hoverToggle)
@@ -385,8 +430,8 @@ namespace CourseGuard.Frontend.Theme
                 return;
             }
 
-            Rectangle anchor = _hoverIndex >= 0 && _hoverIndex < _navItems.Length
-                ? new Rectangle(0, _itemStartY + _hoverIndex * _itemHeight + (_submenuIndex >= 0 && _hoverIndex > _submenuIndex ? _submenuHeight : 0), Width, _itemHeight)
+            Rectangle anchor = IsClickableNavIndex(_hoverIndex)
+                ? GetNavItemBounds(_hoverIndex)
                 : _hoverLogout
                     ? GetLogoutBounds()
                     : GetToggleBounds();
@@ -445,22 +490,42 @@ namespace CourseGuard.Frontend.Theme
 
         private int GetNavIndexAt(Point point)
         {
-            int relativeY = point.Y - _itemStartY;
-            for (int i = 0; i < _navItems.Length; i++)
+            for (int i = 0; i < _navItems.Count; i++)
             {
-                int startY = i * _itemHeight;
-                if (_submenuIndex >= 0 && i > _submenuIndex)
-                {
-                    startY += _submenuHeight;
-                }
-                int endY = startY + _itemHeight;
-                Rectangle itemRect = new Rectangle(10, _itemStartY + startY, Math.Max(24, Width - 20), _itemHeight);
-                if (itemRect.Contains(point))
+                Rectangle itemRect = GetNavItemBounds(i);
+                if (itemRect.Contains(point) && IsClickableNavIndex(i))
                 {
                     return i;
                 }
             }
             return -1;
+        }
+
+        private bool IsClickableNavIndex(int index)
+        {
+            return index >= 0 && index < _navItems.Count && !_navItems[index].IsHeading;
+        }
+
+        private Rectangle GetNavItemBounds(int index)
+        {
+            bool isCollapsed = _isCollapsed || Width <= CollapsedWidth + 8;
+            int y = _itemStartY;
+            for (int i = 0; i < index; i++)
+            {
+                y += GetItemHeight(_navItems[i], isCollapsed);
+                if (_submenuIndex >= 0 && i == _submenuIndex)
+                    y += _submenuHeight;
+            }
+
+            int itemHeight = GetItemHeight(_navItems[index], isCollapsed);
+            return new Rectangle(10, y, Math.Max(24, Width - 20), itemHeight);
+        }
+
+        private int GetItemHeight(SidebarNavItem item, bool collapsed)
+        {
+            if (!item.IsHeading)
+                return _itemHeight;
+            return collapsed ? 10 : 32;
         }
 
         private static void DrawNavIcon(Graphics g, Rectangle bounds, string iconKey, Color color)

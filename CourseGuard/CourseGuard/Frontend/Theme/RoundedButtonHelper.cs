@@ -118,12 +118,16 @@ namespace CourseGuard.Frontend.Theme
                     return roundedPanel.FillColor;
 
                 if (parent.BackColor != Color.Transparent)
+                {
+                    if (parent is Form f && f.Tag?.ToString() == "dialog")
+                        return AppColors.BgCard;
                     return parent.BackColor;
+                }
 
                 parent = parent.Parent;
             }
 
-            return AppColors.BgBase;
+            return AppColors.BgCard;
         }
 
         private static Color ResolveButtonBackColor(Button button, Color parentColor)

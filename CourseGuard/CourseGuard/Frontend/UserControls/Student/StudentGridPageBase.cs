@@ -260,7 +260,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 Margin = new Padding(0, 12, 0, 0),
                 Text = hintText,
                 TextAlign = ContentAlignment.MiddleLeft,
-                UseCompatibleTextRendering = true
+                UseCompatibleTextRendering = false
             };
             content.Controls.Add(HintLabel, 0, 1);
             return content;

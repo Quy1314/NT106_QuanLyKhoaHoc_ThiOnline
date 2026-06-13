@@ -198,7 +198,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             // 
             // lblDescription
             // 
-            this.lblDescription.Font = new System.Drawing.Font(global::CourseGuard.Frontend.Theme.AppFonts.Body.FontFamily, 9F, System.Drawing.FontStyle.Italic);
+            this.lblDescription.Font = new System.Drawing.Font(global::CourseGuard.Frontend.Theme.AppFonts.Body.FontFamily, 10F, System.Drawing.FontStyle.Italic);
             this.lblDescription.ForeColor = System.Drawing.Color.FromArgb(71, 85, 105);
             this.lblDescription.Location = new System.Drawing.Point(15, 125);
             this.lblDescription.Name = "lblDescription";

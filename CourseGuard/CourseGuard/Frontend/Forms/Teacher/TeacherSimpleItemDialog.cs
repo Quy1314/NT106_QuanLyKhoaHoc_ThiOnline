@@ -158,8 +158,10 @@ namespace CourseGuard.Frontend.Forms.Teacher
             control.Dock = DockStyle.Fill;
             control.Font = AppFonts.Body;
             control.ForeColor = AppColors.TextPrimary;
-            control.BackColor = AppColors.BgCard;
-            control.Margin = new Padding(0, 4, 0, 4);
+            control.BackColor = AppColors.BgInput;
+            control.Margin = new Padding(0, 6, 0, 6);
+            if (control is TextBox tb) tb.BorderStyle = BorderStyle.FixedSingle;
+            if (control is ComboBox cb) cb.FlatStyle = FlatStyle.Flat;
         }
 
         private static void ConfigureDatePicker(DateTimePicker picker, string customFormat)

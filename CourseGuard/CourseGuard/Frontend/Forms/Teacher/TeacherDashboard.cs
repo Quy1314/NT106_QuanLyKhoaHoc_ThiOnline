@@ -41,8 +41,12 @@ namespace CourseGuard.Frontend.Forms.Teacher
         {
             _currentUser = user ?? new UserModel { Id = 0, Username = "teacher", FullName = "Teacher" };
             _teacherId = _currentUser.Id;
-            _teacherName = GetDisplayName(_currentUser);
             _teacherController = new TeacherController(_dbContext);
+            
+            TeacherProfileModel? profile = SafeGetProfile(_teacherId);
+            _teacherName = GetDisplayName(_currentUser, profile);
+            string avatarPath = profile?.AvatarPath ?? UserSessionContext.CurrentAvatarPath;
+            UserSessionContext.UpdateProfile(_teacherName, avatarPath);
 
             AppColors.IsDarkMode = false;
             InitializeComponent();
@@ -55,39 +59,28 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private void BuildStudentStyleShell()
         {
             _sidebar = new SidebarPanel { Dock = DockStyle.Left };
-            _sidebar.SetNavItems(
-                new[]
-                {
-                    "Tổng quan",
-                    "Khóa học",
-                    "Bài học",
-                    "Bài tập",
-                    "Bài kiểm tra",
-                    "Giám sát thi",
-                    "Kết quả",
-                    "Sinh viên",
-                    "Tài liệu",
-                    "Lịch dạy",
-                    "Tin nhắn",
-                    "Thông báo",
-                    "Hồ sơ"
-                },
-                new[]
-                {
-                    "home",
-                    "folder-check",
-                    "book",
-                    "document",
-                    "clipboard-check",
-                    "exam",
-                    "chart",
-                    "user",
-                    "document",
-                    "calendar",
-                    "message",
-                    "bell",
-                    "user"
-                });
+            _sidebar.SetNavItems(new[]
+            {
+                new SidebarNavItem("Tổng quan", string.Empty, isHeading: true),
+                new SidebarNavItem("Tổng quan", "home"),
+                new SidebarNavItem("Giảng dạy", string.Empty, isHeading: true),
+                new SidebarNavItem("Khóa học", "folder-check"),
+                new SidebarNavItem("Bài học", "book"),
+                new SidebarNavItem("Tài liệu", "document"),
+                new SidebarNavItem("Bài tập", "document"),
+                new SidebarNavItem("Kiểm tra", string.Empty, isHeading: true),
+                new SidebarNavItem("Bài kiểm tra", "clipboard-check"),
+                new SidebarNavItem("Giám sát thi", "exam"),
+                new SidebarNavItem("Kết quả", "chart"),
+                new SidebarNavItem("Lớp học", string.Empty, isHeading: true),
+                new SidebarNavItem("Sinh viên", "user"),
+                new SidebarNavItem("Lịch dạy", "calendar"),
+                new SidebarNavItem("Thông tin", string.Empty, isHeading: true),
+                new SidebarNavItem("Tin nhắn", "message"),
+                new SidebarNavItem("Thông báo", "bell"),
+                new SidebarNavItem("Tài khoản", string.Empty, isHeading: true),
+                new SidebarNavItem("Hồ sơ", "user")
+            });
             _sidebar.NavItemClicked += Sidebar_NavItemClicked;
 
             _rightPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 8, 12, 0) };
@@ -125,7 +118,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         {
             _routes = new Dictionary<string, Func<UserControl>>
             {
-                { "Tổng quan", () => new UC_TeacherOverview(_teacherId) },
+                { "Tổng quan", CreateTeacherOverviewPage },
                 { "Khóa học", () => new UC_TeacherCourses(_teacherId, _teacherController) },
                 { "Bài học", () => new UC_TeacherLessons(_teacherId, _teacherController) },
                 { "Bài tập", () => new UC_TeacherAssignments(_teacherId, _teacherController) },
@@ -139,6 +132,13 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 { "Thông báo", () => new UC_TeacherNotifications(_teacherId) },
                 { "Hồ sơ", CreateTeacherProfilePage }
             };
+        }
+
+        private UserControl CreateTeacherOverviewPage()
+        {
+            var overview = new UC_TeacherOverview(_teacherId);
+            overview.ActionNavigationRequested += (_, pageName) => NavigateToPage(pageName);
+            return overview;
         }
 
         private UserControl CreateTeacherProfilePage()
@@ -167,7 +167,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void Topbar_NavigationRequested(object? sender, TopbarNavigationRequestedEventArgs e)
         {
-            NavigateToPage(e.PageName);
+            NavigateToPage(e.PageName, e.FocusSecurity);
         }
 
         private async void Topbar_QuickSearchRequested(object? sender, TopbarQuickSearchRequestedEventArgs e)
@@ -257,7 +257,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             };
         }
 
-        private void NavigateToPage(string pageName)
+        private void NavigateToPage(string pageName, bool focusSecurity = false)
         {
             if (!_routes.TryGetValue(pageName, out Func<UserControl>? factory))
                 return;
@@ -266,6 +266,21 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _sidebar.SetActiveByName(pageName);
             _topbar.PageTitle = pageName == ProfilePage ? ProfileTitle : pageName;
             LoadUI(factory());
+
+            if (focusSecurity)
+                FocusProfileSecuritySection();
+        }
+
+        private void FocusProfileSecuritySection()
+        {
+            foreach (Control ctrl in _content.Controls)
+            {
+                if (ctrl is UC_TeacherProfile profile)
+                {
+                    profile.FocusSecuritySection();
+                    return;
+                }
+            }
         }
 
         private void LoadUI(UserControl uc)
@@ -343,8 +358,22 @@ namespace CourseGuard.Frontend.Forms.Teacher
             };
         }
 
-        private static string GetDisplayName(UserModel user)
+        private TeacherProfileModel? SafeGetProfile(int userId)
         {
+            try
+            {
+                return _teacherController.GetTeacherProfile(userId);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string GetDisplayName(UserModel user, TeacherProfileModel? profile)
+        {
+            if (!string.IsNullOrWhiteSpace(profile?.FullName))
+                return profile.FullName.Trim();
             if (!string.IsNullOrWhiteSpace(user.FullName))
                 return user.FullName.Trim();
             if (!string.IsNullOrWhiteSpace(user.Username))

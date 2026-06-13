@@ -347,6 +347,11 @@ namespace CourseGuard.Frontend.UserControls.Student
                     _messageList.AppendMessages(messages, userId);
                 }
 
+                if (messages.Count == 0)
+                {
+                    return;
+                }
+
                 MarkDisplayedMessagesReadAsync(courseId).FireAndForgetSafe(this);
             }
             catch (ObjectDisposedException)

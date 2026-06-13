@@ -6,7 +6,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 {
     internal static class StudentTabChrome
     {
-        private const int HeaderHeight = 124;
+        private const int HeaderHeight = 104;
         private const int ButtonHeight = 36;
         private const int ButtonRadius = 10;
 
@@ -51,6 +51,8 @@ namespace CourseGuard.Frontend.UserControls.Student
         public static RoundedPanel CreateHeader(string title, string subtitle, out FlowLayoutPanel actionPanel, params Control[] actions)
         {
             var card = CreateCard();
+            card.Height = HeaderHeight;
+            card.MinimumSize = new Size(0, HeaderHeight);
             card.Padding = new Padding(20, 16, 20, 16);
             card.Margin = new Padding(0, 0, 0, 16);
 
@@ -73,7 +75,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
                 Margin = Padding.Empty,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Bottom
+                Anchor = AnchorStyles.Left
             };
             textStack.Controls.Add(new Label
             {
@@ -86,15 +88,19 @@ namespace CourseGuard.Frontend.UserControls.Student
                 UseCompatibleTextRendering = true,
                 Margin = new Padding(0, 0, 0, 4)
             });
+            Font subtitleFont = new Font("Segoe UI", 10f, FontStyle.Regular);
             textStack.Controls.Add(new Label
             {
-                AutoSize = true,
+                AutoSize = false,
+                AutoEllipsis = true,
                 BackColor = Color.Transparent,
-                Font = AppFonts.Body,
+                Font = subtitleFont,
                 ForeColor = AppColors.TextSecondary,
                 Text = subtitle,
                 TextAlign = ContentAlignment.MiddleLeft,
-                UseCompatibleTextRendering = true,
+                UseCompatibleTextRendering = false,
+                Size = new Size(TextRenderer.MeasureText(subtitle, subtitleFont).Width + 8, 32),
+                Padding = new Padding(0, 0, 0, 6),
                 Margin = Padding.Empty
             });
 

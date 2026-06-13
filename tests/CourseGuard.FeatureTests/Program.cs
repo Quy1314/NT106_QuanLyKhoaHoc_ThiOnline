@@ -6,6 +6,7 @@ using CourseGuard.Backend.Services;
 using CourseGuard.Backend.Services.Monitoring;
 using CourseGuard.Backend.Services.Realtime;
 using CourseGuard.Frontend.Forms.Student;
+using CourseGuard.Frontend.Forms.Teacher;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 using CourseGuard.Frontend.UserControls;
@@ -1207,6 +1208,244 @@ Run("vietnam time formatter converts explicit utc timestamps", () =>
 });
 
 Run("student and teacher data cards wrap grids in rounded bodies", RunDashboardCardTests);
+Run("student and teacher page descriptions reserve descender space", RunDashboardHeaderSubtitleLayoutTests);
+Run("rounded UI chrome keeps painted borders inside clipping regions", RunRoundedChromeClippingGuardTests);
+Run("overview action and indicator models expose required display fields", () =>
+{
+    Type actionType = typeof(UC_Profile).Assembly.GetType("CourseGuard.Frontend.Helpers.OverviewActionItem")
+        ?? throw new InvalidOperationException("OverviewActionItem must exist");
+    Type indicatorType = typeof(UC_Profile).Assembly.GetType("CourseGuard.Frontend.Helpers.OverviewIndicatorItem")
+        ?? throw new InvalidOperationException("OverviewIndicatorItem must exist");
+
+    foreach (string propertyName in new[] { "Title", "Subtitle", "PageName", "ActionText", "Priority" })
+        AssertTrue(actionType.GetProperty(propertyName) != null, $"OverviewActionItem must expose {propertyName}");
+
+    foreach (string propertyName in new[] { "Label", "Value", "Tone" })
+        AssertTrue(indicatorType.GetProperty(propertyName) != null, $"OverviewIndicatorItem must expose {propertyName}");
+});
+Run("student overview next actions follow agreed priority", () =>
+{
+    Type builderType = typeof(UC_Profile).Assembly.GetType("CourseGuard.Frontend.Helpers.OverviewActionBuilder")
+        ?? throw new InvalidOperationException("OverviewActionBuilder must exist");
+    MethodInfo build = builderType.GetMethod("BuildStudentActions", new[] { typeof(bool), typeof(bool), typeof(bool), typeof(bool), typeof(bool) })
+        ?? throw new InvalidOperationException("BuildStudentActions must exist");
+
+    object[] actions = (object[])build.Invoke(null, new object?[] { true, true, true, true, true })!;
+    string joinedTitles = string.Join("|", actions.Select(a => a.GetType().GetProperty("Title")!.GetValue(a)?.ToString()));
+
+    AssertTrue(joinedTitles.StartsWith("Làm bài thi đang mở|Nộp bài tập sắp hết hạn|Vào lớp học hôm nay|Đọc tin nhắn mới|Xem thông báo mới"),
+        "student actions must be ordered exam, deadline, class, chat, notification");
+});
+Run("teacher overview next actions follow agreed priority", () =>
+{
+    Type builderType = typeof(UC_Profile).Assembly.GetType("CourseGuard.Frontend.Helpers.OverviewActionBuilder")
+        ?? throw new InvalidOperationException("OverviewActionBuilder must exist");
+    MethodInfo build = builderType.GetMethod("BuildTeacherActions", new[] { typeof(bool), typeof(bool), typeof(bool), typeof(bool), typeof(bool) })
+        ?? throw new InvalidOperationException("BuildTeacherActions must exist");
+
+    object[] actions = (object[])build.Invoke(null, new object?[] { true, true, true, true, true })!;
+    string joinedTitles = string.Join("|", actions.Select(a => a.GetType().GetProperty("Title")!.GetValue(a)?.ToString()));
+
+    AssertTrue(joinedTitles.StartsWith("Giám sát kỳ thi đang diễn ra|Xử lý việc cần chú ý|Mở buổi dạy sắp tới|Trả lời tin nhắn mới|Xem thông báo mới"),
+        "teacher actions must be ordered active exam, required task, class, chat, notification");
+});
+Run("overview next actions expose Vietnamese navigation labels", () =>
+{
+    OverviewActionItem[] studentActions = OverviewActionBuilder.BuildStudentActions(true, true, true, true, true);
+    OverviewActionItem[] teacherActions = OverviewActionBuilder.BuildTeacherActions(true, true, true, true, true);
+
+    AssertEqual("Làm bài", studentActions[0].ActionText);
+    AssertEqual("Bài kiểm tra", studentActions[0].PageName);
+    AssertEqual("Lịch học", studentActions[2].PageName);
+    AssertEqual("Giám sát", teacherActions[0].ActionText);
+    AssertEqual("Giám sát thi", teacherActions[0].PageName);
+    AssertEqual("Lịch dạy", teacherActions[2].PageName);
+});
+Run("overview communication actions route chat and notifications separately", () =>
+{
+    OverviewActionItem studentChatOnly = OverviewActionBuilder.BuildStudentActions(false, false, false, true, false).Single();
+    AssertEqual("Đọc tin nhắn mới", studentChatOnly.Title);
+    AssertEqual("Tin nhắn", studentChatOnly.PageName);
+    AssertEqual("Mở tin nhắn", studentChatOnly.ActionText);
+
+    OverviewActionItem studentNotificationOnly = OverviewActionBuilder.BuildStudentActions(false, false, false, false, true).Single();
+    AssertEqual("Xem thông báo mới", studentNotificationOnly.Title);
+    AssertEqual("Thông báo", studentNotificationOnly.PageName);
+    AssertEqual("Mở thông báo", studentNotificationOnly.ActionText);
+
+    OverviewActionItem[] studentBoth = OverviewActionBuilder.BuildStudentActions(false, false, false, true, true);
+    AssertEqual("Tin nhắn", studentBoth[0].PageName);
+    AssertEqual("Thông báo", studentBoth[1].PageName);
+
+    OverviewActionItem teacherChatOnly = OverviewActionBuilder.BuildTeacherActions(false, false, false, true, false).Single();
+    AssertEqual("Trả lời tin nhắn mới", teacherChatOnly.Title);
+    AssertEqual("Tin nhắn", teacherChatOnly.PageName);
+
+    OverviewActionItem teacherNotificationOnly = OverviewActionBuilder.BuildTeacherActions(false, false, false, false, true).Single();
+    AssertEqual("Xem thông báo mới", teacherNotificationOnly.Title);
+    AssertEqual("Thông báo", teacherNotificationOnly.PageName);
+});
+Run("overview action labels reserve enough single line space", () =>
+{
+    string root = RepoRoot();
+    string studentSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_StudentDashboard.cs"));
+    string teacherSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherOverview.cs"));
+
+    AssertFalse(studentSource.Contains("Width = 96"),
+        "student overview action label should not use the old fixed 96px width");
+    AssertFalse(teacherSource.Contains("Width = 96"),
+        "teacher overview action label should not use the old fixed 96px width");
+    AssertTrue(studentSource.Contains("GetActionLabelWidth(item.ActionText)") && studentSource.Contains("TextRenderer.MeasureText"),
+        "student overview action label should measure text and reserve single-line width");
+    AssertTrue(teacherSource.Contains("GetActionLabelWidth(item.ActionText)") && teacherSource.Contains("TextRenderer.MeasureText"),
+        "teacher overview action label should measure text and reserve single-line width");
+
+    IEnumerable<string> actionTexts = OverviewActionBuilder.BuildStudentActions(true, true, true, true, true)
+        .Concat(OverviewActionBuilder.BuildTeacherActions(true, true, true, true, true))
+        .Select(action => action.ActionText);
+    int widestAction = actionTexts.Max(text => TextRenderer.MeasureText(text, AppFonts.Semibold(9.5f)).Width);
+    AssertTrue(widestAction + 24 <= 150,
+        "overview action label max width should fit current Vietnamese action text on one line");
+});
+Run("overview action rows can request dashboard navigation", () =>
+{
+    AssertTrue(typeof(UC_StudentDashboard).GetEvent("ActionNavigationRequested") != null,
+        "student overview action rows must expose a navigation event");
+    AssertTrue(typeof(UC_TeacherOverview).GetEvent("ActionNavigationRequested") != null,
+        "teacher overview action rows must expose a navigation event");
+
+    string root = RepoRoot();
+    string studentDashboardSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Student", "StudentDashboard.cs"));
+    string teacherDashboardSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherDashboard.cs"));
+
+    AssertTrue(studentDashboardSource.Contains("ActionNavigationRequested += (_, pageName) => NavigateToPage(pageName)"),
+        "student dashboard must route overview action clicks");
+    AssertTrue(teacherDashboardSource.Contains("ActionNavigationRequested += (_, pageName) => NavigateToPage(pageName)"),
+        "teacher dashboard must route overview action clicks");
+});
+Run("teacher overview context panels are visually independent", () =>
+{
+    string root = RepoRoot();
+    string source = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherOverview.cs"));
+
+    AssertTrue(source.Contains("private TableLayoutPanel _contextGrid"),
+        "teacher overview should use a context grid instead of one outer context card");
+    AssertFalse(source.Contains("private RoundedPanel _contextPanel"),
+        "teacher overview should not wrap context cards in a shared outer panel");
+    AssertTrue(source.Contains("CreateCardTitle(\"Lịch dạy và việc cần xử lý\")"),
+        "teacher context heading should use Vietnamese copy without mnemonic ampersand");
+    AssertFalse(source.Contains("Lịch dạy &"),
+        "teacher context heading should not use ampersand because WinForms treats it as a mnemonic");
+});
+Run("sidebar headings render larger than caption text", () =>
+{
+    string root = RepoRoot();
+    string source = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Theme", "SidebarPanel.cs"));
+    string colorsSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Theme", "AppColors.cs"));
+
+    AssertTrue(source.Contains("AppFonts.Semibold(10f)"),
+        "sidebar headings should use a larger semibold font");
+    AssertTrue(source.Contains("return collapsed ? 10 : 32;"),
+        "expanded sidebar headings should reserve taller heading rows");
+    AssertTrue(source.Contains("SidebarHeadingText") && source.Contains("SidebarHeadingAccent") && source.Contains("SidebarHeadingBg"),
+        "sidebar headings should use dedicated heading tokens instead of muted nav text");
+    AssertTrue(colorsSource.Contains("SidebarHeadingText") && colorsSource.Contains("SidebarHeadingAccent") && colorsSource.Contains("SidebarHeadingBg"),
+        "AppColors must expose light/dark heading tokens");
+});
+Run("student overview uses compact indicators and next actions instead of stat grid", () =>
+{
+    Type type = typeof(UC_StudentDashboard);
+    AssertTrue(type.GetField("_indicatorStrip", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+        "student overview must expose compact indicator strip");
+    AssertTrue(type.GetField("_nextActionList", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+        "student overview must expose next action list");
+    AssertTrue(type.GetField("_statsGrid", BindingFlags.Instance | BindingFlags.NonPublic) == null,
+        "student overview should not keep the old large stats grid");
+});
+Run("teacher overview uses compact indicators and next actions instead of stat grid", () =>
+{
+    Type type = typeof(UC_TeacherOverview);
+    AssertTrue(type.GetField("_indicatorStrip", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+        "teacher overview must expose compact indicator strip");
+    AssertTrue(type.GetField("_nextActionList", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+        "teacher overview must expose next action list");
+    AssertTrue(type.GetField("_statsGrid", BindingFlags.Instance | BindingFlags.NonPublic) == null,
+        "teacher overview should not keep the old large stats grid");
+});
+Run("profile pages retain role metrics and account security sections", () =>
+{
+    string root = RepoRoot();
+    string studentProfileSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_Profile.cs"));
+    string teacherProfileSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherProfile.cs"));
+
+    AssertTrue(studentProfileSource.Contains("Thong tin hoc tap") || studentProfileSource.Contains("Thông tin học tập"),
+        "student profile must keep learning metrics in profile");
+    AssertTrue(teacherProfileSource.Contains("Thong tin giang day") || teacherProfileSource.Contains("Thông tin giảng dạy"),
+        "teacher profile must keep teaching metrics in profile");
+    AssertTrue(studentProfileSource.Contains("Bao mat tai khoan") || studentProfileSource.Contains("Bảo mật tài khoản"),
+        "student profile must keep account security");
+    AssertTrue(teacherProfileSource.Contains("Bao mat tai khoan") || teacherProfileSource.Contains("Bảo mật tài khoản"),
+        "teacher profile must keep account security");
+});
+Run("sidebar supports visible expanded navigation groups without replacing old API", () =>
+{
+    Type sidebarType = typeof(SidebarPanel);
+    AssertTrue(sidebarType.GetMethod("SetNavItems", new[] { typeof(string[]), typeof(string[]) }) != null,
+        "SidebarPanel must preserve SetNavItems(string[], string[])");
+
+    Type? itemType = typeof(SidebarPanel).Assembly.GetType("CourseGuard.Frontend.Theme.SidebarNavItem");
+    AssertTrue(itemType != null, "SidebarNavItem must exist");
+    AssertTrue(itemType!.GetProperty("Label") != null, "SidebarNavItem must expose Label");
+    AssertTrue(itemType.GetProperty("Icon") != null, "SidebarNavItem must expose Icon");
+    AssertTrue(itemType.GetProperty("IsHeading") != null, "SidebarNavItem must expose IsHeading");
+
+    Type listType = typeof(IEnumerable<>).MakeGenericType(itemType);
+    MethodInfo? groupedMethod = sidebarType.GetMethod("SetNavItems", new[] { listType });
+    AssertTrue(groupedMethod != null, "SidebarPanel must expose SetNavItems(IEnumerable<SidebarNavItem>)");
+});
+Run("student and teacher dashboards define grouped sidebar navigation", () =>
+{
+    string root = RepoRoot();
+    string studentSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Student", "StudentDashboard.cs"));
+    string teacherSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherDashboard.cs"));
+
+    AssertTrue(studentSource.Contains("new SidebarNavItem(\"Tổng quan\", string.Empty, isHeading: true)"),
+        "student sidebar must include always-visible Tổng quan heading");
+    AssertTrue(studentSource.Contains("new SidebarNavItem(\"Học tập\", string.Empty, isHeading: true)"),
+        "student sidebar must include always-visible Học tập heading");
+    AssertTrue(studentSource.Contains("new SidebarNavItem(\"Kiểm tra\", string.Empty, isHeading: true)"),
+        "student sidebar must include always-visible Kiểm tra heading");
+    AssertTrue(studentSource.Contains("new SidebarNavItem(\"Cộng đồng\", string.Empty, isHeading: true)"),
+        "student sidebar must include always-visible Cộng đồng heading");
+    AssertTrue(studentSource.Contains("new SidebarNavItem(\"Tài khoản\", string.Empty, isHeading: true)"),
+        "student sidebar must include always-visible Tài khoản heading");
+
+    AssertTrue(teacherSource.Contains("new SidebarNavItem(\"Giảng dạy\", string.Empty, isHeading: true)"),
+        "teacher sidebar must include always-visible Giảng dạy heading");
+    AssertTrue(teacherSource.Contains("new SidebarNavItem(\"Tổng quan\", string.Empty, isHeading: true)"),
+        "teacher sidebar must include always-visible Tổng quan heading");
+    AssertTrue(teacherSource.Contains("new SidebarNavItem(\"Kiểm tra\", string.Empty, isHeading: true)"),
+        "teacher sidebar must include always-visible Kiểm tra heading");
+    AssertTrue(teacherSource.Contains("new SidebarNavItem(\"Lớp học\", string.Empty, isHeading: true)"),
+        "teacher sidebar must include always-visible Lớp học heading");
+    AssertTrue(teacherSource.Contains("new SidebarNavItem(\"Thông tin\", string.Empty, isHeading: true)"),
+        "teacher sidebar must include always-visible Thông tin heading");
+    AssertTrue(teacherSource.Contains("new SidebarNavItem(\"Tài khoản\", string.Empty, isHeading: true)"),
+        "teacher sidebar must include always-visible Tài khoản heading");
+
+    AssertTrue(!studentSource.Contains("ToggleGroup") && !teacherSource.Contains("ToggleGroup"),
+        "grouped sidebar must not introduce collapsible group state in this phase");
+});
+Run("teacher dashboard honors profile security focus requests", () =>
+{
+    Type type = typeof(TeacherDashboard);
+    MethodInfo? navigate = type.GetMethod("NavigateToPage", BindingFlags.Instance | BindingFlags.NonPublic);
+    AssertTrue(navigate != null, "TeacherDashboard must expose NavigateToPage");
+    AssertTrue(navigate!.GetParameters().Any(p => p.Name == "focusSecurity" && p.ParameterType == typeof(bool)),
+        "TeacherDashboard NavigateToPage must accept focusSecurity");
+    AssertTrue(type.GetMethod("FocusProfileSecuritySection", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+        "TeacherDashboard must expose FocusProfileSecuritySection");
+});
 Run("student grid page base builds layout and empty state without db access", RunStudentGridPageBaseTests);
 Run("student grid page base appends derived actions to header action strip", RunStudentGridPageHeaderActionTests);
 Run("student grid page base shows error empty state on initial failure", RunStudentGridPageInitialFailureTests);
@@ -1599,6 +1838,60 @@ static void RunDashboardCardTests()
     teacherCard.Dispose();
 }
 
+static void RunDashboardHeaderSubtitleLayoutTests()
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            using Control studentHeader = InvokeChromeHeader(
+                "CourseGuard.Frontend.UserControls.Student.StudentTabChrome",
+                "Tổng quan cá nhân",
+                "Theo dõi khóa học đang tham gia, bài kiểm tra, thông báo và hoạt động gần đây.");
+            using Control teacherHeader = InvokeChromeHeader(
+                "CourseGuard.Frontend.UserControls.Teacher.TeacherTabChrome",
+                "Lịch dạy",
+                "Quản lý lịch học và mở lớp trực tuyến");
+
+            AssertHeaderSubtitleHasDescenderRoom(studentHeader, "student header");
+            AssertHeaderSubtitleHasDescenderRoom(teacherHeader, "teacher header");
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw new InvalidOperationException(failure.Message, failure);
+}
+
+static void RunRoundedChromeClippingGuardTests()
+{
+    string repoRoot = RepoRoot();
+    string metaTheme = File.ReadAllText(Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Frontend", "Theme", "MetaTheme.cs"));
+    string dropdownStyler = File.ReadAllText(Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Frontend", "Theme", "StudentDropdownStyler.cs"));
+
+    AssertTrue(
+        metaTheme.Contains("new Rectangle(-1, -1, Width + 2, Height + 2), CornerRadius + 1", StringComparison.Ordinal),
+        "themed message dialog region should overscan rounded corners so the outer border is not clipped");
+    AssertTrue(
+        metaTheme.Contains("Margin = new Padding(CornerRadius, 0, CornerRadius, 0)", StringComparison.Ordinal),
+        "themed message dialog tone strip should stay clear of rounded top corners");
+    AssertTrue(
+        dropdownStyler.Contains("new RectangleF(1f, 1f, combo.Width - 2f, combo.Height - 2f)", StringComparison.Ordinal),
+        "styled combobox chrome should draw its border fully inside the window DC to preserve the bottom edge");
+    AssertTrue(
+        dropdownStyler.Contains("combo.Height - 2", StringComparison.Ordinal)
+            && dropdownStyler.Contains("g.DrawLine(pen, 10, bottomY, combo.Width - 11, bottomY)", StringComparison.Ordinal),
+        "styled combobox chrome should explicitly redraw the bottom border inside the control");
+}
+
 static void RunStudentGridPageBaseTests()
 {
     Exception? failure = null;
@@ -1802,6 +2095,7 @@ static void RunMessageDialogButtonTests()
         "Dang xuat",
         MessageBoxButtons.YesNoCancel,
         MessageBoxIcon.Question);
+    AssertEqual(255, yesNoCancel.BackColor.A);
     AssertDialogResults(
         yesNoCancel,
         new[] { DialogResult.Yes, DialogResult.No, DialogResult.Cancel },
@@ -1914,6 +2208,21 @@ static Control InvokeChromeDataCard(string typeName, string title, Control conte
         ?? throw new InvalidOperationException("CreateDataCard returned null"));
 }
 
+static Control InvokeChromeHeader(string typeName, string title, string subtitle)
+{
+    Type chromeType = typeof(StudentExamScoringService).Assembly.GetType(typeName)
+        ?? throw new InvalidOperationException($"Cannot find {typeName}");
+    MethodInfo method = chromeType.GetMethod(
+            "CreateHeader",
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+            null,
+            new[] { typeof(string), typeof(string), typeof(Control[]) },
+            null)
+        ?? throw new InvalidOperationException($"Cannot find CreateHeader(string, string, Control[]) on {typeName}");
+    return (Control)(method.Invoke(null, new object[] { title, subtitle, Array.Empty<Control>() })
+        ?? throw new InvalidOperationException("CreateHeader returned null"));
+}
+
 static void AssertGridIsWrappedInRoundedBody(Control card, DataGridView grid, string scenario)
 {
     TableLayoutPanel layout = card.Controls.OfType<TableLayoutPanel>().Single();
@@ -1923,6 +2232,27 @@ static void AssertGridIsWrappedInRoundedBody(Control card, DataGridView grid, st
         throw new InvalidOperationException($"{scenario}: expected DataGridView content to be hosted inside RoundedPanel");
     if (!body.Controls.Contains(grid))
         throw new InvalidOperationException($"{scenario}: RoundedPanel does not contain original grid");
+}
+
+static void AssertHeaderSubtitleHasDescenderRoom(Control header, string scenario)
+{
+    TableLayoutPanel layout = header.Controls.OfType<TableLayoutPanel>().Single();
+    FlowLayoutPanel titleStack = layout.GetControlFromPosition(0, 0) as FlowLayoutPanel
+        ?? throw new InvalidOperationException($"{scenario}: missing title stack");
+    Label[] labels = titleStack.Controls.OfType<Label>().ToArray();
+    if (labels.Length < 2)
+        throw new InvalidOperationException($"{scenario}: missing subtitle label");
+
+    Label subtitle = labels[1];
+    AssertFalse(subtitle.AutoSize, $"{scenario}: subtitle should use fixed height instead of clipping-prone AutoSize");
+    AssertFalse(subtitle.UseCompatibleTextRendering, $"{scenario}: subtitle should use native TextRenderer to avoid clipping descenders");
+    AssertTrue(subtitle.Height >= 28, $"{scenario}: subtitle should reserve enough height for Vietnamese descenders");
+    AssertTrue(subtitle.Padding.Bottom >= 4, $"{scenario}: subtitle should keep bottom padding for glyph descenders");
+
+    int requiredHeight = header.Padding.Top + header.Padding.Bottom + labels.Sum(label => label.Height + label.Margin.Vertical);
+    AssertTrue(header.MinimumSize.Height >= requiredHeight, $"{scenario}: header card should be tall enough for title and subtitle without clipping");
+    AssertTrue(header.Height >= header.MinimumSize.Height, $"{scenario}: header card should use its minimum height instead of the default panel height");
+    AssertTrue(header.Height <= 104, $"{scenario}: header card should stay compact and not push dashboard content down");
 }
 
 static void AssertEqual<T>(T expected, T actual)

@@ -42,16 +42,17 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         public ThemedDialogBase()
         {
-            StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.None;
+            StartPosition = FormStartPosition.CenterParent;
+            Width = 700;
+            Height = 500;
+            BackColor = AppColors.BorderStrong;
+            Tag = "dialog";
             ShowInTaskbar = false;
-            BackColor = AppColors.BgCard;
             ForeColor = AppColors.TextPrimary;
             Font = AppFonts.Body;
             DoubleBuffered = true;
             Padding = new Padding(1);
-            Width = 700;
-            Height = 450;
 
             _root = new TableLayoutPanel
             {
@@ -153,7 +154,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _contentPanel = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = AppColors.BgCard,
+                BackColor = Color.Transparent,
                 Padding = new Padding(24, 8, 24, 10)
             };
             _root.Controls.Add(_contentPanel, 0, 2);
@@ -162,7 +163,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _footerPanel = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                BackColor = AppColors.BgCard,
+                BackColor = Color.Transparent,
                 ColumnCount = 1,
                 RowCount = 1,
                 Padding = new Padding(16, 12, 16, 12)
@@ -170,7 +171,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _footerPanel.Paint += (_, e) =>
             {
                 using var pen = new Pen(AppColors.Border, 1f);
-                e.Graphics.DrawLine(pen, 0, 0, _footerPanel.Width, 0);
+                e.Graphics.DrawLine(pen, 1, 0, _footerPanel.Width - 1, 0);
             };
             _root.Controls.Add(_footerPanel, 0, 3);
 
@@ -185,6 +186,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 float clampedRadius = Math.Min(CornerRadius, Math.Min(borderRect.Width, borderRect.Height) / 2f);
                 
                 using var path = GraphicsHelpers.RoundedRectF(borderRect, clampedRadius);
+                using var bgBrush = new SolidBrush(AppColors.BgCard);
+                e.Graphics.FillPath(bgBrush, path);
                 using var pen = new Pen(AppColors.BorderStrong, 1f);
                 e.Graphics.DrawPath(pen, path);
             };
@@ -195,10 +198,14 @@ namespace CourseGuard.Frontend.Forms.Teacher
             base.OnShown(e);
             ApplyRoundedRegion();
             AppColors.ApplyTheme(this);
+            
+            // Restore BackColor which AppColors.ApplyTheme overwrites
+            BackColor = AppColors.BorderStrong;
+
             // Re-apply to custom drawn elements
-            _root.BackColor = AppColors.BgCard;
-            _contentPanel.BackColor = AppColors.BgCard;
-            _footerPanel.BackColor = AppColors.BgCard;
+            _root.BackColor = Color.Transparent;
+            _contentPanel.BackColor = Color.Transparent;
+            _footerPanel.BackColor = Color.Transparent;
         }
 
         protected override void OnResize(EventArgs e)
@@ -223,7 +230,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 return;
 
             Region?.Dispose();
-            using var path = GraphicsHelpers.RoundedRect(new Rectangle(-1, -1, Width + 2, Height + 2), CornerRadius + 1);
+            using var path = GraphicsHelpers.RoundedRect(new Rectangle(0, 0, Width, Height), CornerRadius);
             Region = new Region(path);
         }
 

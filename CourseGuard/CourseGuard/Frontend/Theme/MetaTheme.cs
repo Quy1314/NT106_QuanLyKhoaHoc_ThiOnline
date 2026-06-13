@@ -648,6 +648,7 @@ namespace CourseGuard.Frontend.Theme
                 Font = AppFonts.Body;
                 DoubleBuffered = true;
                 Padding = new Padding(1);
+                Tag = "dialog";
 
                 int width = 460;
                 int measuredHeight = TextRenderer.MeasureText(
@@ -658,21 +659,11 @@ namespace CourseGuard.Frontend.Theme
                 Size = new Size(width, Math.Clamp(measuredHeight + 166, 220, 380));
 
                 Controls.Add(BuildRoot(content, title));
-                Paint += (_, e) =>
-                {
-                    e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                    GraphicsHelpers.DrawRoundedBorder(
-                        e.Graphics,
-                        new Rectangle(0, 0, Width - 1, Height - 1),
-                        CornerRadius,
-                        AppColors.BorderStrong,
-                        1f);
-                };
             }
 
-            protected override void OnShown(EventArgs e)
+            protected override void OnHandleCreated(EventArgs e)
             {
-                base.OnShown(e);
+                base.OnHandleCreated(e);
                 ApplyRoundedRegion();
             }
 
@@ -680,6 +671,15 @@ namespace CourseGuard.Frontend.Theme
             {
                 base.OnResize(e);
                 ApplyRoundedRegion();
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                base.OnPaint(e);
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                using var pen = new Pen(AppColors.BorderStrong, 1.5f);
+                using var path = GraphicsHelpers.RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), CornerRadius);
+                e.Graphics.DrawPath(pen, path);
             }
 
             private Control BuildRoot(string content, string title)
@@ -697,7 +697,7 @@ namespace CourseGuard.Frontend.Theme
                 root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
                 root.RowStyles.Add(new RowStyle(SizeType.Absolute, 66f));
 
-                root.Controls.Add(new Panel { Dock = DockStyle.Fill, BackColor = ToneColor, Margin = new Padding(0) }, 0, 0);
+                root.Controls.Add(new Panel { Dock = DockStyle.Fill, BackColor = ToneColor, Margin = new Padding(CornerRadius, 0, CornerRadius, 0) }, 0, 0);
                 root.Controls.Add(BuildHeader(title), 0, 1);
                 root.Controls.Add(BuildBody(content), 0, 2);
                 root.Controls.Add(BuildFooter(), 0, 3);
@@ -1059,6 +1059,19 @@ namespace CourseGuard.Frontend.Theme
                 };
             }
 
+            private static Color OpaqueOn(Color foreground, Color background)
+            {
+                if (foreground.A == 255)
+                    return foreground;
+
+                int alpha = foreground.A;
+                int inverse = 255 - alpha;
+                return Color.FromArgb(
+                    (foreground.R * alpha + background.R * inverse) / 255,
+                    (foreground.G * alpha + background.G * inverse) / 255,
+                    (foreground.B * alpha + background.B * inverse) / 255);
+            }
+
             private static DialogButtonSpec Primary(DialogResult result, string text)
             {
                 return new DialogButtonSpec(result, text, primary: true, cancel: false);
@@ -1083,7 +1096,7 @@ namespace CourseGuard.Frontend.Theme
                     return;
 
                 Region?.Dispose();
-                using var path = GraphicsHelpers.RoundedRect(new Rectangle(-1, -1, Width + 2, Height + 2), CornerRadius);
+                using var path = GraphicsHelpers.RoundedRect(new Rectangle(-1, -1, Width + 2, Height + 2), CornerRadius + 1);
                 Region = new Region(path);
             }
         }
