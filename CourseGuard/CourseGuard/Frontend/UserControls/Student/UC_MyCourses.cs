@@ -47,9 +47,12 @@ namespace CourseGuard.Frontend.UserControls.Student
             StudentTabChrome.StyleDangerButton(btnDrop);
             StudentTabChrome.StyleGrid(dgvMyCourses);
             StudentTabChrome.StyleInput(cboStatusFilter);
+            cboStatusFilter.MinimumSize = new Size(cboStatusFilter.MinimumSize.Width, 38);
+            cboStatusFilter.Height = 38;
 
             // Events
             cboStatusFilter.SelectedIndex = 0;
+            Load += (_, _) => { StudentDropdownStyler.StyleComboBox(cboStatusFilter, useCustomPopup: true); };
             cboStatusFilter.SelectedIndexChanged += (s, e) => ApplyFilter();
             btnRefresh.Click += async (s, e) => await LoadEnrollments();
             btnDrop.Click += BtnDrop_Click;

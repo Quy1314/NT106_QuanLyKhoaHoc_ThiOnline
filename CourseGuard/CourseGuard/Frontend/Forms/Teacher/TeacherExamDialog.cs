@@ -11,7 +11,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
     public partial class TeacherExamDialog : ThemedDialogBase
     {
         private readonly ComboBox _course = new();
-        private readonly TextBox _title = new();
+        private readonly DarkTextInput _title = new();
         private readonly ComboBox _status = new();
         private readonly DarkDateTimePicker _openTime = new();
         private readonly DarkDateTimePicker _closeTime = new();
@@ -98,31 +98,33 @@ namespace CourseGuard.Frontend.Forms.Teacher
             };
 
             var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, Padding = new Padding(0) };
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 16));
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22));
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
-            for (int i = 0; i < 4; i++) grid.RowStyles.Add(new RowStyle(SizeType.Percent, 25));
+            for (int i = 0; i < 4; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
 
-            grid.Controls.Add(CreateLabel("Khóa học"), 0, 0);
+            _title.Placeholder = "Nhập tiêu đề bài kiểm tra...";
+
+            grid.Controls.Add(CreateLabel("Khóa học *"), 0, 0);
             grid.Controls.Add(StyleInput(_course), 1, 0);
             grid.Controls.Add(CreateLabel("Thời gian mở"), 2, 0);
             grid.Controls.Add(_openTime, 3, 0);
 
-            grid.Controls.Add(CreateLabel("Tiêu đề"), 0, 1);
+            grid.Controls.Add(CreateLabel("Tiêu đề *"), 0, 1);
             grid.Controls.Add(StyleInput(_title), 1, 1);
             grid.Controls.Add(CreateLabel("Thời gian đóng"), 2, 1);
             grid.Controls.Add(_closeTime, 3, 1);
 
-            grid.Controls.Add(CreateLabel("Trạng thái"), 0, 2);
+            grid.Controls.Add(CreateLabel("Trạng thái *"), 0, 2);
             grid.Controls.Add(StyleInput(_status), 1, 2);
-            grid.Controls.Add(CreateLabel("Thời lượng (phút)"), 2, 2);
+            grid.Controls.Add(CreateLabel("Thời lượng (phút) *"), 2, 2);
             grid.Controls.Add(_duration, 3, 2);
 
-            grid.Controls.Add(CreateLabel("Số lần làm bài"), 2, 3);
-            grid.Controls.Add(CreateLabel("Vi pham toi da (0 = khong gioi han)"), 0, 3);
+            grid.Controls.Add(CreateLabel("Vi phạm tối đa\n(0 = vô hạn)"), 0, 3);
             grid.Controls.Add(_maxViolations, 1, 3);
+            grid.Controls.Add(CreateLabel("Số lần làm bài *"), 2, 3);
             grid.Controls.Add(_maxAttempts, 3, 3);
 
             ContentPanel.Controls.Add(grid);
@@ -141,7 +143,11 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 Text = text, 
                 Dock = DockStyle.Fill, 
                 TextAlign = ContentAlignment.MiddleLeft,
-                ForeColor = AppColors.TextSecondary
+                ForeColor = AppColors.TextSecondary,
+                Font = AppFonts.Semibold(9f),
+                BackColor = AppColors.BgCard,
+                Margin = new Padding(0, 4, 8, 4),
+                AutoSize = false
             };
         }
 
@@ -151,43 +157,173 @@ namespace CourseGuard.Frontend.Forms.Teacher
             c.BackColor = AppColors.BgInput;
             c.ForeColor = AppColors.TextPrimary;
             c.Font = MetaTheme.Fonts.BodyMd();
+            c.Margin = new Padding(0, 6, 0, 6);
             if (c is TextBox tb) tb.BorderStyle = BorderStyle.FixedSingle;
             if (c is ComboBox cb) cb.FlatStyle = FlatStyle.Flat;
             return c;
         }
     }
 
-    public class DarkNumericInput : TextBox
+    public class DarkTextInput : Panel
     {
+        private readonly TextBox _inner = new TextBox();
+        private bool _isHovered;
+        private bool _isFocused;
+        private const int CornerRadius = 8;
+
+        public DarkTextInput()
+        {
+            Height = 36;
+            Dock = DockStyle.Fill;
+            BackColor = Color.Transparent;
+            Margin = new Padding(0, 6, 0, 6);
+            Padding = new Padding(12, 8, 12, 8);
+            DoubleBuffered = true;
+
+            _inner.BorderStyle = BorderStyle.None;
+            _inner.BackColor = AppColors.BgInput;
+            _inner.ForeColor = AppColors.TextPrimary;
+            _inner.Font = MetaTheme.Fonts.BodyMd();
+            _inner.Dock = DockStyle.Fill;
+            _inner.GotFocus += (_, _) => { _isFocused = true; Invalidate(); };
+            _inner.LostFocus += (_, _) => { _isFocused = false; Invalidate(); };
+
+            Controls.Add(_inner);
+
+            MouseEnter += (_, _) => { _isHovered = true; Invalidate(); };
+            MouseLeave += (_, _) => { _isHovered = false; Invalidate(); };
+            _inner.MouseEnter += (_, _) => { _isHovered = true; Invalidate(); };
+            _inner.MouseLeave += (_, _) => { _isHovered = false; Invalidate(); };
+        }
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern Int32 SendMessage(IntPtr hWnd, int msg, int wParam, [MarshalAs(UnmanagedType.LPWStr)] string lParam);
+        private const int EM_SETCUEBANNER = 0x1501;
+        private string _placeholder = "";
+
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public string Placeholder
+        {
+            get => _placeholder;
+            set
+            {
+                _placeholder = value;
+                if (IsHandleCreated) SendMessage(_inner.Handle, EM_SETCUEBANNER, 1, _placeholder);
+            }
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            if (!string.IsNullOrEmpty(_placeholder))
+                SendMessage(_inner.Handle, EM_SETCUEBANNER, 1, _placeholder);
+        }
+
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        [System.Diagnostics.CodeAnalysis.AllowNull]
+        public override string Text
+        {
+            get => _inner.Text;
+            set => _inner.Text = value;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+
+            var rect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            using var bgPath = GraphicsHelpers.RoundedRectF(rect, CornerRadius);
+            using var bgBrush = new SolidBrush(AppColors.BgInput);
+            e.Graphics.FillPath(bgBrush, bgPath);
+
+            Color borderColor = _isFocused ? AppColors.AccentBlue
+                : _isHovered ? AppColors.BorderStrong
+                : AppColors.Border;
+            float borderWidth = _isFocused ? 1.5f : 1f;
+            using var borderPen = new Pen(borderColor, borderWidth);
+            e.Graphics.DrawPath(borderPen, bgPath);
+        }
+    }
+
+    public class DarkNumericInput : Panel
+    {
+        private readonly TextBox _inner = new TextBox();
+        private bool _isHovered;
+        private bool _isFocused;
+        private const int CornerRadius = 8;
+
         public DarkNumericInput()
         {
-            BackColor = AppColors.BgInput;
-            ForeColor = AppColors.TextPrimary;
-            BorderStyle = BorderStyle.FixedSingle;
-            Font = MetaTheme.Fonts.BodyMd();
+            Height = 36;
             Dock = DockStyle.Fill;
+            BackColor = Color.Transparent;
+            Margin = new Padding(0, 6, 0, 6);
+            Padding = new Padding(12, 8, 12, 8);
+            DoubleBuffered = true;
+
+            _inner.BorderStyle = BorderStyle.None;
+            _inner.BackColor = AppColors.BgInput;
+            _inner.ForeColor = AppColors.TextPrimary;
+            _inner.Font = MetaTheme.Fonts.BodyMd();
+            _inner.Dock = DockStyle.Fill;
+            _inner.KeyPress += (_, e) => {
+                if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar))
+                    e.Handled = true;
+            };
+            _inner.GotFocus += (_, _) => { _isFocused = true; Invalidate(); };
+            _inner.LostFocus += (_, _) => { _isFocused = false; Invalidate(); };
+
+            Controls.Add(_inner);
+
+            MouseEnter += (_, _) => { _isHovered = true; Invalidate(); };
+            MouseLeave += (_, _) => { _isHovered = false; Invalidate(); };
+            _inner.MouseEnter += (_, _) => { _isHovered = true; Invalidate(); };
+            _inner.MouseLeave += (_, _) => { _isHovered = false; Invalidate(); };
         }
 
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public int Value
         {
-            get => int.TryParse(Text, out int v) ? v : 0;
-            set => Text = value.ToString();
+            get => int.TryParse(_inner.Text, out int v) ? v : 0;
+            set => _inner.Text = value.ToString();
         }
 
-        protected override void OnKeyPress(KeyPressEventArgs e)
+        protected override void OnPaint(PaintEventArgs e)
         {
-            if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar))
-                e.Handled = true;
-            base.OnKeyPress(e);
+            base.OnPaint(e);
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+
+            var rect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            using var bgPath = GraphicsHelpers.RoundedRectF(rect, CornerRadius);
+            using var bgBrush = new SolidBrush(AppColors.BgInput);
+            e.Graphics.FillPath(bgBrush, bgPath);
+
+            Color borderColor = _isFocused ? AppColors.AccentBlue
+                : _isHovered ? AppColors.BorderStrong
+                : AppColors.Border;
+            float borderWidth = _isFocused ? 1.5f : 1f;
+            using var borderPen = new Pen(borderColor, borderWidth);
+            e.Graphics.DrawPath(borderPen, bgPath);
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
         }
     }
 
     public class DarkDateTimePicker : Panel
     {
         private TextBox _textBox = new TextBox();
-        private Button _btn = new Button();
+        private Panel _iconBtn = new Panel();
+        private Panel _innerPanel = new Panel();
         private DateTime? _value;
+        private bool _isHovered;
+        private bool _isFocused;
+        private const int CornerRadius = 8;
 
         public bool Checked => _value.HasValue;
         
@@ -200,38 +336,97 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         public DarkDateTimePicker()
         {
-            Height = 28;
+            Height = 36;
             Dock = DockStyle.Fill;
-            Padding = new Padding(1);
-            BackColor = AppColors.Border; // Border
+            BackColor = Color.Transparent;
+            Margin = new Padding(0, 6, 0, 6);
+            DoubleBuffered = true;
             
-            var innerPanel = new Panel { Dock = DockStyle.Fill, BackColor = AppColors.BgInput };
+            _iconBtn = new Panel
+            {
+                Dock = DockStyle.Right,
+                Width = 36,
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
+            Controls.Add(_iconBtn);
+
+            _innerPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(12, 8, 0, 8) };
             
             _textBox.BorderStyle = BorderStyle.None;
             _textBox.BackColor = AppColors.BgInput;
             _textBox.ForeColor = AppColors.TextPrimary;
             _textBox.Font = MetaTheme.Fonts.BodyMd();
-            _textBox.Location = new Point(5, 4);
-            _textBox.Width = 130;
-            _textBox.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+            _textBox.Dock = DockStyle.Fill;
             _textBox.TextChanged += (s, e) => {
                 if (DateTime.TryParseExact(_textBox.Text, "dd/MM/yyyy HH:mm", null, System.Globalization.DateTimeStyles.None, out DateTime dt))
                     _value = dt;
             };
+            _textBox.GotFocus += (_, _) => { _isFocused = true; Invalidate(); };
+            _textBox.LostFocus += (_, _) => { _isFocused = false; Invalidate(); };
 
-            _btn.Text = "▼";
-            _btn.Dock = DockStyle.Right;
-            _btn.Width = 30;
-            _btn.FlatStyle = FlatStyle.Flat;
-            _btn.FlatAppearance.BorderSize = 0;
-            _btn.BackColor = AppColors.BgInput;
-            _btn.ForeColor = AppColors.TextSecondary;
-            _btn.Cursor = Cursors.Hand;
-            _btn.Click += Btn_Click;
+            _iconBtn.Paint += (_, e) => {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                var pen = new Pen(_isFocused ? AppColors.AccentBlue : AppColors.TextSecondary, 1.5f)
+                {
+                    StartCap = System.Drawing.Drawing2D.LineCap.Round,
+                    EndCap = System.Drawing.Drawing2D.LineCap.Round
+                };
+                int cx = _iconBtn.Width / 2;
+                int cy = _iconBtn.Height / 2;
+                // Calendar icon
+                var r = new Rectangle(cx - 7, cy - 7, 14, 14);
+                e.Graphics.DrawRectangle(pen, r);
+                e.Graphics.DrawLine(pen, r.Left, cy - 3, r.Right, cy - 3);
+                e.Graphics.DrawLine(pen, cx - 3, r.Top - 2, cx - 3, r.Top + 2);
+                e.Graphics.DrawLine(pen, cx + 3, r.Top - 2, cx + 3, r.Top + 2);
+                // Dots for days
+                using var dotBrush = new SolidBrush(_isFocused ? AppColors.AccentBlue : AppColors.TextSecondary);
+                e.Graphics.FillEllipse(dotBrush, cx - 4, cy + 1, 3, 3);
+                e.Graphics.FillEllipse(dotBrush, cx + 1, cy + 1, 3, 3);
+                pen.Dispose();
+            };
+            _iconBtn.Click += Btn_Click;
 
-            innerPanel.Controls.Add(_textBox);
-            innerPanel.Controls.Add(_btn);
-            Controls.Add(innerPanel);
+            _innerPanel.Controls.Add(_textBox);
+            Controls.Add(_innerPanel);
+
+            MouseEnter += (_, _) => { _isHovered = true; Invalidate(); };
+            MouseLeave += (_, _) => { _isHovered = false; Invalidate(); };
+            _textBox.MouseEnter += (_, _) => { _isHovered = true; Invalidate(); };
+            _textBox.MouseLeave += (_, _) => { _isHovered = false; Invalidate(); };
+            _iconBtn.MouseEnter += (_, _) => { _isHovered = true; _iconBtn.Invalidate(); Invalidate(); };
+            _iconBtn.MouseLeave += (_, _) => { _isHovered = false; _iconBtn.Invalidate(); Invalidate(); };
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+
+            var rect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            using var bgPath = GraphicsHelpers.RoundedRectF(rect, CornerRadius);
+            using var bgBrush = new SolidBrush(AppColors.BgInput);
+            e.Graphics.FillPath(bgBrush, bgPath);
+
+            Color borderColor = _isFocused ? AppColors.AccentBlue 
+                : _isHovered ? AppColors.BorderStrong 
+                : AppColors.Border;
+            float borderWidth = _isFocused ? 1.5f : 1f;
+            using var borderPen = new Pen(borderColor, borderWidth);
+            e.Graphics.DrawPath(borderPen, bgPath);
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            if (Width > 0 && Height > 0)
+            {
+                Region?.Dispose();
+                using var path = GraphicsHelpers.RoundedRect(new Rectangle(-1, -1, Width + 2, Height + 2), CornerRadius + 1);
+                Region = new Region(path);
+            }
         }
 
         public void Clear()
@@ -249,15 +444,33 @@ namespace CourseGuard.Frontend.Forms.Teacher
         {
             using var popup = new Form { 
                 StartPosition = FormStartPosition.Manual, 
-                FormBorderStyle = FormBorderStyle.FixedToolWindow, 
-                Width = 250, Height = 250,
-                Text = "Chọn ngày giờ"
+                FormBorderStyle = FormBorderStyle.None, 
+                Width = 260, Height = 280,
+                Text = "Chọn ngày giờ",
+                BackColor = AppColors.BgCard,
+                ShowInTaskbar = false
             };
-            popup.Location = PointToScreen(new Point(0, Height));
+            popup.Location = PointToScreen(new Point(0, Height + 4));
+            
+            // Apply rounded region to popup
+            popup.Paint += (_, pe) => {
+                pe.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                GraphicsHelpers.DrawRoundedBorder(pe.Graphics, new Rectangle(0, 0, popup.Width - 1, popup.Height - 1), 12, AppColors.BorderStrong, 1f);
+            };
+            popup.Shown += (_, _) => {
+                popup.Region?.Dispose();
+                using var rp = GraphicsHelpers.RoundedRect(new Rectangle(-1, -1, popup.Width + 2, popup.Height + 2), 13);
+                popup.Region = new Region(rp);
+            };
+
             var dtp = new DateTimePicker { 
                 Format = DateTimePickerFormat.Custom, 
                 CustomFormat = "dd/MM/yyyy HH:mm", 
-                Dock = DockStyle.Top 
+                Dock = DockStyle.Top,
+                CalendarMonthBackground = AppColors.BgInput,
+                CalendarForeColor = AppColors.TextPrimary,
+                CalendarTitleBackColor = AppColors.BgCard,
+                CalendarTitleForeColor = AppColors.TextPrimary
             };
             var mc = new MonthCalendar { Dock = DockStyle.Fill, MaxSelectionCount = 1 };
             
@@ -270,7 +483,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 dtp.Value = new DateTime(ev.Start.Year, ev.Start.Month, ev.Start.Day, dtp.Value.Hour, dtp.Value.Minute, 0);
             };
             
-            var btnOk = new Button { Text = "Xác nhận", Dock = DockStyle.Bottom, DialogResult = DialogResult.OK, Height = 35 };
+            var btnOk = new Button { Text = "Xác nhận", Dock = DockStyle.Bottom, DialogResult = DialogResult.OK, Height = 36 };
             btnOk.Tag = "primary";
             RoundedButtonHelper.Apply(8, btnOk);
             AppColors.ApplyTheme(popup);
@@ -279,6 +492,15 @@ namespace CourseGuard.Frontend.Forms.Teacher
             popup.Controls.Add(dtp);
             popup.Controls.Add(btnOk);
             popup.AcceptButton = btnOk;
+            
+            // Close popup when clicking outside
+            popup.Deactivate += (_, _) => {
+                if (popup.Visible)
+                {
+                    popup.DialogResult = DialogResult.Cancel;
+                    popup.Close();
+                }
+            };
             
             if (popup.ShowDialog() == DialogResult.OK)
                 Value = dtp.Value;

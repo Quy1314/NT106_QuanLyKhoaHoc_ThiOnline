@@ -7,12 +7,66 @@ using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Services;
+using CourseGuard.Frontend.Forms.Teacher;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.Forms.Student
 {
-    public class StudentAssignmentSubmitDialog : Form
+    public class RoundedInputPanel : Panel
+    {
+        private const int CornerRadius = 8;
+        private bool _isFocused;
+        private bool _isHovered;
+
+        public RoundedInputPanel(Control innerControl)
+        {
+            BackColor = Color.Transparent;
+            Padding = new Padding(12, 8, 12, 8);
+            DoubleBuffered = true;
+            
+            innerControl.Dock = DockStyle.Fill;
+            innerControl.GotFocus += (_, _) => { _isFocused = true; Invalidate(); };
+            innerControl.LostFocus += (_, _) => { _isFocused = false; Invalidate(); };
+            innerControl.MouseEnter += (_, _) => { _isHovered = true; Invalidate(); };
+            innerControl.MouseLeave += (_, _) => { _isHovered = false; Invalidate(); };
+            MouseEnter += (_, _) => { _isHovered = true; Invalidate(); };
+            MouseLeave += (_, _) => { _isHovered = false; Invalidate(); };
+
+            Controls.Add(innerControl);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            Color parentColor = AppColors.BgCard;
+            Control? p = Parent;
+            while(p != null)
+            {
+                if (p.BackColor != Color.Transparent)
+                {
+                    if (p is Form f && f.Tag?.ToString() == "dialog") parentColor = AppColors.BgCard;
+                    else parentColor = p.BackColor;
+                    break;
+                }
+                p = p.Parent;
+            }
+            e.Graphics.Clear(parentColor);
+
+            var rect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            using var bgPath = GraphicsHelpers.RoundedRectF(rect, CornerRadius);
+            using var bgBrush = new SolidBrush(AppColors.BgInput);
+            e.Graphics.FillPath(bgBrush, bgPath);
+
+            Color borderColor = _isFocused ? AppColors.AccentBlue : _isHovered ? AppColors.BorderStrong : AppColors.Border;
+            using var borderPen = new Pen(borderColor, _isFocused ? 1.5f : 1f);
+            e.Graphics.DrawPath(borderPen, bgPath);
+        }
+    }
+
+    public class StudentAssignmentSubmitDialog : CourseGuard.Frontend.Forms.Teacher.ThemedDialogBase
     {
         private readonly CourseGuardDbContext _dbContext;
         private readonly StudentAssignmentRow _assignment;
@@ -48,126 +102,170 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private void InitializeComponent()
         {
-            this.Text = "Nộp bài tập";
-            this.Size = new Size(600, 500);
-            this.StartPosition = FormStartPosition.CenterParent;
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
+            Text = "Nộp bài tập";
+            Width = 600;
+            Height = 500;
 
-            lblTitle = new Label { Location = new Point(20, 20), AutoSize = true, Font = MetaTheme.Fonts.HeadingMd() };
-            lblCourse = new Label { Location = new Point(20, 50), AutoSize = true, Font = MetaTheme.Fonts.BodyMd() };
-            lblDueDate = new Label { Location = new Point(20, 75), AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), ForeColor = Color.Red };
+            // Title info panel
+            lblTitle = new Label { AutoSize = true, Font = MetaTheme.Fonts.HeadingMd(), Dock = DockStyle.Top, Padding = new Padding(0, 0, 0, 2) };
+            lblCourse = new Label { AutoSize = true, Font = MetaTheme.Fonts.BodyMd(), Dock = DockStyle.Top, Padding = new Padding(0, 0, 0, 0) };
+            lblDueDate = new Label { AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), ForeColor = Color.Red, Dock = DockStyle.Top, Padding = new Padding(0, 0, 0, 8) };
 
-            lblDescriptionTitle = new Label { Location = new Point(20, 105), AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Text = "Mô tả đề bài:" };
+            lblDescriptionTitle = new Label { AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Text = "Mô tả đề bài:", Dock = DockStyle.Top, Padding = new Padding(0, 4, 0, 4) };
 
             txtDescription = new TextBox
             {
-                Location = new Point(20, 130),
-                Size = new Size(540, 75),
                 Multiline = true,
                 ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical,
-                Font = MetaTheme.Fonts.BodyMd()
+                Font = MetaTheme.Fonts.BodyMd(),
+                BackColor = AppColors.BgInput,
+                ForeColor = AppColors.TextPrimary,
+                BorderStyle = BorderStyle.None,
+                Margin = new Padding(0),
+                TabStop = false
+            };
+            var pnlDescription = new RoundedInputPanel(txtDescription)
+            {
+                Height = 120,
+                Margin = new Padding(0, 0, 0, 8)
             };
 
-            lblDownloadTitle = new Label { Location = new Point(20, 215), AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Text = "Download bài tập:" };
+            lblDownloadTitle = new Label { AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Text = "Download bài tập:", Dock = DockStyle.Top, Padding = new Padding(0, 8, 0, 4) };
 
             btnDownloadTeacherFile = new Button
             {
-                Location = new Point(20, 240),
                 Size = new Size(200, 35),
                 Text = "Tải đề bài đính kèm",
                 Font = MetaTheme.Fonts.BodyMd(),
-                FlatStyle = FlatStyle.Flat
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Dock = DockStyle.Top
             };
+            btnDownloadTeacherFile.Tag = "secondary";
             btnDownloadTeacherFile.Click += BtnDownloadTeacherFile_Click;
+            RoundedButtonHelper.Apply(8, btnDownloadTeacherFile);
 
-            lblUploadTitle = new Label { Location = new Point(20, 285), AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Text = "Bài làm của bạn (Tối đa 10MB):" };
+            lblUploadTitle = new Label { AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Text = "Bài làm của bạn (Tối đa 10MB):", Dock = DockStyle.Top, Padding = new Padding(0, 8, 0, 4) };
+
+            // File selection row
+            var fileRow = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 38,
+                ColumnCount = 2,
+                RowCount = 1,
+                Margin = new Padding(0, 0, 0, 8)
+            };
+            fileRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            fileRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120f));
 
             txtSelectedFile = new TextBox
             {
-                Location = new Point(20, 315),
-                Size = new Size(410, 30),
                 ReadOnly = true,
-                Font = MetaTheme.Fonts.BodyMd()
+                Font = MetaTheme.Fonts.BodyMd(),
+                BackColor = AppColors.BgInput,
+                ForeColor = AppColors.TextPrimary,
+                BorderStyle = BorderStyle.None,
+                Margin = new Padding(0)
+            };
+            var pnlSelectedFile = new RoundedInputPanel(txtSelectedFile)
+            {
+                Dock = DockStyle.Fill,
+                Height = 36,
+                Margin = new Padding(0)
             };
 
             btnSelectFile = new Button
             {
-                Location = new Point(440, 313),
-                Size = new Size(120, 32),
+                Dock = DockStyle.Fill,
                 Text = "Chọn file...",
                 Font = MetaTheme.Fonts.BodyMd(),
-                FlatStyle = FlatStyle.Flat
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Margin = new Padding(8, 0, 0, 0)
             };
+            btnSelectFile.Tag = "secondary";
             btnSelectFile.Click += BtnSelectFile_Click;
+            RoundedButtonHelper.Apply(8, btnSelectFile);
 
+            fileRow.Controls.Add(pnlSelectedFile, 0, 0);
+            fileRow.Controls.Add(btnSelectFile, 1, 0);
+
+            // Build content using FlowLayoutPanel for auto-layout
+            var flow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoScroll = true,
+                BackColor = AppColors.BgCard,
+                Padding = new Padding(4)
+            };
+
+            flow.Resize += (s, e) =>
+            {
+                int w = flow.ClientSize.Width - flow.Padding.Horizontal;
+                if (w > 0)
+                {
+                    lblTitle.MaximumSize = new Size(w, 0);
+                    lblCourse.MaximumSize = new Size(w, 0);
+                    lblDueDate.MaximumSize = new Size(w, 0);
+                    lblDescriptionTitle.MaximumSize = new Size(w, 0);
+                    pnlDescription.Width = w;
+                    lblDownloadTitle.MaximumSize = new Size(w, 0);
+                    btnDownloadTeacherFile.Width = w;
+                    lblUploadTitle.MaximumSize = new Size(w, 0);
+                    fileRow.Width = w;
+                }
+            };
+
+            flow.Controls.Add(lblTitle);
+            flow.Controls.Add(lblCourse);
+            flow.Controls.Add(lblDueDate);
+            flow.Controls.Add(lblDescriptionTitle);
+            flow.Controls.Add(pnlDescription);
+            flow.Controls.Add(lblDownloadTitle);
+            flow.Controls.Add(btnDownloadTeacherFile);
+            flow.Controls.Add(lblUploadTitle);
+            flow.Controls.Add(fileRow);
+
+            ContentPanel.Controls.Add(flow);
+
+            // Footer buttons
             btnSubmit = new Button
             {
-                Location = new Point(340, 395),
-                Size = new Size(110, 40),
                 Text = "Nộp bài",
                 Font = MetaTheme.Fonts.ButtonMd(),
-                FlatStyle = FlatStyle.Flat
+                Width = 110,
+                Cursor = Cursors.Hand
             };
+            btnSubmit.Tag = "primary";
             btnSubmit.Click += async (s, e) => await BtnSubmit_Click();
 
             btnCancel = new Button
             {
-                Location = new Point(460, 395),
-                Size = new Size(100, 40),
                 Text = "Đóng",
                 Font = MetaTheme.Fonts.BodyMd(),
-                FlatStyle = FlatStyle.Flat
+                Width = 100,
+                Cursor = Cursors.Hand
             };
+            btnCancel.Tag = "secondary";
             btnCancel.Click += (s, e) => this.Close();
 
-            this.Controls.Add(lblTitle);
-            this.Controls.Add(lblCourse);
-            this.Controls.Add(lblDueDate);
-            this.Controls.Add(lblDescriptionTitle);
-            this.Controls.Add(txtDescription);
-            this.Controls.Add(lblDownloadTitle);
-            this.Controls.Add(btnDownloadTeacherFile);
-            this.Controls.Add(lblUploadTitle);
-            this.Controls.Add(txtSelectedFile);
-            this.Controls.Add(btnSelectFile);
-            this.Controls.Add(btnSubmit);
-            this.Controls.Add(btnCancel);
+            AddFooterButtons(btnCancel, btnSubmit);
+            RoundedButtonHelper.Apply(8, btnSubmit, btnCancel);
+            AcceptButton = btnSubmit;
+            CancelButton = btnCancel;
+
+            Load += (s, e) =>
+            {
+                btnCancel.Focus();
+            };
         }
 
         private void ApplyStyle()
         {
-            this.BackColor = AppColors.BgBase;
-            lblTitle.ForeColor = AppColors.TextPrimary;
-            lblCourse.ForeColor = AppColors.TextSecondary;
-            lblDescriptionTitle.ForeColor = AppColors.TextPrimary;
-            lblDownloadTitle.ForeColor = AppColors.TextPrimary;
-            lblUploadTitle.ForeColor = AppColors.TextPrimary;
-
-            txtDescription.BackColor = AppColors.BgCard;
-            txtDescription.ForeColor = AppColors.TextPrimary;
-            txtDescription.BorderStyle = BorderStyle.FixedSingle;
-
-            txtSelectedFile.BackColor = AppColors.BgCard;
-            txtSelectedFile.ForeColor = AppColors.TextPrimary;
-
-            btnDownloadTeacherFile.BackColor = AppColors.BgCard;
-            btnDownloadTeacherFile.ForeColor = AppColors.TextPrimary;
-            btnDownloadTeacherFile.FlatAppearance.BorderColor = AppColors.Border;
-
-            btnSelectFile.BackColor = AppColors.BgCard;
-            btnSelectFile.ForeColor = AppColors.TextPrimary;
-            btnSelectFile.FlatAppearance.BorderColor = AppColors.Border;
-
-            btnSubmit.BackColor = AppColors.AccentBlue;
-            btnSubmit.ForeColor = Color.White;
-            btnSubmit.FlatAppearance.BorderSize = 0;
-
-            btnCancel.BackColor = AppColors.BgCard;
-            btnCancel.ForeColor = AppColors.TextPrimary;
-            btnCancel.FlatAppearance.BorderColor = AppColors.Border;            
             if (_assignment.Status != "OPEN")
             {
                 btnSubmit.Enabled = false;
@@ -182,8 +280,6 @@ namespace CourseGuard.Frontend.Forms.Student
             lblTitle.Text = _assignment.Title;
             lblCourse.Text = $"Khóa học: {_assignment.CourseName}";
             lblDueDate.Text = $"Hạn nộp: {_assignment.DueDate:dd/MM/yyyy HH:mm}";
-            
-            int currentY = 105;
 
             if (string.IsNullOrWhiteSpace(_assignment.Description))
             {
@@ -192,10 +288,7 @@ namespace CourseGuard.Frontend.Forms.Student
             }
             else
             {
-                lblDescriptionTitle.Top = currentY;
-                txtDescription.Top = currentY + 25;
                 txtDescription.Text = _assignment.Description;
-                currentY += 110;
             }
 
             if (_assignment.HasTeacherFile)
@@ -203,27 +296,13 @@ namespace CourseGuard.Frontend.Forms.Student
                 lblDownloadTitle.Visible = true;
                 btnDownloadTeacherFile.Visible = true;
                 btnDownloadTeacherFile.Enabled = true;
-                lblDownloadTitle.Top = currentY;
-                btnDownloadTeacherFile.Top = currentY + 25;
                 btnDownloadTeacherFile.Text = $"Tải đính kèm ({_assignment.TeacherFileName})";
-                currentY += 70;
             }
             else
             {
                 lblDownloadTitle.Visible = false;
                 btnDownloadTeacherFile.Visible = false;
             }
-
-            lblUploadTitle.Top = currentY;
-            txtSelectedFile.Top = currentY + 30;
-            btnSelectFile.Top = currentY + 28;
-            currentY += 80;
-
-            btnSubmit.Top = currentY;
-            btnCancel.Top = currentY;
-            
-            // Adjust the window height based on the final currentY + the button height (40) + padding (50)
-            this.Height = currentY + 90;
 
             if (_assignment.IsSubmitted)
             {

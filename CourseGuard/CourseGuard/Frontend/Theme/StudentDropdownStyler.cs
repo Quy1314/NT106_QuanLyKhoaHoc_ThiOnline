@@ -400,6 +400,12 @@ namespace CourseGuard.Frontend.Theme
 
         private sealed class ComboBoxPainter : NativeWindow
         {
+            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            private static extern IntPtr GetWindowDC(IntPtr hWnd);
+
+            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
             private const int WmPaint = 0x000F;
             private const int WmNcPaint = 0x0085;
             private ComboBox? _combo;
@@ -450,64 +456,85 @@ namespace CourseGuard.Frontend.Theme
 
             private static void PaintComboChrome(ComboBox combo)
             {
-                using Graphics g = Graphics.FromHwnd(combo.Handle);
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-                g.PixelOffsetMode = PixelOffsetMode.Half;
-                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                IntPtr hdc = GetWindowDC(combo.Handle);
+                if (hdc == IntPtr.Zero) return;
 
-                Color parentBg = GetEffectiveBackColor(combo.Parent);
-                using (SolidBrush parentBrush = new SolidBrush(parentBg))
+                int actualWidth = combo.Width;
+                int actualHeight = combo.Height;
+
+                try
                 {
-                    g.FillRectangle(parentBrush, 0, 0, combo.Width, combo.Height);
+                    using Graphics g = Graphics.FromHdc(hdc);
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.PixelOffsetMode = PixelOffsetMode.Half;
+                    g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+                    Color parentBg = GetEffectiveBackColor(combo.Parent);
+                    using (SolidBrush parentBrush = new SolidBrush(parentBg))
+                    {
+                        g.FillRectangle(parentBrush, 0, 0, actualWidth, actualHeight);
+                    }
+
+                    ComboPopupState state = ComboStates.GetOrCreateValue(combo);
+                    Color bgColor = state.BlendWithCard ? AppColors.BgCard : MetaTheme.Colors.InputBg;
+                    Color borderColor = state.IsFocused || state.IsOpen
+                        ? MetaTheme.Colors.BorderFocus
+                        : state.IsHovered
+                            ? ComboHoverBorderColor
+                            : ComboBorderColor;
+
+                    RectangleF chromeRect = new RectangleF(1f, 1f, combo.Width - 2f, combo.Height - 2f);
+                    float borderWidth = state.IsFocused || state.IsOpen ? 1.35f : 1f;
+                    FillSmoothRoundedRect(g, chromeRect, ComboRadius, bgColor);
+
+                    string text = combo.SelectedIndex >= 0
+                        ? combo.GetItemText(combo.SelectedItem) ?? string.Empty
+                        : combo.Text;
+
+                    using StringFormat sf = new StringFormat
+                    {
+                        Alignment = StringAlignment.Near,
+                        LineAlignment = StringAlignment.Center,
+                        Trimming = StringTrimming.EllipsisCharacter
+                    };
+                    using SolidBrush textBrush = new SolidBrush(AppColors.TextPrimary);
+                    Rectangle textRect = new Rectangle(14, 1, Math.Max(1, actualWidth - 48), Math.Max(1, actualHeight - 2));
+                    g.DrawString(text, AppFonts.Body, textBrush, textRect, sf);
+
+                    Point center = new Point(actualWidth - 15, actualHeight / 2);
+                    Color arrowColor = state.IsFocused || state.IsOpen ? MetaTheme.Colors.Accent : AppColors.TextSecondary;
+                    {
+                        using Pen pen = new Pen(arrowColor, 1.8f)
+                        {
+                            StartCap = LineCap.Round,
+                            EndCap = LineCap.Round,
+                            LineJoin = LineJoin.Round
+                        };
+
+                        if (state.IsOpen)
+                        {
+                            g.DrawLine(pen, center.X - 4, center.Y + 2, center.X, center.Y - 2);
+                            g.DrawLine(pen, center.X, center.Y - 2, center.X + 4, center.Y + 2);
+                        }
+                        else
+                        {
+                            g.DrawLine(pen, center.X - 4, center.Y - 2, center.X, center.Y + 2);
+                            g.DrawLine(pen, center.X, center.Y + 2, center.X + 4, center.Y - 2);
+                        }
+                    }
+
+                    DrawSmoothRoundedBorder(g, chromeRect, ComboRadius, borderColor, borderWidth);
+                    using (Pen pen = new Pen(borderColor, borderWidth))
+                    {
+                        int bottomY = combo.Height - 2;
+                        g.DrawLine(pen, 10, bottomY, combo.Width - 11, bottomY);
+                    }
+
                 }
-
-                ComboPopupState state = ComboStates.GetOrCreateValue(combo);
-                Color bgColor = state.BlendWithCard ? AppColors.BgCard : MetaTheme.Colors.InputBg;
-                Color borderColor = state.IsFocused || state.IsOpen
-                    ? MetaTheme.Colors.BorderFocus
-                    : state.IsHovered
-                        ? ComboHoverBorderColor
-                        : ComboBorderColor;
-
-                RectangleF chromeRect = new RectangleF(0.5f, 0.5f, combo.Width - 1f, combo.Height - 1f);
-                float borderWidth = state.IsFocused || state.IsOpen ? 1.35f : 1f;
-                FillSmoothRoundedRect(g, chromeRect, ComboRadius, bgColor);
-
-                string text = combo.SelectedIndex >= 0
-                    ? combo.GetItemText(combo.SelectedItem) ?? string.Empty
-                    : combo.Text;
-                
-                using StringFormat sf = new StringFormat
+                finally
                 {
-                    Alignment = StringAlignment.Near,
-                    LineAlignment = StringAlignment.Center,
-                    Trimming = StringTrimming.EllipsisCharacter
-                };
-                using SolidBrush textBrush = new SolidBrush(AppColors.TextPrimary);
-                Rectangle textRect = new Rectangle(14, 1, Math.Max(1, combo.Width - 48), Math.Max(1, combo.Height - 2));
-                g.DrawString(text, AppFonts.Body, textBrush, textRect, sf);
-
-                Point center = new Point(combo.Width - 15, combo.Height / 2);
-                Color arrowColor = state.IsFocused || state.IsOpen ? MetaTheme.Colors.Accent : AppColors.TextSecondary;
-                using Pen pen = new Pen(arrowColor, 1.8f)
-                {
-                    StartCap = LineCap.Round,
-                    EndCap = LineCap.Round,
-                    LineJoin = LineJoin.Round
-                };
-                
-                if (state.IsOpen)
-                {
-                    g.DrawLine(pen, center.X - 4, center.Y + 2, center.X, center.Y - 2);
-                    g.DrawLine(pen, center.X, center.Y - 2, center.X + 4, center.Y + 2);
+                    ReleaseDC(combo.Handle, hdc);
                 }
-                else
-                {
-                    g.DrawLine(pen, center.X - 4, center.Y - 2, center.X, center.Y + 2);
-                    g.DrawLine(pen, center.X, center.Y + 2, center.X + 4, center.Y - 2);
-                }
-
-                DrawSmoothRoundedBorder(g, chromeRect, ComboRadius, borderColor, borderWidth);
             }
         }
 
