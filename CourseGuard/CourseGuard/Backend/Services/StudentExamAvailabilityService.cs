@@ -15,6 +15,11 @@ namespace CourseGuard.Backend.Services
 
         public static bool CanStart(StudentExamListItemModel exam)
         {
+            return CanStart(exam, DateTime.Now);
+        }
+
+        public static bool CanStart(StudentExamListItemModel exam, DateTime now)
+        {
             if (!exam.AttemptStorageAvailable)
                 return false;
 
@@ -24,7 +29,6 @@ namespace CourseGuard.Backend.Services
             if (exam.QuestionCount <= 0)
                 return false;
 
-            DateTime now = DateTime.Now;
             if (exam.OpenTime.HasValue && exam.OpenTime.Value > now)
                 return false;
 
@@ -36,6 +40,11 @@ namespace CourseGuard.Backend.Services
 
         public static string GetStatusText(StudentExamListItemModel exam)
         {
+            return GetStatusText(exam, DateTime.Now);
+        }
+
+        public static string GetStatusText(StudentExamListItemModel exam, DateTime now)
+        {
             if (!exam.AttemptStorageAvailable)
                 return StatusStorageUnavailable;
 
@@ -45,7 +54,6 @@ namespace CourseGuard.Backend.Services
             if (exam.QuestionCount <= 0)
                 return StatusNoQuestions;
 
-            DateTime now = DateTime.Now;
             if (exam.OpenTime.HasValue && exam.OpenTime.Value > now)
                 return StatusNotOpenYet;
 

@@ -79,6 +79,12 @@ namespace CourseGuard.Frontend.Forms.Student
         private TextBox txtDescription = null!;
         private Label lblDownloadTitle = null!;
         private Button btnDownloadTeacherFile = null!;
+        private Label _statusBanner = null!;
+        private Label _submissionSummary = null!;
+        private Panel _feedbackPanel = null!;
+        private Label _feedbackText = null!;
+        private Label _submitStatus = null!;
+        private AssignmentUxPresentation _presentation = null!;
 
         private Label lblUploadTitle = null!;
         private TextBox txtSelectedFile = null!;
@@ -110,6 +116,53 @@ namespace CourseGuard.Frontend.Forms.Student
             lblTitle = new Label { AutoSize = true, Font = MetaTheme.Fonts.HeadingMd(), Dock = DockStyle.Top, Padding = new Padding(0, 0, 0, 2) };
             lblCourse = new Label { AutoSize = true, Font = MetaTheme.Fonts.BodyMd(), Dock = DockStyle.Top, Padding = new Padding(0, 0, 0, 0) };
             lblDueDate = new Label { AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), ForeColor = Color.Red, Dock = DockStyle.Top, Padding = new Padding(0, 0, 0, 8) };
+            _presentation = StudentAssignmentUxPresenter.Present(_assignment, DateTime.Now);
+
+            _statusBanner = new Label
+            {
+                AutoSize = false,
+                Height = 34,
+                Dock = DockStyle.Top,
+                Font = AppFonts.Semibold(9f),
+                ForeColor = AppColors.TextPrimary,
+                BackColor = AppColors.BgInput,
+                Padding = new Padding(10, 0, 10, 0),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Text = $"{_presentation.StatusText} - {_presentation.DetailText}",
+                UseCompatibleTextRendering = false
+            };
+
+            _submissionSummary = new Label
+            {
+                AutoSize = false,
+                Height = 28,
+                Dock = DockStyle.Top,
+                Font = AppFonts.Caption,
+                ForeColor = AppColors.TextSecondary,
+                BackColor = Color.Transparent,
+                TextAlign = ContentAlignment.MiddleLeft,
+                UseCompatibleTextRendering = false
+            };
+
+            _feedbackPanel = new Panel
+            {
+                Height = 70,
+                Dock = DockStyle.Top,
+                BackColor = AppColors.BgInput,
+                Padding = new Padding(10),
+                Visible = false
+            };
+            _feedbackText = new Label
+            {
+                Dock = DockStyle.Fill,
+                AutoEllipsis = true,
+                Font = AppFonts.Caption,
+                ForeColor = AppColors.TextPrimary,
+                BackColor = Color.Transparent,
+                TextAlign = ContentAlignment.MiddleLeft,
+                UseCompatibleTextRendering = false
+            };
+            _feedbackPanel.Controls.Add(_feedbackText);
 
             lblDescriptionTitle = new Label { AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Text = "Mô tả đề bài:", Dock = DockStyle.Top, Padding = new Padding(0, 4, 0, 4) };
 
@@ -211,6 +264,10 @@ namespace CourseGuard.Frontend.Forms.Student
                     lblTitle.MaximumSize = new Size(w, 0);
                     lblCourse.MaximumSize = new Size(w, 0);
                     lblDueDate.MaximumSize = new Size(w, 0);
+                    _statusBanner.Width = w;
+                    _submissionSummary.Width = w;
+                    _submissionSummary.MaximumSize = new Size(w, 0);
+                    _feedbackPanel.Width = w;
                     lblDescriptionTitle.MaximumSize = new Size(w, 0);
                     pnlDescription.Width = w;
                     lblDownloadTitle.MaximumSize = new Size(w, 0);
@@ -223,6 +280,9 @@ namespace CourseGuard.Frontend.Forms.Student
             flow.Controls.Add(lblTitle);
             flow.Controls.Add(lblCourse);
             flow.Controls.Add(lblDueDate);
+            flow.Controls.Add(_statusBanner);
+            flow.Controls.Add(_submissionSummary);
+            flow.Controls.Add(_feedbackPanel);
             flow.Controls.Add(lblDescriptionTitle);
             flow.Controls.Add(pnlDescription);
             flow.Controls.Add(lblDownloadTitle);
@@ -232,12 +292,25 @@ namespace CourseGuard.Frontend.Forms.Student
 
             ContentPanel.Controls.Add(flow);
 
+            _submitStatus = new Label
+            {
+                AutoSize = false,
+                Height = 24,
+                Dock = DockStyle.Bottom,
+                Font = AppFonts.Caption,
+                ForeColor = AppColors.TextSecondary,
+                BackColor = Color.Transparent,
+                TextAlign = ContentAlignment.MiddleRight,
+                UseCompatibleTextRendering = false
+            };
+            ContentPanel.Controls.Add(_submitStatus);
+
             // Footer buttons
             btnSubmit = new Button
             {
                 Text = "Nộp bài",
                 Font = MetaTheme.Fonts.ButtonMd(),
-                Width = 110,
+                Width = 132,
                 Cursor = Cursors.Hand
             };
             btnSubmit.Tag = "primary";
@@ -266,13 +339,9 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private void ApplyStyle()
         {
-            if (_assignment.Status != "OPEN")
-            {
-                btnSubmit.Enabled = false;
-                btnSelectFile.Enabled = false;
-                btnSubmit.BackColor = Color.Gray;
-                btnSubmit.Text = "Đã đóng";
-            }
+            btnSubmit.Enabled = _presentation.CanSubmit;
+            btnSelectFile.Enabled = _presentation.CanSubmit;
+            btnSubmit.Text = _presentation.ActionText;
         }
 
         private void LoadData()
@@ -307,9 +376,25 @@ namespace CourseGuard.Frontend.Forms.Student
             if (_assignment.IsSubmitted)
             {
                 txtSelectedFile.Text = _assignment.StudentFileName;
-                btnSubmit.Text = "Nộp lại";
                 lblUploadTitle.Text = $"Đã nộp lúc: {_assignment.SubmittedAt:dd/MM/yyyy HH:mm}";
             }
+
+            string submittedAtText = _assignment.SubmittedAt.HasValue
+                ? _assignment.SubmittedAt.Value.ToString("dd/MM/yyyy HH:mm")
+                : "không rõ thời gian";
+            _submissionSummary.Text = _assignment.IsSubmitted
+                ? $"Bài đã nộp: {_assignment.StudentFileName} - {submittedAtText}"
+                : "Chưa có bài nộp.";
+
+            if (_presentation.ShowsFeedback)
+            {
+                _feedbackPanel.Visible = true;
+                _feedbackText.Text = $"Điểm: {_assignment.Score.GetValueOrDefault():0.##}/10\nNhận xét: {_assignment.Feedback}";
+            }
+
+            btnSubmit.Enabled = _presentation.CanSubmit;
+            btnSelectFile.Enabled = _presentation.CanSubmit;
+            btnSubmit.Text = _presentation.ActionText;
         }
 
         private async void BtnDownloadTeacherFile_Click(object? sender, EventArgs e)
@@ -381,8 +466,15 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private async Task BtnSubmit_Click()
         {
+            if (!_presentation.CanSubmit)
+            {
+                _submitStatus.Text = "Bài nộp hiện chỉ có thể xem.";
+                return;
+            }
+
             if (_selectedFileContent == null && !_assignment.IsSubmitted)
             {
+                _submitStatus.Text = "Vui lòng chọn file bài làm trước khi nộp.";
                 MetaTheme.ShowModernDialog("Vui lòng chọn file bài làm trước khi nộp.", "Cảnh báo");
                 return;
             }
@@ -390,6 +482,7 @@ namespace CourseGuard.Frontend.Forms.Student
             if (_selectedFileContent == null && _assignment.IsSubmitted)
             {
                 // Already submitted, but no new file selected
+                _submitStatus.Text = "Bạn chưa chọn file mới để cập nhật bài làm.";
                 MetaTheme.ShowModernDialog("Bạn chưa chọn file mới để cập nhật bài làm.", "Thông báo");
                 return;
             }
@@ -398,6 +491,7 @@ namespace CourseGuard.Frontend.Forms.Student
             {
                 btnSubmit.Enabled = false;
                 btnSubmit.Text = "Đang nộp...";
+                _submitStatus.Text = "Đang tải bài làm lên...";
 
                 var submission = new AssignmentSubmissionModel
                 {
@@ -413,6 +507,8 @@ namespace CourseGuard.Frontend.Forms.Student
 
                 if (success)
                 {
+                    _submitStatus.Text = "Đã nộp bài thành công.";
+
                     // Update in-app notification
                     var notifRepo = new NotificationRepository();
                     notifRepo.Create(
@@ -449,16 +545,18 @@ namespace CourseGuard.Frontend.Forms.Student
                 }
                 else
                 {
+                    _submitStatus.Text = "Nộp bài chưa thành công.";
                     MetaTheme.ShowModernDialog("Nộp bài thất bại. Vui lòng thử lại sau.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     btnSubmit.Enabled = true;
-                    btnSubmit.Text = "Nộp bài";
+                    btnSubmit.Text = _presentation.ActionText;
                 }
             }
             catch (Exception ex)
             {
+                _submitStatus.Text = "Nộp bài chưa thành công.";
                 MetaTheme.ShowModernDialog($"Lỗi khi nộp bài: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 btnSubmit.Enabled = true;
-                btnSubmit.Text = "Nộp bài";
+                btnSubmit.Text = _presentation.ActionText;
             }
         }
     }
