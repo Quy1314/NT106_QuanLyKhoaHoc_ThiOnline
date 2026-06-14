@@ -25,6 +25,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private readonly TextBox _d = new();
         private readonly ComboBox _correct = new();
         private readonly Label _points = new();
+        private Label _readinessSummary = null!;
+        private Label _readOnlyHint = null!;
         private readonly Button _importExcel = TeacherTabChrome.SecondaryButton("Nhập từ file (Excel)");
         private readonly Button _questionBank = TeacherTabChrome.SecondaryButton("Ngân hàng câu hỏi");
         private readonly Button _add = TeacherTabChrome.PrimaryButton("Thêm câu");
@@ -32,7 +34,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private readonly Button _delete = TeacherTabChrome.DangerButton("Xóa câu");
         private readonly Button _close = TeacherTabChrome.SecondaryButton("Đóng");
         private readonly Button _randomBuilder = TeacherTabChrome.SecondaryButton("Tao ngau nhien");
-        private readonly bool _canEdit;
+        private bool _canEdit;
         private readonly int _courseId;
 
         public TeacherExamQuestionsDialog(int teacherId, int examId, string examTitle, int courseId)
@@ -40,17 +42,64 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _teacherId = teacherId;
             _examId = examId;
             _courseId = courseId;
-            _canEdit = string.Equals(_controller.GetExamStatus(teacherId, examId), WorkflowConstants.ExamStatus.Draft, StringComparison.OrdinalIgnoreCase);
+            _canEdit = IsExamDraft();
             Text = $"Soạn câu hỏi - {examTitle}";
             Width = 980;
             Height = 620;
             BuildLayout();
             WireEvents();
+            RefreshEditState();
             LoadQuestions();
         }
 
         private void BuildLayout()
         {
+            var shell = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Padding = new Padding(0),
+                BackColor = Color.Transparent
+            };
+            shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+            shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+            var topArea = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Padding = new Padding(0, 0, 0, 10),
+                BackColor = Color.Transparent
+            };
+            topArea.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            topArea.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+
+            _readinessSummary = new Label
+            {
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = AppColors.TextPrimary,
+                Font = AppFonts.Semibold(9f),
+                BackColor = Color.Transparent,
+                AutoEllipsis = true
+            };
+            _readOnlyHint = new Label
+            {
+                Text = "Bài kiểm tra không còn ở trạng thái nháp nên chỉ có thể xem câu hỏi.",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = AppColors.Warning,
+                Font = AppFonts.Semibold(9f),
+                BackColor = Color.Transparent,
+                AutoEllipsis = true,
+                Visible = !_canEdit
+            };
+            topArea.Controls.Add(_readinessSummary, 0, 0);
+            topArea.Controls.Add(_readOnlyHint, 0, 1);
+            shell.Controls.Add(topArea, 0, 0);
+
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0) };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
@@ -99,8 +148,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
             editor.Controls.Add(buttons, 0, 7);
             editor.SetColumnSpan(buttons, 2);
             root.Controls.Add(editor, 1, 0);
-            
-            ContentPanel.Controls.Add(root);
+
+            shell.Controls.Add(root, 0, 1);
+            ContentPanel.Controls.Add(shell);
             AddFooterButtons(_close);
             CancelButton = _close;
         }
@@ -122,11 +172,46 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _importExcel.Click += async (_, _) => await ImportFromExcelAsync();
             _questionBank.Click += (_, _) => OpenQuestionBank();
             _randomBuilder.Click += (_, _) => OpenRandomBuilder();
-            _add.Enabled = _save.Enabled = _delete.Enabled = _importExcel.Enabled = _questionBank.Enabled = _randomBuilder.Enabled = _canEdit;
+            ApplyEditState();
+        }
+
+        private bool IsExamDraft() =>
+            string.Equals(_controller.GetExamStatus(_teacherId, _examId), WorkflowConstants.ExamStatus.Draft, StringComparison.OrdinalIgnoreCase);
+
+        private bool RefreshEditState()
+        {
+            _canEdit = IsExamDraft();
+            ApplyEditState();
+            return _canEdit;
+        }
+
+        private void ApplyEditState()
+        {
+            _readOnlyHint.Visible = !_canEdit;
+            _add.Enabled = _canEdit;
+            _save.Enabled = _canEdit;
+            _delete.Enabled = _canEdit;
+            _importExcel.Enabled = _canEdit;
+            _questionBank.Enabled = _canEdit;
+            _randomBuilder.Enabled = _canEdit;
+            if (!_canEdit)
+                ClearEditor();
+        }
+
+        private void ShowGuardedQuestionWriteFailure()
+        {
+            MetaTheme.ShowModernDialog("Bài kiểm tra không còn ở trạng thái nháp nên không thể chỉnh sửa câu hỏi.", "Không thể chỉnh sửa", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         private async System.Threading.Tasks.Task ImportFromExcelAsync()
         {
+            if (!RefreshEditState())
+            {
+                ShowGuardedQuestionWriteFailure();
+                LoadQuestions();
+                return;
+            }
+
             using var ofd = new OpenFileDialog
             {
                 Filter = "Excel Files|*.xlsx;*.xls",
@@ -175,8 +260,16 @@ namespace CourseGuard.Frontend.Forms.Teacher
                     return;
                 }
 
-                await _controller.ImportQuestionsToExamAsync(_teacherId, _examId, _courseId, questions);
-                MetaTheme.ShowModernDialog($"Nhập thành công {questions.Count} câu hỏi!", "Hoàn tất", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                int importedCount = await _controller.ImportQuestionsToExamAsync(_teacherId, _examId, _courseId, questions);
+                if (importedCount <= 0)
+                {
+                    RefreshEditState();
+                    LoadQuestions();
+                    MetaTheme.ShowModernDialog("Bài kiểm tra không còn ở trạng thái nháp hoặc không thuộc khóa học đã chọn. Vui lòng tải lại danh sách câu hỏi.", "Không thể nhập câu hỏi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                MetaTheme.ShowModernDialog($"Nhập thành công {importedCount} câu hỏi!", "Hoàn tất", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 LoadQuestions();
             }
             catch (Exception ex)
@@ -185,27 +278,43 @@ namespace CourseGuard.Frontend.Forms.Teacher
             }
             finally
             {
-                _importExcel.Enabled = _canEdit;
                 _importExcel.Text = "Nhập từ file (Excel)";
+                ApplyEditState();
             }
         }
 
         private void OpenQuestionBank()
         {
+            if (!RefreshEditState())
+            {
+                ShowGuardedQuestionWriteFailure();
+                LoadQuestions();
+                return;
+            }
+
             using var qbd = new QuestionBankDialog(_teacherId, _examId, _courseId);
             qbd.ShowDialog(this);
             if (qbd.QuestionsAdded)
             {
+                RefreshEditState();
                 LoadQuestions();
             }
         }
 
         private void OpenRandomBuilder()
         {
+            if (!RefreshEditState())
+            {
+                ShowGuardedQuestionWriteFailure();
+                LoadQuestions();
+                return;
+            }
+
             using var dialog = new RandomExamBuilderDialog(_teacherId, _examId, _courseId);
             dialog.ShowDialog(this);
             if (dialog.QuestionsAdded)
             {
+                RefreshEditState();
                 LoadQuestions();
             }
         }
@@ -220,6 +329,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
             table.Columns.Add("Điểm", typeof(string));
 
             var questions = _controller.GetExamQuestions(_teacherId, _examId);
+            _readinessSummary.Text = questions.Count == 0
+                ? "Chưa có câu hỏi. Cần ít nhất 1 câu để kích hoạt bài kiểm tra."
+                : $"Đã có {questions.Count} câu hỏi. Điểm mỗi câu sẽ được phân bổ lại về tổng 10 điểm.";
             foreach (var q in questions)
                 table.Rows.Add(q.Id, q.DisplayOrder, q.QuestionText, q.CorrectOption, q.Points.ToString("0.##", CultureInfo.InvariantCulture));
 
@@ -250,30 +362,72 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void SaveNewQuestion()
         {
+            if (!RefreshEditState())
+            {
+                ShowGuardedQuestionWriteFailure();
+                LoadQuestions();
+                return;
+            }
+
             if (!TryBuildQuestion(out var model))
                 return;
-            _controller.CreateExamQuestion(_teacherId, model);
+            int createdId = _controller.CreateExamQuestion(_teacherId, model);
+            if (createdId <= 0)
+            {
+                RefreshEditState();
+                ShowGuardedQuestionWriteFailure();
+                LoadQuestions();
+                return;
+            }
             LoadQuestions();
         }
 
         private void SaveExistingQuestion()
         {
+            if (!RefreshEditState())
+            {
+                ShowGuardedQuestionWriteFailure();
+                LoadQuestions();
+                return;
+            }
+
             int id = CurrentQuestionId();
             if (id <= 0 || !TryBuildQuestion(out var model))
                 return;
             model.Id = id;
-            _controller.UpdateExamQuestion(_teacherId, model);
+            bool updated = _controller.UpdateExamQuestion(_teacherId, model);
+            if (!updated)
+            {
+                RefreshEditState();
+                ShowGuardedQuestionWriteFailure();
+                LoadQuestions();
+                return;
+            }
             LoadQuestions();
         }
 
         private void DeleteSelectedQuestion()
         {
+            if (!RefreshEditState())
+            {
+                ShowGuardedQuestionWriteFailure();
+                LoadQuestions();
+                return;
+            }
+
             int id = CurrentQuestionId();
             if (id <= 0)
                 return;
             if (MetaTheme.ShowModernDialog("Xóa câu hỏi này khỏi bài kiểm tra?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                 return;
-            _controller.DeleteExamQuestion(_teacherId, _examId, id);
+            bool deleted = _controller.DeleteExamQuestion(_teacherId, _examId, id);
+            if (!deleted)
+            {
+                RefreshEditState();
+                ShowGuardedQuestionWriteFailure();
+                LoadQuestions();
+                return;
+            }
             LoadQuestions();
         }
 

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Models;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 using CourseGuard.Frontend.UserControls.Teacher;
 
@@ -21,6 +22,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private List<StudentSubmissionModel> _allSubmissions = new();
 
         private ComboBox _cboCourse = null!;
+        private ComboBox _cboAssignment = null!;
+        private ComboBox _cboStatus = null!;
         private DataGridView _grid = null!;
         private BindingSource _bindingSource = new();
 
@@ -31,7 +34,22 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private NumericUpDown _numScore = null!;
         private TextBox _txtFeedback = null!;
         private Button _btnSaveGrade = null!;
+        private Label _saveStatus = null!;
         private StudentSubmissionModel? _selectedSubmission;
+
+        private sealed class FilterItem
+        {
+            public int Id { get; }
+            public string Name { get; }
+
+            public FilterItem(int id, string name)
+            {
+                Id = id;
+                Name = name;
+            }
+
+            public override string ToString() => Name;
+        }
 
         public TeacherSubmissionsDialog(int teacherId, TeacherController controller, List<TeacherCourseModel> courses)
         {
@@ -56,22 +74,36 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 ColumnCount = 1,
                 Padding = new Padding(0)
             };
-            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 180)); // Grading panel
             ContentPanel.Controls.Add(mainLayout);
 
             // Filter
-            var filterPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
-            filterPanel.Controls.Add(new Label { Text = "Lọc theo khóa học:", AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Margin = new Padding(0, 5, 10, 0) });
-            _cboCourse = new ComboBox { Width = 300, DropDownStyle = ComboBoxStyle.DropDownList, Font = MetaTheme.Fonts.BodyMd() };
-            _cboCourse.Items.Add(new { Id = 0, Name = "Tất cả khóa học" });
-            foreach (var c in _courses) _cboCourse.Items.Add(new { Id = c.Id, Name = c.Name });
+            var filterPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false };
+            filterPanel.Controls.Add(new Label { Text = "Khóa học:", AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Margin = new Padding(0, 8, 8, 0) });
+            _cboCourse = new ComboBox { Width = 240, DropDownStyle = ComboBoxStyle.DropDownList, Font = MetaTheme.Fonts.BodyMd(), Margin = new Padding(0, 4, 14, 0) };
+            _cboCourse.Items.Add(new FilterItem(0, "Tất cả khóa học"));
+            foreach (var c in _courses) _cboCourse.Items.Add(new FilterItem(c.Id, c.Name));
             _cboCourse.DisplayMember = "Name";
             _cboCourse.ValueMember = "Id";
             _cboCourse.SelectedIndex = 0;
             _cboCourse.SelectedIndexChanged += async (s, e) => await LoadDataAsync();
             filterPanel.Controls.Add(_cboCourse);
+
+            filterPanel.Controls.Add(new Label { Text = "Bài tập:", AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Margin = new Padding(0, 8, 8, 0) });
+            _cboAssignment = new ComboBox { Width = 240, DropDownStyle = ComboBoxStyle.DropDownList, Font = MetaTheme.Fonts.BodyMd(), Margin = new Padding(0, 4, 14, 0) };
+            _cboAssignment.DisplayMember = "Name";
+            _cboAssignment.ValueMember = "Id";
+            _cboAssignment.SelectedIndexChanged += FilterChanged;
+            filterPanel.Controls.Add(_cboAssignment);
+
+            filterPanel.Controls.Add(new Label { Text = "Trạng thái:", AutoSize = true, Font = MetaTheme.Fonts.BodyMdBold(), Margin = new Padding(0, 8, 8, 0) });
+            _cboStatus = new ComboBox { Width = 130, DropDownStyle = ComboBoxStyle.DropDownList, Font = MetaTheme.Fonts.BodyMd(), Margin = new Padding(0, 4, 0, 0) };
+            _cboStatus.Items.AddRange(new object[] { "Tất cả", "Chưa chấm", "Đã chấm" });
+            _cboStatus.SelectedIndex = 0;
+            _cboStatus.SelectedIndexChanged += FilterChanged;
+            filterPanel.Controls.Add(_cboStatus);
             mainLayout.Controls.Add(filterPanel, 0, 0);
 
             // Grid
@@ -109,7 +141,10 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _btnSaveGrade.Click += BtnSaveGrade_Click;
             _gradingPanel.Controls.Add(_btnSaveGrade);
 
-            _gradingPanel.Enabled = false; // Disable until a row is selected
+            _saveStatus = new Label { Location = new Point(510, 148), AutoSize = true, Font = MetaTheme.Fonts.BodyMd(), ForeColor = AppColors.TextSecondary };
+            _gradingPanel.Controls.Add(_saveStatus);
+
+            SetGradingInputsEnabled(false);
             mainLayout.Controls.Add(_gradingPanel, 0, 2);
             
             var closeBtn = TeacherTabChrome.SecondaryButton("Đóng");
@@ -126,6 +161,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             {
                 if (c is Label l) l.ForeColor = AppColors.TextPrimary;
             }
+            _saveStatus.ForeColor = AppColors.TextSecondary;
         }
 
         protected override async void OnLoad(EventArgs e)
@@ -136,43 +172,11 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private async Task LoadDataAsync()
         {
-            int? courseId = null;
-            if (_cboCourse.SelectedItem != null)
-            {
-                dynamic selected = _cboCourse.SelectedItem;
-                if (selected.Id > 0) courseId = selected.Id;
-            }
-
             try
             {
-                _allSubmissions = await _controller.GetStudentSubmissionsAsync(_teacherId, courseId);
-                
-                var table = new DataTable();
-                table.Columns.Add("Id", typeof(int));
-                table.Columns.Add("Khóa học", typeof(string));
-                table.Columns.Add("Bài tập", typeof(string));
-                table.Columns.Add("Sinh viên", typeof(string));
-                table.Columns.Add("Thời gian nộp", typeof(string));
-                table.Columns.Add("File", typeof(string));
-                table.Columns.Add("Trạng thái", typeof(string));
-                table.Columns.Add("Điểm", typeof(string));
-
-                foreach (var s in _allSubmissions)
-                {
-                    table.Rows.Add(s.SubmissionId, s.CourseName, s.AssignmentTitle, s.StudentName, 
-                        s.SubmittedAt.ToString("dd/MM/yyyy HH:mm"), s.FileName, 
-                        s.Status == "GRADED" ? "Đã chấm" : "Chưa chấm", 
-                        s.Score?.ToString("0.0") ?? "");
-                }
-
-                _bindingSource.DataSource = table;
-                _grid.DataSource = _bindingSource;
-                if (_grid.Columns.Contains("Id") && _grid.Columns["Id"] != null) 
-                    _grid.Columns["Id"]!.Visible = false;
-                
-                // Clear selection
-                _grid.ClearSelection();
-                _gradingPanel.Enabled = false;
+                _allSubmissions = await _controller.GetStudentSubmissionsAsync(_teacherId, SelectedCourseId());
+                RefreshAssignmentFilter();
+                ApplyFilters();
             }
             catch (Exception ex)
             {
@@ -180,12 +184,117 @@ namespace CourseGuard.Frontend.Forms.Teacher
             }
         }
 
+        private void FilterChanged(object? sender, EventArgs e)
+        {
+            ApplyFilters();
+        }
+
+        private int? SelectedCourseId()
+        {
+            return _cboCourse.SelectedItem is FilterItem item && item.Id > 0
+                ? item.Id
+                : null;
+        }
+
+        private int SelectedAssignmentId()
+        {
+            return _cboAssignment.SelectedItem is FilterItem item
+                ? item.Id
+                : 0;
+        }
+
+        private void RefreshAssignmentFilter()
+        {
+            _cboAssignment.SelectedIndexChanged -= FilterChanged;
+            _cboAssignment.Items.Clear();
+            _cboAssignment.Items.Add(new FilterItem(0, "Tất cả bài tập"));
+
+            foreach (var assignment in _allSubmissions
+                .GroupBy(s => new { s.AssignmentId, s.AssignmentTitle })
+                .OrderBy(g => g.Key.AssignmentTitle))
+            {
+                _cboAssignment.Items.Add(new FilterItem(assignment.Key.AssignmentId, assignment.Key.AssignmentTitle));
+            }
+
+            _cboAssignment.SelectedIndex = 0;
+            _cboAssignment.SelectedIndexChanged += FilterChanged;
+        }
+
+        private void ApplyFilters()
+        {
+            IEnumerable<StudentSubmissionModel> filtered = _allSubmissions;
+
+            int assignmentId = SelectedAssignmentId();
+            if (assignmentId > 0)
+                filtered = filtered.Where(s => s.AssignmentId == assignmentId);
+
+            string status = _cboStatus.SelectedItem?.ToString() ?? "Tất cả";
+            if (status == "Chưa chấm")
+                filtered = filtered.Where(s => !IsGraded(s));
+            else if (status == "Đã chấm")
+                filtered = filtered.Where(IsGraded);
+
+            BindSubmissions(filtered);
+        }
+
+        private static bool IsGraded(StudentSubmissionModel submission)
+        {
+            return submission.Score.HasValue
+                || string.Equals(submission.Status, "GRADED", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void BindSubmissions(IEnumerable<StudentSubmissionModel> submissions)
+        {
+            var table = new DataTable();
+            table.Columns.Add("Id", typeof(int));
+            table.Columns.Add("Khóa học", typeof(string));
+            table.Columns.Add("Bài tập", typeof(string));
+            table.Columns.Add("Sinh viên", typeof(string));
+            table.Columns.Add("Thời gian nộp", typeof(string));
+            table.Columns.Add("File", typeof(string));
+            table.Columns.Add("Trạng thái", typeof(string));
+            table.Columns.Add("Điểm", typeof(string));
+            table.Columns.Add("Hành động", typeof(string));
+
+            foreach (var s in submissions)
+            {
+                AssignmentUxPresentation presentation = TeacherAssignmentUxPresenter.PresentSubmission(s);
+                table.Rows.Add(
+                    s.SubmissionId,
+                    s.CourseName,
+                    s.AssignmentTitle,
+                    s.StudentName,
+                    s.SubmittedAt.ToString("dd/MM/yyyy HH:mm"),
+                    s.FileName,
+                    presentation.StatusText,
+                    s.Score?.ToString("0.0") ?? "",
+                    presentation.ActionText);
+            }
+
+            _bindingSource.DataSource = table;
+            _grid.DataSource = _bindingSource;
+            if (_grid.Columns.Contains("Id") && _grid.Columns["Id"] != null)
+                _grid.Columns["Id"]!.Visible = false;
+
+            _grid.ClearSelection();
+            ResetGradingPanel();
+        }
+
+        private void ResetGradingPanel()
+        {
+            _selectedSubmission = null;
+            SetGradingInputsEnabled(false);
+            _lblStudentName.Text = "Chưa chọn bài nộp";
+            _numScore.Value = 0;
+            _txtFeedback.Text = string.Empty;
+            _saveStatus.Text = string.Empty;
+        }
+
         private void Grid_SelectionChanged(object? sender, EventArgs e)
         {
             if (_grid.CurrentRow == null || _grid.CurrentRow.IsNewRow || _grid.CurrentRow.Cells["Id"].Value == null)
             {
-                _gradingPanel.Enabled = false;
-                _selectedSubmission = null;
+                ResetGradingPanel();
                 return;
             }
 
@@ -194,11 +303,20 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             if (_selectedSubmission != null)
             {
-                _gradingPanel.Enabled = true;
+                SetGradingInputsEnabled(true);
                 _lblStudentName.Text = $"Đang chọn: {_selectedSubmission.StudentName} - {_selectedSubmission.AssignmentTitle}";
                 _numScore.Value = _selectedSubmission.Score ?? 0;
                 _txtFeedback.Text = _selectedSubmission.Feedback ?? "";
+                _saveStatus.Text = string.Empty;
             }
+        }
+
+        private void SetGradingInputsEnabled(bool enabled)
+        {
+            _btnDownload.Enabled = enabled;
+            _numScore.Enabled = enabled;
+            _txtFeedback.Enabled = enabled;
+            _btnSaveGrade.Enabled = enabled;
         }
 
         private async void BtnDownload_Click(object? sender, EventArgs e)
@@ -256,8 +374,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             try
             {
-                _btnSaveGrade.Enabled = false;
+                SetGradingInputsEnabled(false);
                 _btnSaveGrade.Text = "Đang lưu...";
+                SetSaveStatus("Đang lưu điểm...", AppColors.TextSecondary);
 
                 bool success = await _controller.UpdateGradeAsync(_teacherId, _selectedSubmission.SubmissionId, _numScore.Value, _txtFeedback.Text);
                 
@@ -265,21 +384,30 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 {
                     MetaTheme.ShowModernDialog("Cập nhật điểm thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     await LoadDataAsync();
+                    SetSaveStatus("Đã lưu điểm.", AppColors.Success);
                 }
                 else
                 {
+                    SetSaveStatus("Chưa lưu được điểm.", AppColors.Danger);
                     MetaTheme.ShowModernDialog("Cập nhật thất bại.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
             catch (Exception ex)
             {
+                SetSaveStatus("Chưa lưu được điểm.", AppColors.Danger);
                 MetaTheme.ShowModernDialog("Lỗi khi cập nhật điểm: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
-                _btnSaveGrade.Enabled = true;
+                SetGradingInputsEnabled(_selectedSubmission != null);
                 _btnSaveGrade.Text = "Cập nhật điểm";
             }
+        }
+
+        private void SetSaveStatus(string message, Color color)
+        {
+            _saveStatus.Text = message;
+            _saveStatus.ForeColor = color;
         }
     }
 }

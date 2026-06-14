@@ -171,16 +171,32 @@ namespace CourseGuard.Frontend.Forms.Teacher
             try
             {
                 List<int> previewQuestionIds = _previewQuestions.Select(q => q.Id).Where(id => id > 0).Distinct().ToList();
-                await _controller.AddQuestionsFromBankAsync(_teacherId, _examId, _courseId, previewQuestionIds);
-                QuestionsAdded = true;
-                MetaTheme.ShowModernDialog("Da them cau hoi ngau nhien vao de.", "Thanh cong", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                Close();
+                int addedCount = await _controller.AddQuestionsFromBankAsync(_teacherId, _examId, _courseId, previewQuestionIds);
+                if (addedCount <= 0)
+                {
+                    QuestionsAdded = false;
+                    ShowGuardedQuestionAddFailure();
+                    _add.Enabled = true;
+                    return;
+                }
+
+                if (addedCount > 0)
+                {
+                    QuestionsAdded = true;
+                    MetaTheme.ShowModernDialog($"Da them {addedCount} cau hoi ngau nhien vao de.", "Thanh cong", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    Close();
+                }
             }
             catch (Exception ex)
             {
                 MetaTheme.ShowModernDialog("Khong the them cau hoi ngau nhien: " + ex.Message, "Loi", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 _add.Enabled = true;
             }
+        }
+
+        private static void ShowGuardedQuestionAddFailure()
+        {
+            MetaTheme.ShowModernDialog("Khong the them cau hoi. Bai kiem tra co the khong con o trang thai nhap hoac cac cau hoi da co trong de.", "Khong the them cau hoi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         private static string CriteriaSignature(IReadOnlyList<RandomQuestionCriteria> criteria) =>

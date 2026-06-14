@@ -18,10 +18,11 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private readonly DarkNumericInput _duration = new();
         private readonly DarkNumericInput _maxAttempts = new();
         private readonly DarkNumericInput _maxViolations = new();
+        private Label _validationSummary = null!;
 
         public int CourseId => _course.SelectedItem is TeacherCourseModel course ? course.Id : 0;
         public string ItemTitle => _title.Text.Trim();
-        public string Status => _status.SelectedItem?.ToString() ?? string.Empty;
+        public string Status => _status.SelectedItem?.ToString() ?? WorkflowConstants.ExamStatus.Draft;
         public DateTime? OpenTime => _openTime.Checked ? _openTime.Value : null;
         public DateTime? CloseTime => _closeTime.Checked ? _closeTime.Value : null;
         public int DurationMinutes => _duration.Value;
@@ -32,7 +33,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         {
             Text = existing == null ? "Thêm bài kiểm tra" : "Sửa bài kiểm tra";
             Width = 700;
-            Height = 420;
+            Height = 460;
 
             _course.DropDownStyle = ComboBoxStyle.DropDownList;
             _course.DisplayMember = nameof(TeacherCourseModel.Name);
@@ -40,7 +41,18 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 _course.Items.Add(course);
 
             _status.DropDownStyle = ComboBoxStyle.DropDownList;
-            _status.Items.AddRange(new object[] { "DRAFT", "ACTIVE", "CLOSED" });
+            ConfigureStatusOptions(existing);
+            _validationSummary = new Label
+            {
+                Text = "Tạo nháp bài kiểm tra, thêm câu hỏi, sau đó kích hoạt từ danh sách.",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = AppColors.TextSecondary,
+                Font = AppFonts.Semibold(9f),
+                BackColor = AppColors.BgCard,
+                AutoSize = false,
+                Padding = new Padding(0, 0, 0, 8)
+            };
             
             if (existing != null)
             {
@@ -62,7 +74,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 _duration.Value = existing.DurationMinutes > 0 ? existing.DurationMinutes : 60;
                 _maxAttempts.Value = existing.MaxAttempts > 0 ? existing.MaxAttempts : 1;
                 _maxViolations.Value = Math.Max(0, existing.MaxViolations);
-                _status.SelectedItem = existing.Status;
+                SelectStatus(existing.Status);
             }
             else
             {
@@ -72,7 +84,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 _duration.Value = 60;
                 _maxAttempts.Value = 1;
                 _maxViolations.Value = 0;
-                _status.SelectedIndex = 0;
+                SelectStatus(WorkflowConstants.ExamStatus.Draft);
             }
 
             var save = new Button { Text = "Lưu", DialogResult = DialogResult.OK, Width = 100, Cursor = Cursors.Hand };
@@ -83,15 +95,16 @@ namespace CourseGuard.Frontend.Forms.Teacher
             
             save.Click += (s, e) =>
             {
+                ResetValidationSummary();
                 if (CourseId <= 0 || string.IsNullOrWhiteSpace(ItemTitle))
                 {
-                    MetaTheme.ShowModernDialog("Vui lòng chọn khóa học và nhập tiêu đề.", "Lỗi nhập liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    ShowValidationSummary("Vui lòng chọn khóa học và nhập tiêu đề.");
                     DialogResult = DialogResult.None;
                     return;
                 }
                 if (_openTime.Checked && _closeTime.Checked && _closeTime.Value <= _openTime.Value)
                 {
-                    MetaTheme.ShowModernDialog("Thời gian đóng phải sau thời gian mở.", "Lỗi nhập liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    ShowValidationSummary("Thời gian đóng phải sau thời gian mở.");
                     DialogResult = DialogResult.None;
                     return;
                 }
@@ -127,7 +140,20 @@ namespace CourseGuard.Frontend.Forms.Teacher
             grid.Controls.Add(CreateLabel("Số lần làm bài *"), 2, 3);
             grid.Controls.Add(_maxAttempts, 3, 3);
 
-            ContentPanel.Controls.Add(grid);
+            var shell = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Padding = new Padding(0),
+                BackColor = AppColors.BgCard
+            };
+            shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            shell.Controls.Add(_validationSummary, 0, 0);
+            shell.Controls.Add(grid, 0, 1);
+
+            ContentPanel.Controls.Add(shell);
             AddFooterButtons(cancel, save);
             
             AcceptButton = save;
@@ -161,6 +187,64 @@ namespace CourseGuard.Frontend.Forms.Teacher
             if (c is TextBox tb) tb.BorderStyle = BorderStyle.FixedSingle;
             if (c is ComboBox cb) cb.FlatStyle = FlatStyle.Flat;
             return c;
+        }
+
+        private void ConfigureStatusOptions(TeacherExamModel? existing)
+        {
+            _status.Items.Clear();
+            if (existing == null)
+            {
+                _status.Items.Add(WorkflowConstants.ExamStatus.Draft);
+                return;
+            }
+
+            string status = (existing.Status ?? WorkflowConstants.ExamStatus.Draft).Trim().ToUpperInvariant();
+            if (status == WorkflowConstants.ExamStatus.Draft)
+            {
+                _status.Items.Add(WorkflowConstants.ExamStatus.Draft);
+                _status.Items.Add(WorkflowConstants.ExamStatus.Closed);
+                return;
+            }
+
+            if (status == WorkflowConstants.ExamStatus.Active)
+            {
+                _status.Items.Add(WorkflowConstants.ExamStatus.Active);
+                _status.Items.Add(WorkflowConstants.ExamStatus.Closed);
+                return;
+            }
+
+            _status.Items.Add(WorkflowConstants.ExamStatus.Closed);
+        }
+
+        private void SelectStatus(string? status)
+        {
+            string normalized = string.IsNullOrWhiteSpace(status)
+                ? WorkflowConstants.ExamStatus.Draft
+                : status.Trim().ToUpperInvariant();
+
+            foreach (object item in _status.Items)
+            {
+                if (string.Equals(item.ToString(), normalized, StringComparison.OrdinalIgnoreCase))
+                {
+                    _status.SelectedItem = item;
+                    return;
+                }
+            }
+
+            if (_status.Items.Count > 0)
+                _status.SelectedIndex = 0;
+        }
+
+        private void ResetValidationSummary()
+        {
+            _validationSummary.ForeColor = AppColors.TextSecondary;
+            _validationSummary.Text = "Tạo nháp bài kiểm tra, thêm câu hỏi, sau đó kích hoạt từ danh sách.";
+        }
+
+        private void ShowValidationSummary(string message)
+        {
+            _validationSummary.ForeColor = AppColors.Danger;
+            _validationSummary.Text = message;
         }
     }
 

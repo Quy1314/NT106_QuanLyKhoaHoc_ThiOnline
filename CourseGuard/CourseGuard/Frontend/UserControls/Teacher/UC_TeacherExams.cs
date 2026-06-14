@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Models;
 using CourseGuard.Frontend.Forms.Teacher;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
@@ -24,11 +25,18 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private const string ColumnQuestions = "Câu hỏi";
         private const string ColumnStatus = "Trạng thái";
 
+        private readonly Button _activateButton = TeacherTabChrome.PrimaryButton("Kích hoạt");
+
         public UC_TeacherExams(int teacherId, TeacherController controller) : base(teacherId, controller, "Bài kiểm tra", "Tạo và quản lý kỳ thi. Giám sát nằm ở tab riêng.", "Danh sách bài kiểm tra")
         {
             var questionsButton = TeacherTabChrome.SecondaryButton("Soạn câu hỏi");
             questionsButton.Click += async (_, _) => await EditQuestionsAsync();
             AddHeaderAction(questionsButton);
+
+            _activateButton.Enabled = false;
+            _activateButton.Click += async (_, _) => await ActivateSelectedExamAsync();
+            AddHeaderAction(_activateButton);
+            Grid.SelectionChanged += (_, _) => UpdateExamWorkflowState();
         }
 
         protected override Task<DataTable> CreateTableAsync() => Task.Run(() => TeacherTabChrome.ToTable(
@@ -56,12 +64,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             using var dialog = new TeacherExamDialog(Controller.GetCourses(TeacherId));
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                if (string.Equals(dialog.Status, WorkflowConstants.ExamStatus.Active, StringComparison.OrdinalIgnoreCase))
-                {
-                    MetaTheme.ShowModernDialog("Bài kiểm tra cần được tạo ở trạng thái nháp, thêm câu hỏi, rồi mới kích hoạt.", "Chưa thể kích hoạt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
                 Controller.CreateExam(TeacherId, new TeacherExamModel
                 {
                     CourseId = dialog.CourseId,
@@ -71,7 +73,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     DurationMinutes = dialog.DurationMinutes,
                     MaxAttempts = dialog.MaxAttempts,
                     MaxViolations = dialog.MaxViolations,
-                    Status = dialog.Status
+                    Status = WorkflowConstants.ExamStatus.Draft
                 });
                 await LoadDataAsync();
             }
@@ -93,16 +95,12 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 DurationMinutes = CurrentInt(ColumnDuration),
                 MaxAttempts = CurrentInt(ColumnAttempts),
                 MaxViolations = CurrentInt(ColumnViolations),
-                Status = CurrentString(ColumnStatus)
+                QuestionCount = CurrentInt(ColumnQuestions),
+                Status = CurrentString(ColumnStatus),
+                StatusText = CurrentString(ColumnStatus)
             });
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                if (string.Equals(dialog.Status, WorkflowConstants.ExamStatus.Active, StringComparison.OrdinalIgnoreCase) && !Controller.CanActivateExam(TeacherId, id))
-                {
-                    MetaTheme.ShowModernDialog("Bài kiểm tra cần có ít nhất 1 câu hỏi trước khi kích hoạt.", "Chưa thể kích hoạt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
                 Controller.UpdateExam(TeacherId, new TeacherExamModel
                 {
                     Id = id,
@@ -134,6 +132,89 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             return DateTime.TryParseExact(value, "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsed)
                 ? parsed
                 : null;
+        }
+
+        private TeacherExamModel? SelectedExamFromGrid()
+        {
+            if (Grid.CurrentRow == null || Grid.CurrentRow.IsNewRow)
+                return null;
+
+            int id = CurrentInt(ColumnExamId);
+            if (id <= 0)
+                return null;
+
+            string status = CurrentString(ColumnStatus);
+            return new TeacherExamModel
+            {
+                Id = id,
+                CourseId = CurrentInt(ColumnCourseId),
+                CourseName = CurrentString(ColumnCourse),
+                Title = CurrentString(ColumnTitle),
+                OpenTime = ParseGridDate(CurrentString(ColumnOpen)),
+                CloseTime = ParseGridDate(CurrentString(ColumnClose)),
+                DurationMinutes = CurrentInt(ColumnDuration),
+                MaxAttempts = CurrentInt(ColumnAttempts),
+                MaxViolations = CurrentInt(ColumnViolations),
+                QuestionCount = CurrentInt(ColumnQuestions),
+                Status = status,
+                StatusText = status
+            };
+        }
+
+        private void UpdateExamWorkflowState()
+        {
+            TeacherExamModel? exam = SelectedExamFromGrid();
+            if (exam == null)
+            {
+                _activateButton.Text = "Kích hoạt";
+                _activateButton.Enabled = false;
+                return;
+            }
+
+            ExamUxPresentation view = TeacherExamUxPresenter.Present(exam);
+            _activateButton.Text = view.CanActivate ? "Kích hoạt" : view.PrimaryActionText;
+            _activateButton.Enabled = view.CanActivate;
+        }
+
+        private async Task ActivateSelectedExamAsync()
+        {
+            TeacherExamModel? exam = SelectedExamFromGrid();
+            if (exam == null)
+                return;
+
+            ExamUxPresentation view = TeacherExamUxPresenter.Present(exam);
+            if (!view.CanActivate)
+            {
+                MetaTheme.ShowModernDialog(view.DetailText, "Chưa thể kích hoạt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            DialogResult confirm = MetaTheme.ShowModernDialog(
+                $"Kích hoạt bài kiểm tra \"{exam.Title}\"?",
+                "Xác nhận",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes)
+                return;
+
+            if (!Controller.CanActivateExam(TeacherId, exam.Id))
+            {
+                MetaTheme.ShowModernDialog("Bài kiểm tra cần có ít nhất 1 câu hỏi trước khi kích hoạt.", "Chưa thể kích hoạt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                await LoadDataAsync();
+                UpdateExamWorkflowState();
+                return;
+            }
+
+            if (!Controller.ActivateExam(TeacherId, exam.Id))
+            {
+                MetaTheme.ShowModernDialog("Bài kiểm tra chỉ có thể kích hoạt khi còn ở trạng thái nháp và đã có ít nhất 1 câu hỏi.", "Chưa thể kích hoạt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                await LoadDataAsync();
+                UpdateExamWorkflowState();
+                return;
+            }
+
+            await LoadDataAsync();
+            UpdateExamWorkflowState();
         }
     }
 }

@@ -1484,9 +1484,9 @@ namespace CourseGuard.Backend.Data
             return session;
         }
 
-        public async Task BulkInsertQuestionsAndMapToExamAsync(int examId, int courseId, List<TeacherExamQuestionModel> questions, CancellationToken cancellationToken = default)
+        public async Task<int> BulkInsertQuestionsAndMapToExamAsync(int teacherId, int examId, int courseId, List<TeacherExamQuestionModel> questions, CancellationToken cancellationToken = default)
         {
-            if (questions == null || questions.Count == 0) return;
+            if (questions == null || questions.Count == 0) return 0;
 
             using var connection = CreateConnection();
             await connection.OpenAsync(cancellationToken);
@@ -1495,6 +1495,28 @@ namespace CourseGuard.Backend.Data
 
             try
             {
+                await using (var guard = new NpgsqlCommand(@"
+                    SELECT COUNT(*)::int
+                    FROM courses c
+                    JOIN exams ex ON ex.course_id = c.id
+                    WHERE c.teacher_id = @teacher_id
+                      AND ex.id = @exam_id
+                      AND ex.course_id = @course_id
+                      AND UPPER(COALESCE(ex.status, '')) = @draft_status", connection, transaction))
+                {
+                    guard.Parameters.AddWithValue("@teacher_id", teacherId);
+                    guard.Parameters.AddWithValue("@exam_id", examId);
+                    guard.Parameters.AddWithValue("@course_id", courseId);
+                    guard.Parameters.AddWithValue("@draft_status", WorkflowConstants.ExamStatus.Draft);
+
+                    int editable = Convert.ToInt32(await guard.ExecuteScalarAsync(cancellationToken) ?? 0);
+                    if (editable <= 0)
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                        return 0;
+                    }
+                }
+
                 // We use a single string builder to insert all questions into the QUESTIONS table
                 var sb = new System.Text.StringBuilder();
                 sb.AppendLine("INSERT INTO questions (course_id, content, type, correct_answer, score, difficulty, chapter, question_type) VALUES ");
@@ -1562,6 +1584,7 @@ namespace CourseGuard.Backend.Data
 
                 await eqCommand.ExecuteNonQueryAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
+                return insertedQuestionIds.Count;
             }
             catch
             {
@@ -1570,13 +1593,13 @@ namespace CourseGuard.Backend.Data
             }
         }
 
-        public async Task AddQuestionsFromBankAsync(int examId, int courseId, IReadOnlyList<int> questionIds, CancellationToken cancellationToken = default)
+        public async Task<int> AddQuestionsFromBankAsync(int examId, int courseId, IReadOnlyList<int> questionIds, CancellationToken cancellationToken = default)
         {
             var distinctQuestionIds = questionIds?
                 .Where(id => id > 0)
                 .Distinct()
                 .ToList() ?? new List<int>();
-            if (examId <= 0 || courseId <= 0 || distinctQuestionIds.Count == 0) return;
+            if (examId <= 0 || courseId <= 0 || distinctQuestionIds.Count == 0) return 0;
 
             using var connection = CreateConnection();
             await connection.OpenAsync(cancellationToken);
@@ -1590,7 +1613,7 @@ namespace CourseGuard.Backend.Data
                     FROM exams
                     WHERE id = @exam_id
                       AND course_id = @course_id
-                      AND UPPER(COALESCE(status, 'DRAFT')) = 'DRAFT'", connection, transaction))
+                      AND UPPER(COALESCE(status, '')) = 'DRAFT'", connection, transaction))
                 {
                     guard.Parameters.AddWithValue("@exam_id", examId);
                     guard.Parameters.AddWithValue("@course_id", courseId);
@@ -1598,12 +1621,13 @@ namespace CourseGuard.Backend.Data
                     if (editable <= 0)
                     {
                         await transaction.RollbackAsync(cancellationToken);
-                        return;
+                        return 0;
                     }
                 }
 
-                await InsertQuestionBankSnapshotsAsync(connection, transaction, examId, courseId, distinctQuestionIds, cancellationToken);
+                int insertedCount = await InsertQuestionBankSnapshotsAsync(connection, transaction, examId, courseId, distinctQuestionIds, cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
+                return insertedCount;
             }
             catch
             {
@@ -1739,10 +1763,10 @@ namespace CourseGuard.Backend.Data
             return result;
         }
 
-        public async Task AddRandomQuestionsToExamAsync(int examId, int courseId, IReadOnlyList<RandomQuestionCriteria> criteria, CancellationToken cancellationToken = default)
+        public async Task<int> AddRandomQuestionsToExamAsync(int examId, int courseId, IReadOnlyList<RandomQuestionCriteria> criteria, CancellationToken cancellationToken = default)
         {
             if (criteria == null || criteria.Count == 0)
-                return;
+                return 0;
 
             await using var connection = CreateConnection();
             await connection.OpenAsync(cancellationToken);
@@ -1756,7 +1780,7 @@ namespace CourseGuard.Backend.Data
                     FROM exams
                     WHERE id = @exam_id
                       AND course_id = @course_id
-                      AND UPPER(COALESCE(status, 'DRAFT')) = 'DRAFT'", connection, transaction))
+                      AND UPPER(COALESCE(status, '')) = 'DRAFT'", connection, transaction))
                 {
                     guard.Parameters.AddWithValue("@exam_id", examId);
                     guard.Parameters.AddWithValue("@course_id", courseId);
@@ -1764,7 +1788,7 @@ namespace CourseGuard.Backend.Data
                     if (editable <= 0)
                     {
                         await transaction.RollbackAsync(cancellationToken);
-                        return;
+                        return 0;
                     }
                 }
 
@@ -1796,11 +1820,12 @@ namespace CourseGuard.Backend.Data
                 if (distinctSelectedIds.Count == 0)
                 {
                     await transaction.CommitAsync(cancellationToken);
-                    return;
+                    return 0;
                 }
 
-                await InsertQuestionBankSnapshotsAsync(connection, transaction, examId, courseId, distinctSelectedIds, cancellationToken);
+                int insertedCount = await InsertQuestionBankSnapshotsAsync(connection, transaction, examId, courseId, distinctSelectedIds, cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
+                return insertedCount;
             }
             catch
             {
@@ -1809,7 +1834,7 @@ namespace CourseGuard.Backend.Data
             }
         }
 
-        private static async Task InsertQuestionBankSnapshotsAsync(
+        private static async Task<int> InsertQuestionBankSnapshotsAsync(
             NpgsqlConnection connection,
             NpgsqlTransaction transaction,
             int examId,
@@ -1818,7 +1843,7 @@ namespace CourseGuard.Backend.Data
             CancellationToken cancellationToken)
         {
             if (questionIds.Count == 0)
-                return;
+                return 0;
 
             var sb = new System.Text.StringBuilder();
             sb.AppendLine(@"WITH selected AS (
@@ -1867,7 +1892,7 @@ namespace CourseGuard.Backend.Data
             for (int i = 0; i < questionIds.Count; i++)
                 command.Parameters.AddWithValue($"@qid_{i}", questionIds[i]);
 
-            await command.ExecuteNonQueryAsync(cancellationToken);
+            return await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
         private static (string Text, string OptionA, string OptionB, string OptionC, string OptionD) ParseQuestionBankContent(string content)
@@ -4794,36 +4819,49 @@ namespace CourseGuard.Backend.Data
             await using var connection = CreateConnection();
             await connection.OpenAsync(cancellationToken);
 
-            const string checkQuery = "SELECT id FROM assignment_submissions WHERE assignment_id = @assignment_id AND student_id = @student_id LIMIT 1";
-            await using var checkCommand = new NpgsqlCommand(checkQuery, connection);
-            checkCommand.Parameters.AddWithValue("@assignment_id", submission.AssignmentId);
-            checkCommand.Parameters.AddWithValue("@student_id", submission.StudentId);
-            
-            object? existingId = await checkCommand.ExecuteScalarAsync(cancellationToken);
-
-            string query;
-            if (existingId != null)
-            {
-                query = @"
-                    UPDATE assignment_submissions SET
-                        file_name = @file_name,
+            const string query = @"
+                WITH eligible_assignment AS (
+                    SELECT a.id
+                    FROM (SELECT 1) guard
+                    JOIN teacher_assignments a ON a.id = @assignment_id
+                    JOIN courses c ON c.id = a.course_id
+                    JOIN enrollments e ON e.course_id = c.id
+                    WHERE e.student_id = @student_id
+                      AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                      AND UPPER(COALESCE(c.status, '')) = 'ACTIVE'
+                      AND UPPER(COALESCE(a.status, '')) = 'OPEN'
+                      AND (a.due_at IS NULL OR a.due_at >= CURRENT_TIMESTAMP)
+                    LIMIT 1
+                ),
+                updated AS (
+                    UPDATE assignment_submissions s
+                    SET file_name = @file_name,
                         content_type = @content_type,
                         file_size = @file_size,
                         file_content = @file_content,
                         submitted_at = @submitted_at
-                    WHERE id = @id";
-            }
-            else
-            {
-                query = @"
+                    FROM eligible_assignment a
+                    WHERE s.assignment_id = a.id
+                      AND s.student_id = @student_id
+                      AND s.score IS NULL
+                      AND UPPER(COALESCE(s.status, '')) <> 'GRADED'
+                    RETURNING s.id
+                ),
+                inserted AS (
                     INSERT INTO assignment_submissions (assignment_id, student_id, file_name, content_type, file_size, file_content, submitted_at)
-                    VALUES (@assignment_id, @student_id, @file_name, @content_type, @file_size, @file_content, @submitted_at)";
-            }
+                    SELECT @assignment_id, @student_id, @file_name, @content_type, @file_size, @file_content, @submitted_at
+                    FROM eligible_assignment a
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM assignment_submissions s
+                        WHERE s.assignment_id = a.id
+                          AND s.student_id = @student_id
+                    )
+                    RETURNING id
+                )
+                SELECT (SELECT COUNT(*) FROM updated) + (SELECT COUNT(*) FROM inserted)";
 
             await using var command = new NpgsqlCommand(query, connection);
-            if (existingId != null)
-                command.Parameters.AddWithValue("@id", existingId);
-            
             command.Parameters.AddWithValue("@assignment_id", submission.AssignmentId);
             command.Parameters.AddWithValue("@student_id", submission.StudentId);
             command.Parameters.AddWithValue("@file_name", submission.FileName ?? string.Empty);
@@ -4832,7 +4870,8 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@file_content", submission.FileContent ?? (object)DBNull.Value);
             command.Parameters.AddWithValue("@submitted_at", DateTime.Now);
 
-            int rows = await command.ExecuteNonQueryAsync(cancellationToken);
+            object? result = await command.ExecuteScalarAsync(cancellationToken);
+            int rows = result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
             return rows > 0;
         }
 

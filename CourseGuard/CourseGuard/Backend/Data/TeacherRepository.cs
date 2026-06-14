@@ -441,7 +441,7 @@ namespace CourseGuard.Backend.Data
             input.CourseId,
             @"UPDATE teacher_assignments a
               SET title = @title, description = @description, due_at = @due_at, status = @status,
-                  file_name = @file_name, file_path = @file_path, content_type = @content_type, file_size = @file_size, file_content = @file_content
+                  file_name = @file_name, file_path = @file_path, content_type = @content_type, file_size = @file_size, file_content = CASE WHEN @update_file = 1 THEN @file_content ELSE a.file_content END
               FROM courses c
               WHERE a.course_id = c.id AND c.teacher_id = @teacher_id AND a.id = @id AND a.course_id = @course_id",
             command =>
@@ -455,7 +455,21 @@ namespace CourseGuard.Backend.Data
                 command.Parameters.AddWithValue("@file_path", string.IsNullOrWhiteSpace(input.FilePath) ? DBNull.Value : input.FilePath);
                 command.Parameters.AddWithValue("@content_type", string.IsNullOrWhiteSpace(input.ContentType) ? DBNull.Value : input.ContentType);
                 command.Parameters.AddWithValue("@file_size", input.FileSize.HasValue ? input.FileSize.Value : DBNull.Value);
-                command.Parameters.AddWithValue("@file_content", input.FileContent == null || input.FileContent.Length == 0 ? DBNull.Value : input.FileContent);
+                if (input.FileContent != null && input.FileContent.Length > 0)
+                {
+                    command.Parameters.AddWithValue("@update_file", 1);
+                    command.Parameters.AddWithValue("@file_content", input.FileContent);
+                }
+                else if (input.HasStoredContent && input.FileContent == null)
+                {
+                    command.Parameters.AddWithValue("@update_file", 0);
+                    command.Parameters.AddWithValue("@file_content", DBNull.Value);
+                }
+                else
+                {
+                    command.Parameters.AddWithValue("@update_file", 1);
+                    command.Parameters.AddWithValue("@file_content", DBNull.Value);
+                }
             });
 
         public bool DeleteAssignment(int teacherId, int assignmentId) => ExecuteOwnedDelete(
@@ -479,10 +493,45 @@ namespace CourseGuard.Backend.Data
             @"UPDATE exams ex
               SET title = @title, open_time = @open_time, close_time = @close_time,
                   duration_minutes = @duration_minutes, max_attempts = @max_attempts,
-                  max_violations = @max_violations, status = @status
+                  max_violations = @max_violations,
+                  status = CASE
+                      WHEN @status = @closed_status THEN @closed_status
+                      WHEN UPPER(COALESCE(ex.status, '')) = @active_status THEN @active_status
+                      WHEN UPPER(COALESCE(ex.status, '')) = @closed_status THEN @closed_status
+                      WHEN UPPER(COALESCE(ex.status, '')) = @draft_status THEN @draft_status
+                      ELSE COALESCE(ex.status, '')
+                  END
               FROM courses c
               WHERE ex.course_id = c.id AND c.teacher_id = @teacher_id AND ex.id = @id AND ex.course_id = @course_id",
-            command => AddExamParameters(command, input, includeId: true));
+            command =>
+            {
+                AddExamParameters(command, input, includeId: true);
+                AddExamWorkflowStatusParameters(command);
+            });
+
+        public bool ActivateExam(int teacherId, int examId)
+        {
+            using var connection = _dbContext.CreateConnection();
+            connection.Open();
+            using var command = new NpgsqlCommand(@"
+                UPDATE exams ex
+                SET status = @active_status
+                FROM courses c
+                WHERE ex.course_id = c.id
+                  AND c.teacher_id = @teacher_id
+                  AND ex.id = @exam_id
+                  AND UPPER(COALESCE(ex.status, '')) = @draft_status
+                  AND EXISTS (
+                      SELECT 1
+                      FROM exam_questions eq
+                      WHERE eq.exam_id = ex.id
+                  )", connection);
+            command.Parameters.AddWithValue("@teacher_id", teacherId);
+            command.Parameters.AddWithValue("@exam_id", examId);
+            command.Parameters.AddWithValue("@active_status", WorkflowConstants.ExamStatus.Active);
+            command.Parameters.AddWithValue("@draft_status", WorkflowConstants.ExamStatus.Draft);
+            return command.ExecuteNonQuery() > 0;
+        }
 
         public bool DeleteExam(int teacherId, int examId) => ExecuteOwnedDelete(
             teacherId,
@@ -495,14 +544,23 @@ namespace CourseGuard.Backend.Data
             using var connection = _dbContext.CreateConnection();
             connection.Open();
             using var command = new NpgsqlCommand(@"
-                SELECT COUNT(eq.id)::int
-                FROM exams ex
-                JOIN courses c ON c.id = ex.course_id
-                LEFT JOIN exam_questions eq ON eq.exam_id = ex.id
-                WHERE c.teacher_id = @teacher_id AND ex.id = @exam_id", connection);
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM exams ex
+                    JOIN courses c ON c.id = ex.course_id
+                    WHERE c.teacher_id = @teacher_id
+                      AND ex.id = @exam_id
+                      AND UPPER(COALESCE(ex.status, '')) = @draft_status
+                      AND EXISTS (
+                          SELECT 1
+                          FROM exam_questions eq
+                          WHERE eq.exam_id = ex.id
+                      )
+                )", connection);
             command.Parameters.AddWithValue("@teacher_id", teacherId);
             command.Parameters.AddWithValue("@exam_id", examId);
-            return Convert.ToInt32(command.ExecuteScalar() ?? 0) > 0;
+            command.Parameters.AddWithValue("@draft_status", WorkflowConstants.ExamStatus.Draft);
+            return command.ExecuteScalar() is bool canActivate && canActivate;
         }
 
         public List<TeacherExamQuestionModel> GetExamQuestions(int teacherId, int examId)
@@ -554,14 +612,15 @@ namespace CourseGuard.Backend.Data
             using var connection = _dbContext.CreateConnection();
             connection.Open();
             using var command = new NpgsqlCommand(@"
-                SELECT COALESCE(ex.status, 'DRAFT')
+                SELECT ex.status
                 FROM exams ex
                 JOIN courses c ON c.id = ex.course_id
                 WHERE c.teacher_id = @teacher_id
                   AND ex.id = @exam_id", connection);
             command.Parameters.AddWithValue("@teacher_id", teacherId);
             command.Parameters.AddWithValue("@exam_id", examId);
-            return command.ExecuteScalar()?.ToString() ?? WorkflowConstants.ExamStatus.Draft;
+            object? result = command.ExecuteScalar();
+            return result == null || result == DBNull.Value ? string.Empty : Convert.ToString(result) ?? string.Empty;
         }
 
         public int CreateExamQuestion(int teacherId, TeacherExamQuestionModel input)
@@ -580,10 +639,11 @@ namespace CourseGuard.Backend.Data
                     JOIN courses c ON c.id = ex.course_id
                     WHERE ex.id = @exam_id
                       AND c.teacher_id = @teacher_id
-                      AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'DRAFT'
+                      AND UPPER(COALESCE(ex.status, '')) = @draft_status
                 )
                 RETURNING id", connection, transaction);
             AddQuestionParameters(command, teacherId, input, nextOrder);
+            command.Parameters.AddWithValue("@draft_status", WorkflowConstants.ExamStatus.Draft);
             object? result = command.ExecuteScalar();
             int id = result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
             if (id > 0)
@@ -613,9 +673,10 @@ namespace CourseGuard.Backend.Data
                   AND c.teacher_id = @teacher_id
                   AND eq.id = @id
                   AND eq.exam_id = @exam_id
-                  AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'DRAFT'", connection);
+                  AND UPPER(COALESCE(ex.status, '')) = @draft_status", connection);
             command.Parameters.AddWithValue("@id", input.Id);
             AddQuestionParameters(command, teacherId, input, input.DisplayOrder <= 0 ? 1 : input.DisplayOrder);
+            command.Parameters.AddWithValue("@draft_status", WorkflowConstants.ExamStatus.Draft);
             return command.ExecuteNonQuery() > 0;
         }
 
@@ -632,10 +693,11 @@ namespace CourseGuard.Backend.Data
                   AND c.teacher_id = @teacher_id
                   AND eq.exam_id = @exam_id
                   AND eq.id = @id
-                  AND UPPER(COALESCE(ex.status, 'DRAFT')) = 'DRAFT'", connection, transaction);
+                  AND UPPER(COALESCE(ex.status, '')) = @draft_status", connection, transaction);
             command.Parameters.AddWithValue("@teacher_id", teacherId);
             command.Parameters.AddWithValue("@exam_id", examId);
             command.Parameters.AddWithValue("@id", questionId);
+            command.Parameters.AddWithValue("@draft_status", WorkflowConstants.ExamStatus.Draft);
             bool deleted = command.ExecuteNonQuery() > 0;
             if (deleted)
                 RecalculateQuestionPoints(connection, transaction, examId);
@@ -1008,7 +1070,7 @@ namespace CourseGuard.Backend.Data
                 SELECT ex.id, ex.course_id, COALESCE(c.name, ''), COALESCE(ex.title, ''),
                        ex.open_time, ex.close_time, COALESCE(ex.duration_minutes, 0),
                        COALESCE(ex.max_attempts, 1), COALESCE(ex.max_violations, 0), COUNT(eq.id)::int,
-                       COALESCE(ex.status, 'DRAFT')
+                       COALESCE(ex.status, '')
                 FROM exams ex
                 JOIN courses c ON c.id = ex.course_id
                 LEFT JOIN exam_questions eq ON eq.exam_id = ex.id
@@ -1673,7 +1735,14 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@duration_minutes", input.DurationMinutes);
             command.Parameters.AddWithValue("@max_attempts", input.MaxAttempts <= 0 ? 1 : input.MaxAttempts);
             command.Parameters.AddWithValue("@max_violations", Math.Max(0, input.MaxViolations));
-            command.Parameters.AddWithValue("@status", NormalizeExamStatus(input.Status));
+            command.Parameters.AddWithValue("@status", includeId ? NormalizeExamStatus(input.Status) : WorkflowConstants.ExamStatus.Draft);
+        }
+
+        private static void AddExamWorkflowStatusParameters(NpgsqlCommand command)
+        {
+            command.Parameters.AddWithValue("@active_status", WorkflowConstants.ExamStatus.Active);
+            command.Parameters.AddWithValue("@closed_status", WorkflowConstants.ExamStatus.Closed);
+            command.Parameters.AddWithValue("@draft_status", WorkflowConstants.ExamStatus.Draft);
         }
 
         private static string NormalizeExamStatus(string? status)
@@ -1897,30 +1966,47 @@ namespace CourseGuard.Backend.Data
             return results;
         }
 
-        public async Task<byte[]?> GetSubmissionContentAsync(int submissionId, System.Threading.CancellationToken cancellationToken = default)
-        {
-            await using var connection = _dbContext.CreateConnection();
-            await connection.OpenAsync(cancellationToken);
-
-            string query = "SELECT file_content FROM assignment_submissions WHERE id = @id LIMIT 1";
-            await using var command = new NpgsqlCommand(query, connection);
-            command.Parameters.AddWithValue("@id", submissionId);
-
-            object? result = await command.ExecuteScalarAsync(cancellationToken);
-            return result != DBNull.Value && result is byte[] bytes ? bytes : null;
-        }
-
-        public async Task<bool> UpdateGradeAsync(int submissionId, decimal score, string feedback, System.Threading.CancellationToken cancellationToken = default)
+        public async Task<byte[]?> GetSubmissionContentAsync(int teacherId, int submissionId, System.Threading.CancellationToken cancellationToken = default)
         {
             await using var connection = _dbContext.CreateConnection();
             await connection.OpenAsync(cancellationToken);
 
             string query = @"
-                WITH updated AS (
-                    UPDATE assignment_submissions 
+                SELECT s.file_content
+                FROM assignment_submissions s
+                JOIN teacher_assignments a ON s.assignment_id = a.id
+                JOIN courses c ON a.course_id = c.id
+                WHERE s.id = @id
+                  AND c.teacher_id = @teacher_id
+                LIMIT 1";
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@id", submissionId);
+            command.Parameters.AddWithValue("@teacher_id", teacherId);
+
+            object? result = await command.ExecuteScalarAsync(cancellationToken);
+            return result != DBNull.Value && result is byte[] bytes ? bytes : null;
+        }
+
+        public async Task<bool> UpdateGradeAsync(int teacherId, int submissionId, decimal score, string feedback, System.Threading.CancellationToken cancellationToken = default)
+        {
+            await using var connection = _dbContext.CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            string query = @"
+                WITH owned_submission AS (
+                    SELECT s.id
+                    FROM assignment_submissions s
+                    JOIN teacher_assignments a ON s.assignment_id = a.id
+                    JOIN courses c ON a.course_id = c.id
+                    WHERE s.id = @id
+                      AND c.teacher_id = @teacher_id
+                ),
+                updated AS (
+                    UPDATE assignment_submissions s
                     SET score = @score, feedback = @feedback, status = 'GRADED'
-                    WHERE id = @id
-                    RETURNING student_id, assignment_id
+                    FROM owned_submission os
+                    WHERE s.id = os.id
+                    RETURNING s.student_id, s.assignment_id
                 )
                 SELECT u.student_id, u.assignment_id, a.title, c.name
                 FROM updated u
@@ -1929,6 +2015,7 @@ namespace CourseGuard.Backend.Data
 
             await using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@id", submissionId);
+            command.Parameters.AddWithValue("@teacher_id", teacherId);
             command.Parameters.AddWithValue("@score", score);
             command.Parameters.AddWithValue("@feedback", string.IsNullOrWhiteSpace(feedback) ? DBNull.Value : feedback);
 
