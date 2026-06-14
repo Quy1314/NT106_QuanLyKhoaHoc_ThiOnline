@@ -15,7 +15,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         public UC_TeacherAssignments(int teacherId, TeacherController controller) : base(teacherId, controller, "Bài tập", "Quản lý bài tập và hạn nộp theo khóa học.", "Danh sách bài tập")
         {
-            _btnViewSubmissions = TeacherTabChrome.SecondaryButton("Xem bài nộp");
+            _btnViewSubmissions = TeacherTabChrome.SecondaryButton("Mở bài nộp");
             _btnViewSubmissions.Click += (s, e) => {
                 using var dialog = new TeacherSubmissionsDialog(TeacherId, Controller, Controller.GetCourses(TeacherId));
                 dialog.ShowDialog(FindForm());
@@ -66,11 +66,24 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 }
                 else if (existing != null)
                 {
-                    // Giữ lại file cũ nếu không chọn file mới và file cũ chưa bị xóa
-                    model.FileName = existing.FileName;
-                    model.FilePath = existing.FilePath;
-                    model.ContentType = existing.ContentType;
-                    model.FileSize = existing.FileSize;
+                    if (dialog.ClearFileRequested)
+                    {
+                        model.FileName = string.Empty;
+                        model.FilePath = string.Empty;
+                        model.ContentType = string.Empty;
+                        model.FileSize = null;
+                        model.FileContent = null;
+                        model.HasStoredContent = false;
+                    }
+                    else
+                    {
+                        model.FileName = existing.FileName;
+                        model.FilePath = existing.FilePath;
+                        model.ContentType = existing.ContentType;
+                        model.FileSize = existing.FileSize;
+                        model.FileContent = null;
+                        model.HasStoredContent = existing.HasStoredContent;
+                    }
                 }
                 Controller.UpdateAssignment(TeacherId, model);
                 await LoadDataAsync();

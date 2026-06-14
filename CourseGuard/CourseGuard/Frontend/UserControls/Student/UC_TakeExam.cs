@@ -26,12 +26,17 @@ namespace CourseGuard.Frontend.UserControls.Student
         private string _globalSearchKeyword = string.Empty;
         private RoundedPanel _examBody = null!;
         private Label _emptyStateLabel = null!;
+        private RoundedPanel _examPreviewPanel = null!;
+        private Label _examPreviewTitle = null!;
+        private Label _examPreviewDetail = null!;
+        private Label _examPreviewStatus = null!;
 
         public UC_TakeExam()
         {
             _authController = new AuthController(_dbContext);
             InitializeComponent();
             BuildCardLayout();
+            dgvExams.SelectionChanged += (_, _) => UpdateSelectedExamPreview();
             ApplyAcademicStyle();
             LoadDataAsync().FireAndForgetSafe(this);
 
@@ -54,8 +59,96 @@ namespace CourseGuard.Frontend.UserControls.Student
                 "Theo dõi bài kiểm tra active trong các khóa học đang học và trạng thái làm bài.",
                 btnStartExam), 0, 0);
             _examBody = StudentTabChrome.CreateTableBody(dgvExams, out _emptyStateLabel);
-            root.Controls.Add(StudentTabChrome.CreateDataCard("Danh sách bài kiểm tra", _examBody), 0, 1);
+
+            var content = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 1,
+                RowCount = 2,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            content.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 108f));
+
+            content.Controls.Add(StudentTabChrome.CreateDataCard("Danh sách bài kiểm tra", _examBody), 0, 0);
+            content.Controls.Add(BuildExamPreviewPanel(), 0, 1);
+            root.Controls.Add(content, 0, 1);
             StudentTabChrome.EnableNaturalFocusClear(this, dgvExams);
+            UpdateExamPreviewEmpty();
+        }
+
+        private RoundedPanel BuildExamPreviewPanel()
+        {
+            _examPreviewPanel = new RoundedPanel
+            {
+                Dock = DockStyle.Fill,
+                FillColor = AppColors.IsDarkMode ? AppColors.BgCardHover : ColorTranslator.FromHtml("#F8FAFC"),
+                BorderColor = AppColors.Border,
+                CornerRadius = 12,
+                Margin = new Padding(0, 12, 0, 0),
+                Padding = new Padding(18, 12, 18, 12)
+            };
+
+            var grid = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 2,
+                RowCount = 2,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30f));
+            grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+
+            _examPreviewTitle = new Label
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = false,
+                AutoEllipsis = true,
+                BackColor = Color.Transparent,
+                Font = AppFonts.Semibold(11f),
+                ForeColor = AppColors.TextPrimary,
+                TextAlign = ContentAlignment.MiddleLeft,
+                UseCompatibleTextRendering = false
+            };
+
+            _examPreviewStatus = new Label
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Right,
+                BackColor = Color.Transparent,
+                Font = AppFonts.Semibold(9f),
+                ForeColor = AppColors.TextMuted,
+                Margin = new Padding(12, 0, 0, 0),
+                TextAlign = ContentAlignment.MiddleRight,
+                UseCompatibleTextRendering = false
+            };
+
+            _examPreviewDetail = new Label
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = false,
+                AutoEllipsis = true,
+                BackColor = Color.Transparent,
+                Font = AppFonts.Body,
+                ForeColor = AppColors.TextSecondary,
+                TextAlign = ContentAlignment.TopLeft,
+                UseCompatibleTextRendering = false
+            };
+
+            grid.Controls.Add(_examPreviewTitle, 0, 0);
+            grid.Controls.Add(_examPreviewStatus, 1, 0);
+            grid.Controls.Add(_examPreviewDetail, 0, 1);
+            grid.SetColumnSpan(_examPreviewDetail, 2);
+            _examPreviewPanel.Controls.Add(grid);
+
+            return _examPreviewPanel;
         }
 
         private async System.Threading.Tasks.Task LoadDataAsync()
@@ -88,14 +181,16 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             foreach (StudentExamListItemModel exam in _exams)
             {
+                ExamUxPresentation view = StudentExamUxPresenter.Present(exam, DateTime.Now);
                 dt.Rows.Add(
                     exam.Id,
-                    exam.CanStart,
+                    view.CanLaunch,
                     exam.Title,
                     exam.CourseName,
                     BuildExamTimeText(exam),
                     exam.QuestionCount > 0 ? exam.QuestionCount.ToString(CultureInfo.InvariantCulture) : "N/A",
-                    exam.StatusText);
+                    view.StatusText,
+                    view.ActionText);
             }
 
             return dt;
@@ -107,7 +202,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             {
                 dgvExams.DataSource = null;
                 StudentTabChrome.SetTableState(_examBody, dgvExams, _emptyStateLabel, showTable: false, emptyMessage);
-                btnStartExam.Enabled = false;
+                UpdateExamPreviewEmpty();
                 return;
             }
 
@@ -116,9 +211,9 @@ namespace CourseGuard.Frontend.UserControls.Student
             HideInternalColumn("ExamId");
             HideInternalColumn("CanStart");
             StudentTabChrome.SetTableState(_examBody, dgvExams, _emptyStateLabel, showTable: true, string.Empty);
-            btnStartExam.Enabled = true;
             dgvExams.ClearSelection();
             dgvExams.CurrentCell = null;
+            UpdateExamPreviewEmpty();
         }
 
         public void ApplyGlobalSearch(string keyword)
@@ -167,6 +262,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             dt.Columns.Add("Thời gian", typeof(string));
             dt.Columns.Add("Số câu", typeof(string));
             dt.Columns.Add("Tình trạng", typeof(string));
+            dt.Columns.Add("Hành động", typeof(string));
             return dt;
         }
 
@@ -186,21 +282,110 @@ namespace CourseGuard.Frontend.UserControls.Student
             return duration;
         }
 
+        private void UpdateSelectedExamPreview()
+        {
+            StudentExamListItemModel? exam = SelectedExam();
+            if (exam == null)
+            {
+                UpdateExamPreviewEmpty();
+                return;
+            }
+
+            ExamUxPresentation view = StudentExamUxPresenter.Present(exam, DateTime.Now);
+            ApplySelectedExamPresentation(exam, view);
+        }
+
+        private void ApplySelectedExamPresentation(StudentExamListItemModel exam, ExamUxPresentation view)
+        {
+            _examPreviewTitle.Text = exam.Title;
+            _examPreviewDetail.Text = view.DetailText;
+            _examPreviewStatus.Text = view.StatusText;
+            _examPreviewStatus.ForeColor = GetPreviewStatusColor(view.Tone);
+            btnStartExam.Text = view.ActionText;
+            btnStartExam.Enabled = view.CanLaunch;
+        }
+
+        private void UpdateExamPreviewEmpty()
+        {
+            _examPreviewTitle.Text = "Chọn một bài kiểm tra";
+            _examPreviewDetail.Text = "Chọn một dòng trong danh sách để xem trạng thái và hành động phù hợp.";
+            _examPreviewStatus.Text = string.Empty;
+            _examPreviewStatus.ForeColor = AppColors.TextMuted;
+            btnStartExam.Text = "Bắt đầu làm bài";
+            btnStartExam.Enabled = false;
+        }
+
+        private DataGridViewRow? SelectedExamRow()
+        {
+            if (!dgvExams.Visible)
+                return null;
+
+            if (IsValidExamRow(dgvExams.CurrentRow))
+                return dgvExams.CurrentRow;
+
+            if (dgvExams.SelectedRows.Count > 0 && IsValidExamRow(dgvExams.SelectedRows[0]))
+                return dgvExams.SelectedRows[0];
+
+            return null;
+        }
+
+        private static bool IsValidExamRow(DataGridViewRow? row)
+        {
+            return row != null && !row.IsNewRow;
+        }
+
+        private StudentExamListItemModel? SelectedExam()
+        {
+            DataGridViewRow? row = SelectedExamRow();
+            if (row == null)
+                return null;
+
+            object? value = row.Cells["ExamId"]?.Value;
+            if (value == null || value == DBNull.Value)
+                return null;
+
+            try
+            {
+                int examId = Convert.ToInt32(value, CultureInfo.InvariantCulture);
+                return _exams.FirstOrDefault(exam => exam.Id == examId);
+            }
+            catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException)
+            {
+                return null;
+            }
+        }
+
+        private static Color GetPreviewStatusColor(string tone)
+        {
+            return tone switch
+            {
+                "Success" => AppColors.Success,
+                "Warning" => AppColors.Warning,
+                "Info" => AppColors.AccentBlue,
+                "Muted" => AppColors.TextMuted,
+                _ => AppColors.TextSecondary
+            };
+        }
+
         private async void btnStartExam_Click(object sender, EventArgs e)
         {
-            StudentExamLaunchContext? launchContext = CreateExamLaunchContext(dgvExams.CurrentRow);
-            if (!dgvExams.Visible || launchContext == null)
+            StudentExamListItemModel? exam = SelectedExam();
+            if (exam == null)
             {
                 MetaTheme.ShowModernDialog(this.FindForm(), "Vui lòng chọn một bài kiểm tra.", "Thông báo");
                 return;
             }
 
-            if (launchContext.ExamId <= 0 || !launchContext.CanStart)
+            ExamUxPresentation view = StudentExamUxPresenter.Present(exam, DateTime.Now);
+            ApplySelectedExamPresentation(exam, view);
+            StudentExamLaunchContext launchContext = CreateExamLaunchContext(exam);
+
+            if (launchContext.ExamId <= 0 || !view.CanLaunch)
             {
-                StudentExamListItemModel? exam = _exams.FirstOrDefault(item => item.Id == launchContext.ExamId);
-                string message = exam == null
+                StudentExamListItemModel? blockedExam = _exams.FirstOrDefault(item => item.Id == launchContext.ExamId);
+                string message = blockedExam == null
                     ? "Bài kiểm tra này chưa thể làm ở thời điểm hiện tại."
-                    : StudentExamAvailabilityService.GetStartBlockedMessage(exam);
+                    : StudentExamAvailabilityService.GetStartBlockedMessage(blockedExam);
                 MetaTheme.ShowModernDialog(this.FindForm(), message, "Thông báo");
                 return;
             }
@@ -259,28 +444,22 @@ namespace CourseGuard.Frontend.UserControls.Student
             return Task.Run(() => _dbContext.StartOrResumeStudentExam(studentId, examId));
         }
 
-        private static StudentExamLaunchContext? CreateExamLaunchContext(DataGridViewRow? row)
+        private static StudentExamLaunchContext CreateExamLaunchContext(StudentExamListItemModel exam)
         {
-            if (row == null || row.IsNewRow)
-                return null;
-
             return new StudentExamLaunchContext(
-                Convert.ToInt32(row.Cells["ExamId"].Value),
-                Convert.ToBoolean(row.Cells["CanStart"].Value),
-                row.Cells["Kỳ thi"].Value?.ToString() ?? "unknown-exam");
+                exam.Id,
+                string.IsNullOrWhiteSpace(exam.Title) ? "unknown-exam" : exam.Title);
         }
 
         private sealed class StudentExamLaunchContext
         {
-            public StudentExamLaunchContext(int examId, bool canStart, string examName)
+            public StudentExamLaunchContext(int examId, string examName)
             {
                 ExamId = examId;
-                CanStart = canStart;
                 ExamName = examName;
             }
 
             public int ExamId { get; }
-            public bool CanStart { get; }
             public string ExamName { get; }
         }
     }

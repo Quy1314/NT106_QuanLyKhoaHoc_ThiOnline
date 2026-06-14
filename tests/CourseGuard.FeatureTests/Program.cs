@@ -111,26 +111,46 @@ Run("student exam launch preloads session before opening form", () =>
     AssertEqual(typeof(Task<StudentExamTakingModel?>), preloadMethod!.ReturnType);
 });
 
-Run("student exam launch context snapshots selected row before preload", () =>
+Run("student exam launch context snapshots selected exam before preload", () =>
 {
     MethodInfo? createContext = typeof(UC_TakeExam).GetMethod(
         "CreateExamLaunchContext",
         BindingFlags.Static | BindingFlags.NonPublic);
     AssertTrue(createContext != null, "UC_TakeExam must snapshot selected exam context before await");
 
-    using DataGridView grid = new();
-    grid.Columns.Add("ExamId", "ExamId");
-    grid.Columns.Add("CanStart", "CanStart");
-    grid.Columns.Add("Kỳ thi", "Kỳ thi");
-    grid.Rows.Add(7, true, "Giữa kỳ");
+    var exam = new StudentExamListItemModel
+    {
+        Id = 7,
+        Title = "Giữa kỳ"
+    };
 
-    object context = createContext!.Invoke(null, new object?[] { grid.Rows[0] })
-        ?? throw new InvalidOperationException("launch context must not be null for a valid row");
-    grid.Rows[0].Cells["Kỳ thi"].Value = "Đã đổi";
+    object context = createContext!.Invoke(null, new object?[] { exam })
+        ?? throw new InvalidOperationException("launch context must not be null for a valid exam");
+    exam.Title = "Đã đổi";
 
     AssertEqual(7, GetPropertyValue<int>(context, "ExamId"));
-    AssertTrue(GetPropertyValue<bool>(context, "CanStart"), "launch context should snapshot CanStart");
     AssertEqual("Giữa kỳ", GetPropertyValue<string>(context, "ExamName"));
+    AssertTrue(
+        context.GetType().GetProperty("CanStart", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) == null,
+        "launch context must not snapshot stale CanStart");
+});
+
+Run("student exam launch reuses selected exam helper and fresh presenter state", () =>
+{
+    const BindingFlags privateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
+    MethodInfo selectedExam = typeof(UC_TakeExam).GetMethod("SelectedExam", privateInstance)
+        ?? throw new InvalidOperationException("UC_TakeExam must expose SelectedExam helper");
+    MethodInfo selectedExamRow = typeof(UC_TakeExam).GetMethod("SelectedExamRow", privateInstance)
+        ?? throw new InvalidOperationException("UC_TakeExam must expose SelectedExamRow helper");
+    MethodInfo click = typeof(UC_TakeExam).GetMethod("btnStartExam_Click", privateInstance)
+        ?? throw new InvalidOperationException("UC_TakeExam must expose start click handler");
+    string source = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_TakeExam.cs"));
+
+    AssertTrue(MethodCalls(selectedExam, selectedExamRow), "SelectedExam must resolve rows through SelectedExamRow");
+    AssertTrue(source.Contains("StudentExamListItemModel? exam = SelectedExam();"), "start click must use the same selected exam helper as preview");
+    AssertTrue(source.Contains("StudentExamUxPresenter.Present(exam, DateTime.Now)"), "start click must recompute launchability through the presenter");
+    AssertFalse(source.Contains("CreateExamLaunchContext(dgvExams.CurrentRow)"), "start click must not launch from CurrentRow only");
+    AssertFalse(source.Contains("!launchContext.CanStart"), "start click must not trust stale hidden CanStart");
 });
 
 Run("screen monitor connection loss tracker reports after threshold once", () =>
@@ -614,6 +634,806 @@ Run("student exam availability separates visibility from start eligibility", () 
     AssertEqual(StudentExamAvailabilityService.StatusStorageUnavailable, StudentExamAvailabilityService.GetStatusText(missingAttemptStorage));
 });
 
+Run("exam progress presenter summarizes answered and marked questions", () =>
+{
+    AssertEqual("Đã trả lời 3/10 - Đánh dấu 2", ExamProgressPresenter.BuildProgressText(3, 10, 2));
+    AssertEqual("Đã trả lời 10/10 - Không đánh dấu", ExamProgressPresenter.BuildProgressText(10, 10, 0));
+    AssertEqual("Còn 4 câu chưa trả lời và 1 câu đang đánh dấu xem lại. Bạn có chắc chắn muốn nộp bài không?",
+        ExamProgressPresenter.BuildSubmitConfirmMessage(unansweredCount: 4, markedCount: 1));
+    AssertEqual("Đã lưu lựa chọn lúc 09:15", ExamProgressPresenter.BuildSaveStatus(success: true, new DateTime(2026, 6, 13, 9, 15, 0)));
+    AssertEqual("Chưa lưu được lựa chọn. Vui lòng thử lại.", ExamProgressPresenter.BuildSaveStatus(success: false, new DateTime(2026, 6, 13, 9, 15, 0)));
+});
+
+Run("student exam list shows selected exam action preview", () =>
+{
+    string source = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_TakeExam.cs"));
+    AssertTrue(source.Contains("_examPreviewPanel"), "student exam page must include selected exam preview panel");
+    AssertTrue(source.Contains("UpdateSelectedExamPreview"), "student exam page must update selected exam preview");
+    AssertTrue(source.Contains("StudentExamUxPresenter.Present"), "student exam page must use StudentExamUxPresenter");
+    AssertTrue(source.Contains("\"Hành động\""), "student exam table must expose action text column");
+    AssertTrue(source.Contains("btnStartExam.Enabled = false"), "student exam start action should stay disabled until a row is selected");
+});
+
+Run("student exam UX presenter exposes clear launch states", () =>
+{
+    DateTime now = new DateTime(2026, 6, 13, 9, 0, 0);
+
+    var open = new StudentExamListItemModel
+    {
+        Title = "Quiz",
+        CourseName = "NT106",
+        DurationMinutes = 45,
+        MaxAttempts = 2,
+        AttemptCount = 1,
+        QuestionCount = 10,
+        OpenTime = now.AddHours(-1),
+        CloseTime = now.AddHours(1),
+        AttemptStorageAvailable = true
+    };
+
+    object openView = StudentExamUxPresenter.Present(open, now);
+    AssertEqual(StudentExamAvailabilityService.StatusCanStart, GetPropertyValue<string>(openView, "StatusText"));
+    AssertEqual("Bắt đầu làm bài", GetPropertyValue<string>(openView, "ActionText"));
+    AssertTrue(GetPropertyValue<bool>(openView, "CanLaunch"), "open exam with attempts should launch");
+    AssertEqual("Success", GetPropertyValue<string>(openView, "Tone"));
+
+    var resumable = new StudentExamListItemModel
+    {
+        Title = "Midterm",
+        CourseName = "NT106",
+        MaxAttempts = 1,
+        AttemptCount = 1,
+        InProgressAttemptCount = 1,
+        QuestionCount = 20,
+        OpenTime = now.AddHours(-1),
+        CloseTime = now.AddHours(1),
+        AttemptStorageAvailable = true
+    };
+
+    object resumeView = StudentExamUxPresenter.Present(resumable, now);
+    AssertEqual("Tiếp tục làm bài", GetPropertyValue<string>(resumeView, "ActionText"));
+    AssertTrue(GetPropertyValue<bool>(resumeView, "CanLaunch"), "in-progress exam should be launchable");
+    AssertEqual("Warning", GetPropertyValue<string>(resumeView, "Tone"));
+    AssertEqual("Tiếp tục lượt làm bài đang dở. Không cần lượt mới.", GetPropertyValue<string>(resumeView, "DetailText"));
+
+    var future = new StudentExamListItemModel
+    {
+        Title = "Final",
+        CourseName = "NT106",
+        MaxAttempts = 1,
+        AttemptCount = 0,
+        QuestionCount = 15,
+        OpenTime = now.AddHours(2),
+        CloseTime = now.AddHours(4),
+        AttemptStorageAvailable = true
+    };
+
+    object futureView = StudentExamUxPresenter.Present(future, now);
+    AssertEqual("Chưa đến giờ", GetPropertyValue<string>(futureView, "ActionText"));
+    AssertFalse(GetPropertyValue<bool>(futureView, "CanLaunch"), "future exam should not launch");
+    AssertTrue(GetPropertyValue<string>(futureView, "DetailText").Contains("11:00"), "future detail should include open time");
+
+    var expired = new StudentExamListItemModel
+    {
+        Title = "Expired",
+        CourseName = "NT106",
+        MaxAttempts = 1,
+        AttemptCount = 0,
+        QuestionCount = 15,
+        OpenTime = now.AddHours(-4),
+        CloseTime = now.AddMinutes(-1),
+        AttemptStorageAvailable = true
+    };
+
+    object expiredView = StudentExamUxPresenter.Present(expired, now);
+    AssertEqual(StudentExamAvailabilityService.StatusExpired, GetPropertyValue<string>(expiredView, "StatusText"));
+    AssertEqual("Đã hết hạn", GetPropertyValue<string>(expiredView, "ActionText"));
+    AssertFalse(GetPropertyValue<bool>(expiredView, "CanLaunch"), "expired exam should not launch");
+    AssertEqual("Muted", GetPropertyValue<string>(expiredView, "Tone"));
+
+    var noQuestions = new StudentExamListItemModel
+    {
+        Title = "Empty",
+        CourseName = "NT106",
+        MaxAttempts = 1,
+        AttemptCount = 0,
+        QuestionCount = 0,
+        OpenTime = now.AddHours(-1),
+        CloseTime = now.AddHours(1),
+        AttemptStorageAvailable = true
+    };
+
+    object noQuestionsView = StudentExamUxPresenter.Present(noQuestions, now);
+    AssertEqual(StudentExamAvailabilityService.StatusNoQuestions, GetPropertyValue<string>(noQuestionsView, "StatusText"));
+    AssertEqual("Chưa có câu hỏi", GetPropertyValue<string>(noQuestionsView, "ActionText"));
+    AssertFalse(GetPropertyValue<bool>(noQuestionsView, "CanLaunch"), "exam without questions should not launch");
+    AssertEqual("Muted", GetPropertyValue<string>(noQuestionsView, "Tone"));
+
+    var storageUnavailable = new StudentExamListItemModel
+    {
+        Title = "Storage",
+        CourseName = "NT106",
+        MaxAttempts = 1,
+        AttemptCount = 0,
+        QuestionCount = 10,
+        OpenTime = now.AddHours(-1),
+        CloseTime = now.AddHours(1),
+        AttemptStorageAvailable = false
+    };
+
+    object storageView = StudentExamUxPresenter.Present(storageUnavailable, now);
+    AssertEqual(StudentExamAvailabilityService.StatusStorageUnavailable, GetPropertyValue<string>(storageView, "StatusText"));
+    AssertEqual("Chưa sẵn sàng", GetPropertyValue<string>(storageView, "ActionText"));
+    AssertFalse(GetPropertyValue<bool>(storageView, "CanLaunch"), "exam without attempt storage should not launch");
+    AssertEqual("Warning", GetPropertyValue<string>(storageView, "Tone"));
+
+    var outOfAttempts = new StudentExamListItemModel
+    {
+        Title = "Done",
+        CourseName = "NT106",
+        MaxAttempts = 1,
+        AttemptCount = 1,
+        QuestionCount = 10,
+        OpenTime = now.AddHours(-1),
+        CloseTime = now.AddHours(1),
+        AttemptStorageAvailable = true
+    };
+
+    object outOfAttemptsView = StudentExamUxPresenter.Present(outOfAttempts, now);
+    AssertEqual(StudentExamAvailabilityService.StatusOutOfAttempts, GetPropertyValue<string>(outOfAttemptsView, "StatusText"));
+    AssertEqual("Hết lượt", GetPropertyValue<string>(outOfAttemptsView, "ActionText"));
+    AssertFalse(GetPropertyValue<bool>(outOfAttemptsView, "CanLaunch"), "exam with no remaining attempts should not launch");
+    AssertEqual("Muted", GetPropertyValue<string>(outOfAttemptsView, "Tone"));
+
+    var unlimitedAttempts = new StudentExamListItemModel
+    {
+        Title = "Practice",
+        CourseName = "NT106",
+        DurationMinutes = 30,
+        MaxAttempts = 0,
+        AttemptCount = 5,
+        QuestionCount = 8,
+        OpenTime = now.AddHours(-1),
+        CloseTime = now.AddHours(1),
+        AttemptStorageAvailable = true
+    };
+
+    object unlimitedView = StudentExamUxPresenter.Present(unlimitedAttempts, now);
+    AssertEqual(StudentExamAvailabilityService.StatusCanStart, GetPropertyValue<string>(unlimitedView, "StatusText"));
+    AssertEqual("Bắt đầu làm bài", GetPropertyValue<string>(unlimitedView, "ActionText"));
+    AssertTrue(GetPropertyValue<bool>(unlimitedView, "CanLaunch"), "unlimited attempts exam should launch");
+    AssertTrue(GetPropertyValue<string>(unlimitedView, "DetailText").Contains("không giới hạn lượt"), "unlimited detail should explain attempts");
+});
+
+Run("student assignment UX presenter exposes submission states", () =>
+{
+    DateTime now = new DateTime(2026, 6, 13, 9, 0, 0);
+
+    var urgent = new StudentAssignmentRow
+    {
+        Title = "Report",
+        CourseName = "NT106",
+        DueDate = now.AddHours(3),
+        Status = "OPEN"
+    };
+
+    object urgentView = StudentAssignmentUxPresenter.Present(urgent, now);
+    AssertEqual("Sắp hết hạn", GetPropertyValue<string>(urgentView, "StatusText"));
+    AssertEqual("Nộp bài", GetPropertyValue<string>(urgentView, "ActionText"));
+    AssertTrue(GetPropertyValue<bool>(urgentView, "CanSubmit"), "urgent open assignment should be submittable");
+
+    var graded = new StudentAssignmentRow
+    {
+        Title = "Lab",
+        CourseName = "NT106",
+        DueDate = now.AddDays(-2),
+        Status = "OPEN",
+        SubmissionId = 7,
+        StudentFileName = "lab.pdf",
+        SubmittedAt = now.AddDays(-3),
+        Score = 8.5m,
+        Feedback = "Tốt"
+    };
+
+    object gradedView = StudentAssignmentUxPresenter.Present(graded, now);
+    AssertEqual("Đã chấm", GetPropertyValue<string>(gradedView, "StatusText"));
+    AssertEqual("Xem phản hồi", GetPropertyValue<string>(gradedView, "ActionText"));
+    AssertFalse(GetPropertyValue<bool>(gradedView, "CanSubmit"), "graded assignment should not accept a replacement upload");
+    AssertTrue(GetPropertyValue<bool>(gradedView, "ShowsFeedback"), "graded assignment should show feedback");
+
+    var submittedBeforeDue = new StudentAssignmentRow
+    {
+        Title = "Draft",
+        CourseName = "NT106",
+        DueDate = now.AddHours(3),
+        Status = "OPEN",
+        SubmissionId = 8,
+        StudentFileName = "draft.pdf",
+        SubmittedAt = now.AddHours(-1)
+    };
+
+    object submittedBeforeDueView = StudentAssignmentUxPresenter.Present(submittedBeforeDue, now);
+    AssertEqual("Đã nộp", GetPropertyValue<string>(submittedBeforeDueView, "StatusText"));
+    AssertEqual("Nộp lại", GetPropertyValue<string>(submittedBeforeDueView, "ActionText"));
+    AssertTrue(GetPropertyValue<bool>(submittedBeforeDueView, "CanSubmit"), "submitted assignment before due date should allow replacement upload");
+});
+
+Run("student assignment UX presenter covers closed and overdue states", () =>
+{
+    DateTime now = new DateTime(2026, 6, 13, 9, 0, 0);
+
+    var closedUnsubmitted = new StudentAssignmentRow
+    {
+        Title = "Closed",
+        CourseName = "NT106",
+        DueDate = now.AddHours(3),
+        Status = "CLOSED"
+    };
+
+    object closedUnsubmittedView = StudentAssignmentUxPresenter.Present(closedUnsubmitted, now);
+    AssertEqual("Đã đóng", GetPropertyValue<string>(closedUnsubmittedView, "StatusText"));
+    AssertEqual("Đã đóng", GetPropertyValue<string>(closedUnsubmittedView, "ActionText"));
+    AssertFalse(GetPropertyValue<bool>(closedUnsubmittedView, "CanSubmit"), "closed unsubmitted assignment should not submit");
+
+    var closedSubmitted = new StudentAssignmentRow
+    {
+        Title = "Closed submitted",
+        CourseName = "NT106",
+        DueDate = now.AddHours(3),
+        Status = "CLOSED",
+        SubmissionId = 10,
+        StudentFileName = "closed.pdf",
+        SubmittedAt = now.AddHours(-1)
+    };
+
+    object closedSubmittedView = StudentAssignmentUxPresenter.Present(closedSubmitted, now);
+    AssertEqual("Đã đóng", GetPropertyValue<string>(closedSubmittedView, "StatusText"));
+    AssertEqual("Xem bài nộp", GetPropertyValue<string>(closedSubmittedView, "ActionText"));
+    AssertFalse(GetPropertyValue<bool>(closedSubmittedView, "CanSubmit"), "closed submitted assignment should be view-only");
+
+    var overdueUnsubmitted = new StudentAssignmentRow
+    {
+        Title = "Late",
+        CourseName = "NT106",
+        DueDate = now.AddHours(-2),
+        Status = "OPEN"
+    };
+
+    object overdueUnsubmittedView = StudentAssignmentUxPresenter.Present(overdueUnsubmitted, now);
+    AssertEqual("Quá hạn", GetPropertyValue<string>(overdueUnsubmittedView, "StatusText"));
+    AssertEqual("Quá hạn", GetPropertyValue<string>(overdueUnsubmittedView, "ActionText"));
+    AssertFalse(GetPropertyValue<bool>(overdueUnsubmittedView, "CanSubmit"), "overdue unsubmitted assignment should not submit");
+
+    var submittedOverdue = new StudentAssignmentRow
+    {
+        Title = "Essay",
+        CourseName = "NT106",
+        DueDate = now.AddHours(-2),
+        Status = "OPEN",
+        SubmissionId = 9,
+        StudentFileName = "essay.pdf",
+        SubmittedAt = now.AddHours(-3)
+    };
+
+    object view = StudentAssignmentUxPresenter.Present(submittedOverdue, now);
+    AssertEqual("Đã nộp", GetPropertyValue<string>(view, "StatusText"));
+    AssertEqual("Xem bài nộp", GetPropertyValue<string>(view, "ActionText"));
+    AssertFalse(GetPropertyValue<bool>(view, "CanSubmit"), "overdue submitted assignment should be view-only");
+});
+
+Run("student assignment UX uses presenter and shows status details", () =>
+{
+    string page = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_StudentAssignments.cs"));
+    string basePage = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "StudentGridPageBase.cs"));
+    string dialog = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Student", "StudentAssignmentSubmitDialog.cs"));
+
+    AssertTrue(basePage.Contains("SetBelowGridContent"), "student grid base must expose below-grid content slot");
+    AssertTrue(page.Contains("StudentAssignmentUxPresenter.Present"), "student assignment list must use StudentAssignmentUxPresenter");
+    AssertTrue(page.Contains("\"Hành động\""), "student assignment table must include Hành động column");
+    AssertTrue(page.Contains("_assignmentPreviewPanel"), "student assignment page must include selected assignment preview panel");
+    AssertTrue(dialog.Contains("_statusBanner"), "student assignment dialog must show a status banner");
+    AssertTrue(dialog.Contains("_submissionSummary"), "student assignment dialog must show current submission summary");
+    AssertTrue(dialog.Contains("_feedbackPanel"), "student assignment dialog must show grade feedback panel");
+});
+
+Run("student assignment grid double click ignores non-data rows", () =>
+{
+    string page = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_StudentAssignments.cs"));
+    string openFromRow = ExtractMethodSource(page, "private void OpenAssignmentFromGridRow");
+
+    AssertTrue(page.Contains("Grid.CellDoubleClick += (_, e)"), "assignment grid double-click handler must receive DataGridViewCellEventArgs");
+    AssertTrue(page.Contains("OpenAssignmentFromGridRow(e.RowIndex)"), "assignment grid double-click handler must use e.RowIndex");
+    AssertTrue(openFromRow.Contains("rowIndex < 0"), "assignment double-click helper must ignore header and non-data rows");
+    AssertTrue(openFromRow.Contains("rowIndex >= Grid.Rows.Count"), "assignment double-click helper must guard rows beyond the grid");
+    AssertTrue(openFromRow.Contains("OpenSelectedAssignment();"), "valid assignment row double-click should reuse the selected assignment open path");
+    AssertFalse(
+        page.Contains("Grid.CellDoubleClick += (_, _) => OpenSelectedAssignment();"),
+        "assignment grid double-click must not reuse stale CurrentRow for header clicks");
+});
+
+Run("student assignment submit is guarded by current database state", () =>
+{
+    string dbContext = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Data", "CourseGuardDbContext.cs"));
+    string submit = ExtractMethodSource(dbContext, "public async Task<bool> SubmitAssignmentAsync");
+
+    AssertTrue(submit.Contains("UPDATE assignment_submissions s"), "existing submissions must be updated through a joined guarded update");
+    AssertTrue(submit.Contains("INSERT INTO assignment_submissions") && submit.Contains("SELECT @assignment_id"), "new submissions must insert from a guarded SELECT so guard failure returns zero rows");
+    AssertTrue(submit.Contains("JOIN teacher_assignments a"), "submit guard must verify the assignment row exists");
+    AssertTrue(submit.Contains("JOIN courses c ON c.id = a.course_id"), "submit guard must join the assignment course");
+    AssertTrue(submit.Contains("JOIN enrollments e ON e.course_id = c.id"), "submit guard must join active student enrollment");
+    AssertTrue(submit.Contains("e.student_id = @student_id"), "submit guard must scope enrollment to the submitting student");
+    AssertTrue(submit.Contains("UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')"), "submit guard must require active or approved enrollment");
+    AssertTrue(submit.Contains("UPPER(COALESCE(c.status, '')) = 'ACTIVE'"), "submit guard must require an active course");
+    AssertTrue(submit.Contains("UPPER(COALESCE(a.status, '')) = 'OPEN'"), "submit guard must require an open assignment");
+    AssertTrue(
+        submit.Contains("a.due_at IS NULL") && submit.Contains("a.due_at >= CURRENT_TIMESTAMP"),
+        "submit guard must allow null deadlines and reject non-null past deadlines");
+    AssertTrue(submit.Contains("s.score IS NULL"), "replacement submissions must be blocked after a score is set");
+    AssertTrue(submit.Contains("UPPER(COALESCE(s.status, '')) <> 'GRADED'"), "replacement submissions must be blocked after graded status");
+    AssertTrue(submit.Contains("NOT EXISTS"), "guarded insert must produce zero rows when a submission already exists");
+    AssertTrue(submit.Contains("return rows > 0;"), "SubmitAssignmentAsync must return false when guarded writes affect zero rows");
+    AssertFalse(
+        submit.Contains("SELECT id FROM assignment_submissions WHERE assignment_id"),
+        "SubmitAssignmentAsync must not decide writability from an unguarded cached existence query");
+});
+
+Run("teacher controller scopes submission content and grading calls by teacher", () =>
+{
+    string controller = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Controllers", "TeacherController.cs"));
+    string getContent = ExtractMethodSource(controller, "public System.Threading.Tasks.Task<byte[]?> GetSubmissionContentAsync");
+    string updateGrade = ExtractMethodSource(controller, "public System.Threading.Tasks.Task<bool> UpdateGradeAsync");
+
+    AssertTrue(
+        getContent.Contains("_repository.GetSubmissionContentAsync(teacherId, submissionId)"),
+        "controller content reads must pass teacherId to the repository");
+    AssertFalse(
+        getContent.Contains("_repository.GetSubmissionContentAsync(submissionId)"),
+        "controller content reads must not call the unscoped repository overload");
+    AssertTrue(
+        updateGrade.Contains("_repository.UpdateGradeAsync(teacherId, submissionId, score, feedback)"),
+        "controller grade updates must pass teacherId to the repository");
+    AssertFalse(
+        updateGrade.Contains("_repository.UpdateGradeAsync(submissionId, score, feedback)"),
+        "controller grade updates must not call the unscoped repository overload");
+});
+
+Run("teacher repository submission content and grade updates require ownership", () =>
+{
+    string repository = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Data", "TeacherRepository.cs"));
+    string getContent = ExtractMethodSource(repository, "public async Task<byte[]?> GetSubmissionContentAsync");
+    string updateGrade = ExtractMethodSource(repository, "public async Task<bool> UpdateGradeAsync");
+
+    AssertTrue(
+        repository.Contains("public async Task<byte[]?> GetSubmissionContentAsync(int teacherId, int submissionId"),
+        "repository content read must accept teacherId");
+    AssertTrue(
+        repository.Contains("public async Task<bool> UpdateGradeAsync(int teacherId, int submissionId"),
+        "repository grade update must accept teacherId");
+
+    AssertTrue(getContent.Contains("FROM assignment_submissions s"), "content read must query submissions through an alias");
+    AssertTrue(getContent.Contains("JOIN teacher_assignments a ON s.assignment_id = a.id"), "content read must join the assignment");
+    AssertTrue(getContent.Contains("JOIN courses c ON a.course_id = c.id"), "content read must join the course");
+    AssertTrue(getContent.Contains("c.teacher_id = @teacher_id"), "content read must require course ownership");
+    AssertTrue(getContent.Contains("command.Parameters.AddWithValue(\"@teacher_id\", teacherId)"), "content read must bind teacherId");
+
+    AssertTrue(updateGrade.Contains("UPDATE assignment_submissions s"), "grade update must update submissions through an alias");
+    AssertTrue(updateGrade.Contains("JOIN teacher_assignments a ON s.assignment_id = a.id"), "grade update must join the assignment");
+    AssertTrue(updateGrade.Contains("JOIN courses c ON a.course_id = c.id"), "grade update must join the course");
+    AssertTrue(updateGrade.Contains("c.teacher_id = @teacher_id"), "grade update must require course ownership");
+    AssertTrue(updateGrade.Contains("command.Parameters.AddWithValue(\"@teacher_id\", teacherId)"), "grade update must bind teacherId");
+});
+
+Run("teacher assignment UX presenter exposes grading states", () =>
+{
+    DateTime submittedAt = new DateTime(2026, 6, 13, 8, 30, 0);
+
+    var ungraded = new StudentSubmissionModel
+    {
+        SubmissionId = 1,
+        AssignmentTitle = "Report",
+        StudentName = "Nguyen Van A",
+        FileName = "report.pdf",
+        SubmittedAt = submittedAt,
+        Status = "SUBMITTED"
+    };
+
+    object ungradedView = TeacherAssignmentUxPresenter.PresentSubmission(ungraded);
+    AssertEqual("Chưa chấm", GetPropertyValue<string>(ungradedView, "StatusText"));
+    AssertEqual("Chấm điểm", GetPropertyValue<string>(ungradedView, "ActionText"));
+    AssertEqual("Warning", GetPropertyValue<string>(ungradedView, "Tone"));
+    AssertFalse(GetPropertyValue<bool>(ungradedView, "ShowsFeedback"), "ungraded submission should not show feedback");
+
+    var graded = new StudentSubmissionModel
+    {
+        SubmissionId = 2,
+        AssignmentTitle = "Lab",
+        StudentName = "Tran Thi B",
+        FileName = "lab.pdf",
+        SubmittedAt = submittedAt,
+        Status = "GRADED",
+        Score = 9m,
+        Feedback = "Tốt"
+    };
+
+    object gradedView = TeacherAssignmentUxPresenter.PresentSubmission(graded);
+    AssertEqual("Đã chấm", GetPropertyValue<string>(gradedView, "StatusText"));
+    AssertEqual("Cập nhật điểm", GetPropertyValue<string>(gradedView, "ActionText"));
+    AssertEqual("Success", GetPropertyValue<string>(gradedView, "Tone"));
+    AssertTrue(GetPropertyValue<bool>(gradedView, "ShowsFeedback"), "graded submission should show feedback");
+});
+
+Run("teacher assignment UX exposes grading filters and inline validation", () =>
+{
+    string assignments = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherAssignments.cs"));
+    string assignmentDialog = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherAssignmentDialog.cs"));
+    string submissionsDialog = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherSubmissionsDialog.cs"));
+
+    AssertTrue(assignments.Contains("Mở bài nộp"), "teacher assignment page must label submissions action clearly");
+    AssertTrue(assignmentDialog.Contains("_validationSummary"), "teacher assignment dialog must show inline validation summary");
+    AssertTrue(assignmentDialog.Contains("_fileSummary"), "teacher assignment dialog must show selected file summary");
+    AssertTrue(submissionsDialog.Contains("_cboStatus"), "teacher submissions dialog must include grading status filter");
+    AssertTrue(submissionsDialog.Contains("_cboAssignment"), "teacher submissions dialog must include assignment filter");
+    AssertTrue(submissionsDialog.Contains("_saveStatus"), "teacher submissions dialog must show save status");
+    AssertTrue(submissionsDialog.Contains("TeacherAssignmentUxPresenter.PresentSubmission"), "teacher submissions dialog must use TeacherAssignmentUxPresenter");
+});
+
+Run("teacher assignment dialog rejects empty selected attachment files before save", () =>
+{
+    string dialog = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherAssignmentDialog.cs"));
+    string validateBeforeSave = ExtractMethodSource(dialog, "private bool ValidateBeforeSave");
+
+    AssertTrue(
+        validateBeforeSave.Contains("MaterialFilePolicy.Validate") || validateBeforeSave.Contains("info.Length <= 0") || validateBeforeSave.Contains("info.Length == 0"),
+        "ValidateBeforeSave must reject empty selected files before allowing an assignment save");
+    AssertTrue(
+        validateBeforeSave.Contains("ShowValidationError"),
+        "empty selected files must be reported through inline validation text");
+    AssertTrue(
+        validateBeforeSave.Contains("MaxAttachmentBytes") && validateBeforeSave.Contains("10MB"),
+        "assignment attachment validation must preserve the Task 6 10MB rule and message");
+});
+
+Run("teacher assignment dialog rejects missing selected attachment files before save", () =>
+{
+    string dialog = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherAssignmentDialog.cs"));
+    string validateBeforeSave = ExtractMethodSource(dialog, "private bool ValidateBeforeSave");
+
+    int selectedPathGuard = validateBeforeSave.IndexOf("!string.IsNullOr", StringComparison.Ordinal);
+    int missingFileCheck = validateBeforeSave.IndexOf("!File.Exists(SelectedFilePath)", StringComparison.Ordinal);
+    int inlineError = missingFileCheck < 0
+        ? -1
+        : validateBeforeSave.IndexOf("ShowValidationError", missingFileCheck, StringComparison.Ordinal);
+
+    AssertTrue(
+        selectedPathGuard >= 0 && missingFileCheck > selectedPathGuard,
+        "ValidateBeforeSave must check for a non-empty selected local file path that no longer exists");
+    AssertTrue(
+        inlineError > missingFileCheck,
+        "missing selected files must show inline validation and block save");
+});
+
+Run("teacher assignment update preserves stored attachment content unless replaced or cleared", () =>
+{
+    string repository = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Data", "TeacherRepository.cs"));
+    string assignments = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherAssignments.cs"));
+    string updateAssignment = ExtractMethodSource(repository, "public bool UpdateAssignment");
+    string editAssignment = ExtractMethodSource(assignments, "protected override async Task EditAsync");
+
+    AssertTrue(updateAssignment.Contains("@update_file"), "UpdateAssignment must include an explicit update-file parameter");
+    AssertTrue(
+        updateAssignment.Contains("file_content = CASE WHEN @update_file = 1 THEN @file_content ELSE a.file_content END"),
+        "UpdateAssignment must preserve existing file_content unless a replacement or clear is requested");
+    AssertFalse(
+        updateAssignment.Contains("file_content = @file_content"),
+        "UpdateAssignment must not directly overwrite file_content with a nullable parameter");
+
+    int replacementBranch = updateAssignment.IndexOf("input.FileContent != null && input.FileContent.Length > 0", StringComparison.Ordinal);
+    AssertTrue(replacementBranch >= 0, "UpdateAssignment must branch on positive FileContent replacements");
+    int replacementUpdateFile = updateAssignment.IndexOf("command.Parameters.AddWithValue(\"@update_file\", 1)", replacementBranch, StringComparison.Ordinal);
+    int replacementContent = updateAssignment.IndexOf("command.Parameters.AddWithValue(\"@file_content\", input.FileContent)", replacementBranch, StringComparison.Ordinal);
+    AssertTrue(
+        replacementUpdateFile >= 0 && replacementContent > replacementUpdateFile,
+        "positive FileContent replacements must set @update_file to 1 and send the input bytes");
+
+    int preserveBranch = updateAssignment.IndexOf("input.HasStoredContent && input.FileContent == null", StringComparison.Ordinal);
+    AssertTrue(preserveBranch > replacementBranch, "UpdateAssignment must branch on unchanged stored assignment content");
+    int preserveUpdateFile = updateAssignment.IndexOf("command.Parameters.AddWithValue(\"@update_file\", 0)", preserveBranch, StringComparison.Ordinal);
+    AssertTrue(preserveUpdateFile >= 0, "unchanged stored content must set @update_file to 0");
+
+    int clearUpdateFile = updateAssignment.IndexOf("command.Parameters.AddWithValue(\"@update_file\", 1)", preserveUpdateFile, StringComparison.Ordinal);
+    int clearContent = updateAssignment.IndexOf("command.Parameters.AddWithValue(\"@file_content\", DBNull.Value)", clearUpdateFile, StringComparison.Ordinal);
+    AssertTrue(
+        clearUpdateFile > preserveUpdateFile && clearContent > clearUpdateFile,
+        "cleared assignment attachments must set @update_file to 1 and send DBNull.Value");
+
+    AssertTrue(
+        editAssignment.Contains("dialog.ClearFileRequested") || editAssignment.Contains("dialog.ClearExistingFile"),
+        "assignment edit flow must read the dialog clear-file request");
+    AssertTrue(
+        editAssignment.Contains("model.HasStoredContent = existing.HasStoredContent") || editAssignment.Contains("model.HasStoredContent = true"),
+        "assignment edit flow must retain HasStoredContent when preserving an unchanged attachment");
+    AssertTrue(
+        editAssignment.Contains("model.HasStoredContent = false"),
+        "assignment edit flow must clear HasStoredContent when clearing an attachment");
+});
+
+Run("teacher assignment dialog keeps selected file path separate from existing attachment state", () =>
+{
+    string dialog = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherAssignmentDialog.cs"));
+    string selectedFilePath = ExtractPropertySource(dialog, "public string SelectedFilePath");
+
+    AssertTrue(dialog.Contains("_selectedFilePath"), "assignment dialog must track newly selected local files separately");
+    AssertTrue(dialog.Contains("_existingFileName"), "assignment dialog must track the stored filename separately");
+    AssertTrue(dialog.Contains("_clearExistingFile"), "assignment dialog must track explicit clear-file intent");
+    AssertTrue(
+        dialog.Contains("public bool ClearFileRequested") || dialog.Contains("public bool ClearExistingFile"),
+        "assignment dialog must expose the clear-file request to the edit flow");
+    AssertFalse(
+        selectedFilePath.Contains("_file.Text.Trim()"),
+        "SelectedFilePath must not return the textbox text, which may be an existing stored filename");
+    AssertTrue(
+        selectedFilePath.Contains("_selectedFilePath"),
+        "SelectedFilePath must return only the newly selected local file path");
+});
+
+Run("teacher submissions save status remains readable when grading inputs are disabled", () =>
+{
+    string submissionsDialog = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherSubmissionsDialog.cs"));
+    string resetPanel = ExtractMethodSource(submissionsDialog, "private void ResetGradingPanel");
+    string selectRow = ExtractMethodSource(submissionsDialog, "private void Grid_SelectionChanged");
+    string setInputs = ExtractMethodSource(submissionsDialog, "private void SetGradingInputsEnabled");
+
+    AssertFalse(resetPanel.Contains("_gradingPanel.Enabled = false"), "reset must not disable the parent grading panel that contains save status");
+    AssertFalse(selectRow.Contains("_gradingPanel.Enabled = true"), "row selection must enable only grading inputs, not the parent panel");
+    AssertTrue(setInputs.Contains("_btnDownload.Enabled = enabled"), "grading input helper must disable the download button");
+    AssertTrue(setInputs.Contains("_numScore.Enabled = enabled"), "grading input helper must disable the score input");
+    AssertTrue(setInputs.Contains("_txtFeedback.Enabled = enabled"), "grading input helper must disable the feedback input");
+    AssertTrue(setInputs.Contains("_btnSaveGrade.Enabled = enabled"), "grading input helper must disable the save button");
+    AssertFalse(setInputs.Contains("_saveStatus.Enabled"), "grading input helper must leave save status readable");
+});
+
+Run("teacher exam UX presenter makes draft readiness explicit", () =>
+{
+    var draftWithoutQuestions = new TeacherExamModel
+    {
+        Title = "Draft exam",
+        Status = WorkflowConstants.ExamStatus.Draft,
+        QuestionCount = 0
+    };
+
+    object draftView = TeacherExamUxPresenter.Present(draftWithoutQuestions);
+    AssertEqual("Cần câu hỏi", GetPropertyValue<string>(draftView, "StatusText"));
+    AssertEqual("Soạn câu hỏi", GetPropertyValue<string>(draftView, "PrimaryActionText"));
+    AssertFalse(GetPropertyValue<bool>(draftView, "CanActivate"), "exam without questions cannot activate");
+
+    var draftReady = new TeacherExamModel
+    {
+        Title = "Ready exam",
+        Status = WorkflowConstants.ExamStatus.Draft,
+        QuestionCount = 12
+    };
+
+    object readyView = TeacherExamUxPresenter.Present(draftReady);
+    AssertEqual("Sẵn sàng kích hoạt", GetPropertyValue<string>(readyView, "StatusText"));
+    AssertTrue(GetPropertyValue<bool>(readyView, "CanActivate"), "draft with questions can activate");
+});
+
+Run("teacher exam UX exposes draft readiness and explicit activation", () =>
+{
+    string exams = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherExams.cs"));
+    string examDialog = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherExamDialog.cs"));
+    string questionDialog = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherExamQuestionsDialog.cs"));
+
+    AssertTrue(exams.Contains("_activateButton"), "teacher exams page must include explicit activate button");
+    AssertTrue(exams.Contains("TeacherExamUxPresenter.Present"), "teacher exams page must use TeacherExamUxPresenter");
+    AssertTrue(exams.Contains("ActivateSelectedExamAsync"), "teacher exams page must activate selected draft exams through an explicit action");
+    AssertTrue(examDialog.Contains("_validationSummary"), "teacher exam dialog must show inline validation summary");
+    AssertTrue(examDialog.Contains("Tạo nháp"), "teacher exam dialog must explain draft-first workflow");
+    AssertTrue(questionDialog.Contains("_readinessSummary"), "question dialog must show readiness summary");
+    AssertTrue(questionDialog.Contains("_readOnlyHint"), "question dialog must show read-only hint for non-draft exams");
+});
+
+Run("teacher exam activation uses guarded status-only backend update", () =>
+{
+    string exams = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherExams.cs"));
+    string controller = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Controllers", "TeacherController.cs"));
+    string repository = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Data", "TeacherRepository.cs"));
+
+    string activateSelected = ExtractMethodSource(exams, "private async Task ActivateSelectedExamAsync");
+    string addAsync = ExtractMethodSource(exams, "protected override async Task AddAsync");
+
+    AssertTrue(activateSelected.Contains("Controller.ActivateExam"), "teacher exam activation must use the guarded status-only activation API");
+    AssertFalse(activateSelected.Contains("Controller.UpdateExam"), "teacher exam activation must not write stale grid metadata through UpdateExam");
+    AssertTrue(addAsync.Contains("Status = WorkflowConstants.ExamStatus.Draft"), "new exams must be created as DRAFT regardless of dialog state");
+
+    AssertTrue(controller.Contains("ActivateExam(int teacherId, int examId)"), "teacher controller must expose ActivateExam");
+    AssertTrue(repository.Contains("ActivateExam(int teacherId, int examId)"), "teacher repository must expose ActivateExam");
+
+    string repositoryActivation = ExtractMethodSource(repository, "public bool ActivateExam");
+    AssertTrue(repositoryActivation.Contains("COALESCE(ex.status, '')"), "repository activation must require explicit DRAFT status instead of treating NULL as draft");
+    AssertFalse(repositoryActivation.Contains("COALESCE(ex.status, 'DRAFT')"), "repository activation must not treat NULL status as draft");
+    AssertTrue(repositoryActivation.Contains("UPDATE exams ex"), "repository activation must update the exams table directly");
+    AssertTrue(repositoryActivation.Contains("@active_status"), "repository activation must parameterize active status");
+    AssertTrue(repositoryActivation.Contains("@draft_status"), "repository activation must guard current draft status");
+    AssertTrue(repositoryActivation.Contains("c.teacher_id = @teacher_id"), "repository activation must guard teacher ownership");
+    AssertTrue(repositoryActivation.Contains("ex.id = @exam_id"), "repository activation must target the selected exam");
+    AssertTrue(repositoryActivation.Contains("EXISTS"), "repository activation must require at least one question");
+    AssertFalse(repositoryActivation.Contains("title ="), "repository activation must not update exam title metadata");
+    AssertFalse(repositoryActivation.Contains("open_time ="), "repository activation must not update exam schedule metadata");
+    AssertFalse(repositoryActivation.Contains("AddExamParameters"), "repository activation must not reuse full exam metadata parameters");
+});
+
+Run("teacher exam metadata update cannot activate draft exams", () =>
+{
+    string repository = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Data", "TeacherRepository.cs"));
+    string updateExam = ExtractMethodSource(repository, "public bool UpdateExam");
+
+    AssertTrue(updateExam.Contains("CASE"), "repository update must compute status with a guarded CASE");
+    AssertTrue(updateExam.Contains("@active_status"), "repository update must know the active status explicitly");
+    AssertTrue(updateExam.Contains("@closed_status"), "repository update must allow closed status explicitly");
+    AssertTrue(updateExam.Contains("@draft_status"), "repository update must know the draft status explicitly");
+    AssertTrue(
+        updateExam.Contains("WHEN @status = @closed_status THEN @closed_status"),
+        "repository update must still allow explicit close requests");
+    AssertTrue(
+        updateExam.Contains("UPPER(COALESCE(ex.status, '')) = @active_status"),
+        "repository update must only preserve ACTIVE when the current DB row is already ACTIVE");
+    AssertTrue(
+        updateExam.Contains("UPPER(COALESCE(ex.status, '')) = @closed_status"),
+        "repository update must preserve CLOSED when caller status is DRAFT, blank, or invalid");
+    AssertTrue(
+        updateExam.Contains("UPPER(COALESCE(ex.status, '')) = @draft_status"),
+        "repository update must keep existing DRAFT exams as DRAFT");
+    AssertTrue(
+        updateExam.Contains("ELSE COALESCE(ex.status, '')"),
+        "repository update must preserve unknown or NULL current status instead of defaulting to DRAFT");
+    AssertFalse(
+        updateExam.Contains("ELSE @draft_status"),
+        "repository update must not downgrade existing non-DRAFT or NULL status to DRAFT on metadata updates");
+    AssertFalse(
+        updateExam.Contains("COALESCE(ex.status, 'DRAFT')"),
+        "repository update must not treat NULL current status as DRAFT");
+    AssertFalse(updateExam.Contains("status = @status"), "repository update must not blindly write caller status");
+});
+
+Run("teacher exam create and import enforce draft ownership guards", () =>
+{
+    string repository = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Data", "TeacherRepository.cs"));
+    string controller = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Controllers", "TeacherController.cs"));
+    string dbContext = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Data", "CourseGuardDbContext.cs"));
+    string questionDialog = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherExamQuestionsDialog.cs"));
+
+    string addExamParameters = ExtractMethodSource(repository, "private static void AddExamParameters");
+    AssertTrue(
+        addExamParameters.Contains("includeId ? NormalizeExamStatus(input.Status) : WorkflowConstants.ExamStatus.Draft"),
+        "repository create path must force new exams to DRAFT independent of caller status");
+
+    string canActivateExam = ExtractMethodSource(repository, "public bool CanActivateExam");
+    AssertTrue(canActivateExam.Contains("@draft_status"), "CanActivateExam must guard current draft status");
+    AssertTrue(canActivateExam.Contains("COALESCE(ex.status, '')"), "CanActivateExam must require explicit DRAFT status instead of treating NULL as draft");
+    AssertFalse(canActivateExam.Contains("COALESCE(ex.status, 'DRAFT')"), "CanActivateExam must not treat NULL status as draft");
+    AssertTrue(canActivateExam.Contains("EXISTS"), "CanActivateExam must require at least one question");
+    AssertTrue(canActivateExam.Contains("c.teacher_id = @teacher_id"), "CanActivateExam must guard teacher ownership");
+    AssertTrue(canActivateExam.Contains("ex.id = @exam_id"), "CanActivateExam must target the selected exam");
+
+    string controllerImport = ExtractMethodSource(controller, "public async System.Threading.Tasks.Task<int> ImportQuestionsToExamAsync");
+    AssertTrue(controllerImport.Contains("BulkInsertQuestionsAndMapToExamAsync(teacherId, examId, courseId, questions)"), "controller import must pass teacherId to guarded DB import");
+
+    string dbImport = ExtractMethodSource(dbContext, "public async Task<int> BulkInsertQuestionsAndMapToExamAsync");
+    AssertTrue(dbImport.Contains("int teacherId, int examId"), "DB bulk import must accept teacherId");
+    AssertTrue(dbImport.Contains("c.teacher_id = @teacher_id"), "DB bulk import must guard teacher ownership");
+    AssertTrue(dbImport.Contains("ex.id = @exam_id"), "DB bulk import must guard selected exam id");
+    AssertTrue(dbImport.Contains("ex.course_id = @course_id"), "DB bulk import must guard selected course id");
+    AssertTrue(dbImport.Contains("@draft_status"), "DB bulk import must guard current draft status");
+    AssertTrue(dbImport.Contains("COALESCE(ex.status, '')"), "DB bulk import must require explicit DRAFT status instead of treating NULL as draft");
+    AssertFalse(dbImport.Contains("COALESCE(ex.status, 'DRAFT')"), "DB bulk import must not treat NULL status as draft");
+    AssertTrue(dbImport.Contains("return 0;"), "DB bulk import must return zero when guard fails");
+    AssertTrue(dbImport.Contains("return insertedQuestionIds.Count;"), "DB bulk import must return imported count");
+
+    string importDialog = ExtractMethodSource(questionDialog, "private async System.Threading.Tasks.Task ImportFromExcelAsync");
+    AssertTrue(importDialog.Contains("int importedCount"), "question dialog import must read imported count");
+    AssertTrue(importDialog.Contains("importedCount <= 0"), "question dialog import must handle guarded import rejection");
+    AssertTrue(importDialog.Contains("LoadQuestions();"), "question dialog import must refresh after import rejection or success");
+    AssertTrue(importDialog.Contains("Nhập thành công {importedCount}"), "question dialog import success must report returned imported count");
+    AssertFalse(importDialog.Contains("Nhập thành công {questions.Count}"), "question dialog import must not always report input question count");
+});
+
+Run("teacher question editing refreshes guarded editability and reports no-op writes", () =>
+{
+    string questionDialog = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherExamQuestionsDialog.cs"));
+
+    AssertFalse(questionDialog.Contains("private readonly bool _canEdit"), "question dialog editability must be mutable after backend guard rejects writes");
+    AssertTrue(questionDialog.Contains("RefreshEditState"), "question dialog must refresh editability from backend status");
+    AssertTrue(questionDialog.Contains("ShowGuardedQuestionWriteFailure"), "question dialog must show a guarded no-op write warning");
+
+    string importDialog = ExtractMethodSource(questionDialog, "private async System.Threading.Tasks.Task ImportFromExcelAsync");
+    AssertTrue(importDialog.Contains("RefreshEditState"), "import rejection must refresh editability after guarded no-op");
+
+    string saveNew = ExtractMethodSource(questionDialog, "private void SaveNewQuestion");
+    AssertTrue(saveNew.Contains("RefreshEditState"), "create question must refresh editability before writing");
+    AssertTrue(saveNew.Contains("int createdId"), "create question must read backend create result");
+    AssertTrue(saveNew.Contains("createdId <= 0"), "create question must handle guarded create no-op");
+    AssertTrue(saveNew.Contains("ShowGuardedQuestionWriteFailure"), "create question no-op must show a guarded warning");
+
+    string saveExisting = ExtractMethodSource(questionDialog, "private void SaveExistingQuestion");
+    AssertTrue(saveExisting.Contains("RefreshEditState"), "update question must refresh editability before writing");
+    AssertTrue(saveExisting.Contains("bool updated"), "update question must read backend update result");
+    AssertTrue(saveExisting.Contains("!updated"), "update question must handle guarded update no-op");
+    AssertTrue(saveExisting.Contains("ShowGuardedQuestionWriteFailure"), "update question no-op must show a guarded warning");
+
+    string deleteSelected = ExtractMethodSource(questionDialog, "private void DeleteSelectedQuestion");
+    AssertTrue(deleteSelected.Contains("RefreshEditState"), "delete question must refresh editability before writing");
+    AssertTrue(deleteSelected.Contains("bool deleted"), "delete question must read backend delete result");
+    AssertTrue(deleteSelected.Contains("!deleted"), "delete question must handle guarded delete no-op");
+    AssertTrue(deleteSelected.Contains("ShowGuardedQuestionWriteFailure"), "delete question no-op must show a guarded warning");
+});
+
+Run("teacher question write guards require explicit draft status", () =>
+{
+    string repository = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Data", "TeacherRepository.cs"));
+    string controller = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Controllers", "TeacherController.cs"));
+
+    AssertExplicitDraftQuestionGuard(repository, "public int CreateExamQuestion");
+    AssertExplicitDraftQuestionGuard(repository, "public bool UpdateExamQuestion");
+    AssertExplicitDraftQuestionGuard(repository, "public bool DeleteExamQuestion");
+
+    string getExamStatus = ExtractMethodSource(repository, "public string GetExamStatus");
+    AssertFalse(getExamStatus.Contains("COALESCE(ex.status, 'DRAFT')"), "GetExamStatus must not treat NULL status as DRAFT");
+    AssertFalse(getExamStatus.Contains("?? WorkflowConstants.ExamStatus.Draft"), "GetExamStatus must not treat missing rows as DRAFT");
+    AssertTrue(getExamStatus.Contains("SELECT ex.status"), "GetExamStatus must return the stored status value directly");
+
+    string queryExams = ExtractMethodSource(repository, "private List<TeacherExamModel> QueryExams");
+    AssertFalse(queryExams.Contains("COALESCE(ex.status, 'DRAFT')"), "teacher exam list must not surface NULL status as draft-ready");
+    AssertTrue(queryExams.Contains("COALESCE(ex.status, '')"), "teacher exam list must surface NULL status as a neutral empty status");
+
+    string controllerGetExamStatus = ExtractMethodSource(controller, "public string GetExamStatus");
+    AssertFalse(
+        controllerGetExamStatus.Contains("WorkflowConstants.ExamStatus.Draft"),
+        "controller GetExamStatus invalid-id fallback must not return DRAFT");
+    AssertTrue(
+        controllerGetExamStatus.Contains("string.Empty"),
+        "controller GetExamStatus invalid-id fallback must return a neutral empty status");
+    AssertTrue(
+        controllerGetExamStatus.Contains("_repository.GetExamStatus(teacherId, examId)"),
+        "controller GetExamStatus valid ids must delegate to repository status lookup");
+});
+
+Run("teacher question bank and random adds report guarded insertion results", () =>
+{
+    string controller = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Controllers", "TeacherController.cs"));
+    string dbContext = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Backend", "Data", "CourseGuardDbContext.cs"));
+    string questionBankDialog = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "QuestionBankDialog.cs"));
+    string randomDialog = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "RandomExamBuilderDialog.cs"));
+
+    AssertTrue(controller.Contains("Task<int> AddQuestionsFromBankAsync"), "controller bank add must return inserted count");
+    AssertTrue(dbContext.Contains("public async Task<int> AddQuestionsFromBankAsync"), "DB bank add must return inserted count");
+    AssertTrue(controller.Contains("Task<int> AddRandomQuestionsToExamAsync"), "controller random add must return inserted count");
+    AssertTrue(dbContext.Contains("public async Task<int> AddRandomQuestionsToExamAsync"), "DB random add must return inserted count");
+    AssertTrue(dbContext.Contains("private static async Task<int> InsertQuestionBankSnapshotsAsync"), "question bank snapshot helper must return inserted count");
+
+    string controllerBankAdd = ExtractMethodSource(controller, "public async System.Threading.Tasks.Task<int> AddQuestionsFromBankAsync");
+    AssertTrue(controllerBankAdd.Contains("return 0;"), "controller bank add guard failures must return zero");
+    AssertTrue(controllerBankAdd.Contains("return await _dbContext.AddQuestionsFromBankAsync"), "controller bank add must return DB inserted count");
+
+    string dbBankAdd = ExtractMethodSource(dbContext, "public async Task<int> AddQuestionsFromBankAsync");
+    AssertTrue(dbBankAdd.Contains("COALESCE(status, '')"), "DB bank add must require explicit DRAFT status");
+    AssertTrue(dbBankAdd.Contains("return 0;"), "DB bank add no-ops must return zero");
+    AssertTrue(dbBankAdd.Contains("int insertedCount"), "DB bank add must capture inserted snapshot count");
+    AssertTrue(dbBankAdd.Contains("return insertedCount;"), "DB bank add must return inserted snapshot count");
+
+    string addSelected = ExtractMethodSource(questionBankDialog, "private async System.Threading.Tasks.Task AddSelectedQuestionsAsync");
+    AssertTrue(addSelected.Contains("int addedCount"), "question bank dialog must read inserted count");
+    AssertTrue(addSelected.Contains("addedCount <= 0"), "question bank dialog must handle guarded no-op");
+    AssertTrue(addSelected.Contains("ShowGuardedQuestionAddFailure"), "question bank dialog must warn on guarded no-op");
+    AssertTrue(addSelected.Contains("addedCount > 0"), "question bank dialog must only mark success for positive insert count");
+
+    string addRandom = ExtractMethodSource(randomDialog, "private async System.Threading.Tasks.Task AddQuestionsAsync");
+    AssertTrue(addRandom.Contains("int addedCount"), "random builder dialog must read inserted count");
+    AssertTrue(addRandom.Contains("addedCount <= 0"), "random builder dialog must handle guarded no-op");
+    AssertTrue(addRandom.Contains("ShowGuardedQuestionAddFailure"), "random builder dialog must warn on guarded no-op");
+    AssertTrue(addRandom.Contains("addedCount > 0"), "random builder dialog must only mark success for positive insert count");
+});
+
 Run("activity display helper translates known actions and appends cleaned details", () =>
 {
     var activity = new RecentUserActivityModel
@@ -836,10 +1656,9 @@ Run("classroom open signal coordinator retries start after failure without broad
 
 Run("classroom open signal coordinator starts once for concurrent broadcasts", async () =>
 {
-    using var ready = new CountdownEvent(2);
-    using var releaseBroadcasts = new ManualResetEventSlim();
     using var startEntered = new ManualResetEventSlim();
     using var allowStartListening = new ManualResetEventSlim();
+    using var secondCallStarted = new ManualResetEventSlim();
 
     var signalService = new FakeClassroomSignalService
     {
@@ -851,15 +1670,50 @@ Run("classroom open signal coordinator starts once for concurrent broadcasts", a
     };
     var coordinator = new ClassroomOpenSignalCoordinator(signalService, replayCount: 0);
 
-    Task first = StartConcurrentBroadcast(coordinator, 42, ready, releaseBroadcasts);
-    Task second = StartConcurrentBroadcast(coordinator, 43, ready, releaseBroadcasts);
+    Task first = Task.Run(() => coordinator.BroadcastClassOpenedAsync(42));
+    Thread? secondThread = null;
+    Exception? secondFailure = null;
+    bool secondJoined = false;
+    try
+    {
+        AssertTrue(startEntered.Wait(TimeSpan.FromSeconds(3)), "listener start was not attempted");
 
-    AssertTrue(ready.Wait(TimeSpan.FromSeconds(3)), "broadcast tasks did not become ready");
-    releaseBroadcasts.Set();
-    AssertTrue(startEntered.Wait(TimeSpan.FromSeconds(3)), "listener start was not attempted");
-    allowStartListening.Set();
+        secondThread = new Thread(() =>
+        {
+            try
+            {
+                secondCallStarted.Set();
+                coordinator.BroadcastClassOpenedAsync(43).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                secondFailure = ex;
+            }
+        });
+        secondThread.IsBackground = true;
+        secondThread.Start();
+        AssertTrue(secondCallStarted.Wait(TimeSpan.FromSeconds(3)), "second broadcast call did not start");
+        AssertTrue(
+            SpinWait.SpinUntil(
+                () => (secondThread.ThreadState & ThreadState.WaitSleepJoin) != 0,
+                TimeSpan.FromSeconds(3)),
+            "second broadcast did not block while listener start was held");
 
-    await Task.WhenAll(first, second);
+        allowStartListening.Set();
+
+        await first.WaitAsync(TimeSpan.FromSeconds(3));
+        secondJoined = secondThread.Join(TimeSpan.FromSeconds(3));
+    }
+    finally
+    {
+        allowStartListening.Set();
+        if (secondThread is { IsAlive: true })
+            secondJoined = secondThread.Join(TimeSpan.FromSeconds(3));
+    }
+
+    AssertTrue(secondJoined, "second broadcast thread did not finish");
+    if (secondFailure != null)
+        throw secondFailure;
 
     int[] broadcastIds = signalService.BroadcastSessionIds.OrderBy(id => id).ToArray();
     AssertEqual(1, signalService.StartCount);
@@ -888,6 +1742,70 @@ Run("student exam form constructor does not invoke before handle exists", () =>
 
     if (failure != null)
         throw new InvalidOperationException(failure.Message, failure);
+});
+
+Run("student exam progress and save labels fit inside header", () =>
+{
+    Environment.SetEnvironmentVariable("COURSEGUARD_DB_CONNECTION", "Host=localhost;Username=test;Password=test;Database=test");
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            using var form = new DoExamForm(0);
+            Panel header = GetFieldValue<Panel>(form, "pnlHeader");
+            Label progressLabel = GetFieldValue<Label>(form, "_progressLabel");
+            Label saveStatusLabel = GetFieldValue<Label>(form, "_saveStatusLabel");
+
+            AssertTrue(header.Controls.Contains(progressLabel), "progress label must be in the exam header");
+            AssertTrue(header.Controls.Contains(saveStatusLabel), "save status label must be in the exam header");
+            AssertTrue(
+                progressLabel.Bottom <= header.Height,
+                $"progress label must fit inside header: bottom={progressLabel.Bottom}, headerHeight={header.Height}");
+            AssertTrue(
+                saveStatusLabel.Bottom <= header.Height,
+                $"save status label must fit inside header: bottom={saveStatusLabel.Bottom}, headerHeight={header.Height}");
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw new InvalidOperationException(failure.Message, failure);
+});
+
+Run("student exam answer save failures update inline status without persisting selection", () =>
+{
+    MethodInfo? saveSelectedAnswer = typeof(DoExamForm).GetMethod(
+        "SaveSelectedAnswer",
+        BindingFlags.Instance | BindingFlags.NonPublic);
+    AssertTrue(saveSelectedAnswer != null, "DoExamForm must keep SaveSelectedAnswer as the answer-save path");
+
+    string source = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "Forms", "Student", "DoExamForm.cs"));
+    string methodSource = ExtractMethodSource(source, "private void SaveSelectedAnswer");
+    int saveCallIndex = methodSource.IndexOf("SaveStudentExamAnswer", StringComparison.Ordinal);
+    int assignmentIndex = methodSource.IndexOf("question.SelectedOption = option", StringComparison.Ordinal);
+    int successBlockIndex = methodSource.IndexOf("if (saved)", StringComparison.Ordinal);
+    int catchIndex = methodSource.IndexOf("catch", StringComparison.Ordinal);
+    int returnedFalseStatusIndex = methodSource.LastIndexOf("UpdateSaveStatus(false)", StringComparison.Ordinal);
+
+    AssertTrue(saveCallIndex >= 0, "SaveSelectedAnswer must persist through SaveStudentExamAnswer");
+    AssertTrue(successBlockIndex >= 0, "SaveSelectedAnswer must keep the session mutation in the saved-only branch");
+    AssertTrue(assignmentIndex > saveCallIndex, "SelectedOption must not be mutated before the DB save succeeds");
+    AssertTrue(assignmentIndex > successBlockIndex, "SelectedOption must be assigned only inside the saved-only branch");
+    AssertTrue(catchIndex > saveCallIndex, "SaveSelectedAnswer must catch DB save exceptions near the save path");
+    AssertTrue(
+        methodSource.Substring(catchIndex).Contains("UpdateSaveStatus(false)", StringComparison.Ordinal),
+        "exception path must update the inline save status as failed");
+    AssertTrue(
+        returnedFalseStatusIndex > assignmentIndex,
+        "returned-false save failures must update the inline save status as failed");
 });
 
 Run("fire and forget safe with null owner does not throw synchronously", () =>
@@ -1493,6 +2411,226 @@ static string RepoRoot()
     }
 
     throw new InvalidOperationException("Cannot locate repository root.");
+}
+
+static string ExtractMethodSource(string source, string signature)
+{
+    int signatureIndex = source.IndexOf(signature, StringComparison.Ordinal);
+    if (signatureIndex < 0)
+        throw new InvalidOperationException($"Cannot find method signature: {signature}");
+
+    int expressionStart = source.IndexOf("=>", signatureIndex, StringComparison.Ordinal);
+    int bodyStart = source.IndexOf('{', signatureIndex);
+    if (expressionStart >= 0 && (bodyStart < 0 || expressionStart < bodyStart))
+    {
+        int expressionEnd = FindExpressionBodyEnd(source, expressionStart, signature);
+        return source.Substring(signatureIndex, expressionEnd - signatureIndex + 1);
+    }
+
+    if (bodyStart < 0)
+        throw new InvalidOperationException($"Cannot find method body: {signature}");
+
+    int depth = 0;
+    for (int i = bodyStart; i < source.Length; i++)
+    {
+        if (source[i] == '{')
+        {
+            depth++;
+        }
+        else if (source[i] == '}')
+        {
+            depth--;
+            if (depth == 0)
+                return source.Substring(signatureIndex, i - signatureIndex + 1);
+        }
+    }
+
+    throw new InvalidOperationException($"Cannot find method end: {signature}");
+}
+
+static int FindExpressionBodyEnd(string source, int expressionStart, string signature)
+{
+    int parenDepth = 0;
+    int braceDepth = 0;
+    int bracketDepth = 0;
+    bool inString = false;
+    bool inVerbatimString = false;
+    bool inChar = false;
+    bool inLineComment = false;
+    bool inBlockComment = false;
+
+    for (int i = expressionStart + 2; i < source.Length; i++)
+    {
+        char current = source[i];
+        char next = i + 1 < source.Length ? source[i + 1] : '\0';
+
+        if (inLineComment)
+        {
+            if (current == '\n')
+                inLineComment = false;
+            continue;
+        }
+
+        if (inBlockComment)
+        {
+            if (current == '*' && next == '/')
+            {
+                inBlockComment = false;
+                i++;
+            }
+            continue;
+        }
+
+        if (inString)
+        {
+            if (inVerbatimString)
+            {
+                if (current == '"' && next == '"')
+                {
+                    i++;
+                    continue;
+                }
+
+                if (current == '"')
+                {
+                    inString = false;
+                    inVerbatimString = false;
+                }
+            }
+            else
+            {
+                if (current == '\\')
+                {
+                    i++;
+                    continue;
+                }
+
+                if (current == '"')
+                    inString = false;
+            }
+            continue;
+        }
+
+        if (inChar)
+        {
+            if (current == '\\')
+            {
+                i++;
+                continue;
+            }
+
+            if (current == '\'')
+                inChar = false;
+            continue;
+        }
+
+        if (current == '/' && next == '/')
+        {
+            inLineComment = true;
+            i++;
+            continue;
+        }
+
+        if (current == '/' && next == '*')
+        {
+            inBlockComment = true;
+            i++;
+            continue;
+        }
+
+        if (current == '"')
+        {
+            inString = true;
+            inVerbatimString = i > 0 && source[i - 1] == '@';
+            continue;
+        }
+
+        if (current == '\'')
+        {
+            inChar = true;
+            continue;
+        }
+
+        if (current == '(')
+        {
+            parenDepth++;
+        }
+        else if (current == ')')
+        {
+            parenDepth--;
+        }
+        else if (current == '{')
+        {
+            braceDepth++;
+        }
+        else if (current == '}')
+        {
+            braceDepth--;
+        }
+        else if (current == '[')
+        {
+            bracketDepth++;
+        }
+        else if (current == ']')
+        {
+            bracketDepth--;
+        }
+        else if (current == ';' && parenDepth == 0 && braceDepth == 0 && bracketDepth == 0)
+        {
+            return i;
+        }
+    }
+
+    throw new InvalidOperationException($"Cannot find expression-bodied method end: {signature}");
+}
+
+static string ExtractPropertySource(string source, string signature)
+{
+    int signatureIndex = source.IndexOf(signature, StringComparison.Ordinal);
+    if (signatureIndex < 0)
+        throw new InvalidOperationException($"Cannot find property signature: {signature}");
+
+    int expressionStart = source.IndexOf("=>", signatureIndex, StringComparison.Ordinal);
+    if (expressionStart >= 0)
+    {
+        int expressionEnd = source.IndexOf(';', expressionStart);
+        if (expressionEnd < 0)
+            throw new InvalidOperationException($"Cannot find expression-bodied property end: {signature}");
+
+        return source.Substring(signatureIndex, expressionEnd - signatureIndex + 1);
+    }
+
+    int bodyStart = source.IndexOf('{', signatureIndex);
+    if (bodyStart < 0)
+        throw new InvalidOperationException($"Cannot find property body: {signature}");
+
+    int depth = 0;
+    for (int i = bodyStart; i < source.Length; i++)
+    {
+        if (source[i] == '{')
+        {
+            depth++;
+        }
+        else if (source[i] == '}')
+        {
+            depth--;
+            if (depth == 0)
+                return source.Substring(signatureIndex, i - signatureIndex + 1);
+        }
+    }
+
+    throw new InvalidOperationException($"Cannot find property end: {signature}");
+}
+
+static void AssertExplicitDraftQuestionGuard(string repositorySource, string signature)
+{
+    string method = ExtractMethodSource(repositorySource, signature);
+    AssertTrue(method.Contains("@draft_status"), $"{signature} must use an explicit draft-status parameter");
+    AssertTrue(
+        method.Contains("UPPER(COALESCE(ex.status, '')) = @draft_status"),
+        $"{signature} must require explicit DRAFT status instead of treating NULL as draft");
+    AssertFalse(method.Contains("COALESCE(ex.status, 'DRAFT')"), $"{signature} must not treat NULL status as draft");
+    AssertFalse(method.Contains("= 'DRAFT'"), $"{signature} must not inline a draft literal guard");
 }
 
 static async Task RunDeadlineReminderServiceSendsOneNotification()
@@ -2271,6 +3409,16 @@ static T GetPropertyValue<T>(object instance, string propertyName)
         : throw new InvalidOperationException($"Property {propertyName} was not a {typeof(T).Name}");
 }
 
+static T GetFieldValue<T>(object instance, string fieldName)
+{
+    FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException($"Cannot find field {fieldName}");
+    object? value = field.GetValue(instance);
+    return value is T typed
+        ? typed
+        : throw new InvalidOperationException($"Field {fieldName} was not a {typeof(T).Name}");
+}
+
 static void SetFieldValue(object instance, string fieldName, object? value)
 {
     FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
@@ -2474,20 +3622,6 @@ static void AssertImageDisposed(Image image, string message)
     }
 
     throw new InvalidOperationException(message);
-}
-
-static Task StartConcurrentBroadcast(
-    ClassroomOpenSignalCoordinator coordinator,
-    int sessionId,
-    CountdownEvent ready,
-    ManualResetEventSlim releaseBroadcasts)
-{
-    return Task.Factory.StartNew(async () =>
-    {
-        ready.Signal();
-        AssertTrue(releaseBroadcasts.Wait(TimeSpan.FromSeconds(3)), "broadcast release was not signaled");
-        await coordinator.BroadcastClassOpenedAsync(sessionId);
-    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
 }
 
 static class TestRunner

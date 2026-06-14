@@ -168,16 +168,32 @@ namespace CourseGuard.Frontend.Forms.Teacher
             try
             {
                 _add.Enabled = false;
-                await _controller.AddQuestionsFromBankAsync(_teacherId, _examId, _courseId, selectedIds);
-                QuestionsAdded = true;
-                MetaTheme.ShowModernDialog($"Da them {selectedIds.Count} cau hoi vao bai thi.", "Thanh cong", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                Close();
+                int addedCount = await _controller.AddQuestionsFromBankAsync(_teacherId, _examId, _courseId, selectedIds);
+                if (addedCount <= 0)
+                {
+                    QuestionsAdded = false;
+                    ShowGuardedQuestionAddFailure();
+                    _add.Enabled = true;
+                    return;
+                }
+
+                if (addedCount > 0)
+                {
+                    QuestionsAdded = true;
+                    MetaTheme.ShowModernDialog($"Da them {addedCount} cau hoi vao bai thi.", "Thanh cong", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    Close();
+                }
             }
             catch (Exception ex)
             {
                 MetaTheme.ShowModernDialog("Co loi xay ra: " + ex.Message, "Loi", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 _add.Enabled = true;
             }
+        }
+
+        private static void ShowGuardedQuestionAddFailure()
+        {
+            MetaTheme.ShowModernDialog("Khong the them cau hoi. Bai kiem tra co the khong con o trang thai nhap hoac cac cau hoi da co trong de.", "Khong the them cau hoi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 }

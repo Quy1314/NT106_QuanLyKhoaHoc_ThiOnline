@@ -20,6 +20,10 @@ namespace CourseGuard.Frontend.UserControls.Student
         private readonly CourseGuardDbContext _dbContext = new("");
         private readonly List<StudentAssignmentRow> _assignments = new();
         private readonly Button _detailButton = new() { Text = "Chi tiết / Nộp bài" };
+        private RoundedPanel _assignmentPreviewPanel = null!;
+        private Label _assignmentPreviewTitle = null!;
+        private Label _assignmentPreviewDetail = null!;
+        private Label _assignmentPreviewStatus = null!;
 
         private string _globalSearchKeyword = string.Empty;
 
@@ -41,7 +45,9 @@ namespace CourseGuard.Frontend.UserControls.Student
             AddHeaderAction(_detailButton);
 
             _detailButton.Click += (_, _) => OpenSelectedAssignment();
-            Grid.CellDoubleClick += (_, _) => OpenSelectedAssignment();
+            Grid.CellDoubleClick += (_, e) => OpenAssignmentFromGridRow(e.RowIndex);
+            SetBelowGridContent(BuildAssignmentPreviewPanel(), 88);
+            Grid.SelectionChanged += (_, _) => UpdateSelectedAssignmentPreview();
 
             LoadDataAsync().FireAndForgetSafe(this);
         }
@@ -84,7 +90,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         protected override void OnTableBound(DataTable table, bool hasRows)
         {
-            _detailButton.Enabled = hasRows;
+            UpdateSelectedAssignmentPreview();
         }
 
         public void ApplyGlobalSearch(string keyword)
@@ -149,12 +155,14 @@ namespace CourseGuard.Frontend.UserControls.Student
             table.Columns.Add("Tiêu đề", typeof(string));
             table.Columns.Add("Hạn nộp", typeof(string));
             table.Columns.Add("Trạng thái", typeof(string));
+            table.Columns.Add("Còn lại", typeof(string));
+            table.Columns.Add("Hành động", typeof(string));
             table.Columns.Add("Đã nộp?", typeof(string));
             table.Columns.Add("Điểm", typeof(string));
 
             foreach (var row in rows)
             {
-                string statusText = row.Status == "OPEN" ? "Đã mở" : "Đã đóng";
+                AssignmentUxPresentation view = StudentAssignmentUxPresenter.Present(row, DateTime.Now);
                 string submittedText = row.IsSubmitted ? "Đã nộp" : "Chưa nộp";
                 string scoreText = row.Score.HasValue ? row.Score.Value.ToString("0.##") : "Chưa chấm";
 
@@ -163,7 +171,9 @@ namespace CourseGuard.Frontend.UserControls.Student
                     row.CourseName,
                     row.Title,
                     row.DueDate.ToString("dd/MM/yyyy HH:mm"),
-                    statusText,
+                    view.StatusText,
+                    view.DetailText,
+                    view.ActionText,
                     submittedText,
                     scoreText);
             }
@@ -173,17 +183,10 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private void OpenSelectedAssignment()
         {
-            int assignmentId = CurrentInt("ID");
-            if (assignmentId <= 0)
-            {
-                MetaTheme.ShowModernDialog("Vui lòng chọn một bài tập.", "Thông báo");
-                return;
-            }
-
-            var assignment = _assignments.FirstOrDefault(a => a.AssignmentId == assignmentId);
+            var assignment = SelectedAssignment();
             if (assignment == null)
             {
-                MetaTheme.ShowModernDialog("Không tìm thấy thông tin bài tập.", "Lỗi");
+                MetaTheme.ShowModernDialog("Vui lòng chọn một bài tập.", "Thông báo");
                 return;
             }
 
@@ -197,6 +200,142 @@ namespace CourseGuard.Frontend.UserControls.Student
                 if (FindForm() is CourseGuard.Frontend.Forms.Student.StudentDashboard dashboard)
                     dashboard.RefreshNotificationSummary();
             }
+        }
+
+        private void OpenAssignmentFromGridRow(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= Grid.Rows.Count)
+                return;
+
+            DataGridViewRow row = Grid.Rows[rowIndex];
+            if (row.IsNewRow)
+                return;
+
+            DataGridViewCell? targetCell = null;
+            foreach (DataGridViewColumn column in Grid.Columns.Cast<DataGridViewColumn>().OrderBy(column => column.DisplayIndex))
+            {
+                if (!column.Visible)
+                    continue;
+
+                targetCell = row.Cells[column.Index];
+                break;
+            }
+
+            if (targetCell == null)
+                return;
+
+            Grid.ClearSelection();
+            Grid.CurrentCell = targetCell;
+            row.Selected = true;
+            OpenSelectedAssignment();
+        }
+
+        private RoundedPanel BuildAssignmentPreviewPanel()
+        {
+            _assignmentPreviewPanel = new RoundedPanel
+            {
+                CornerRadius = 10,
+                FillColor = AppColors.BgCard,
+                BorderColor = AppColors.Border,
+                Padding = new Padding(14, 10, 14, 10)
+            };
+
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 2,
+                RowCount = 2
+            };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150f));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26f));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+
+            _assignmentPreviewTitle = new Label
+            {
+                Dock = DockStyle.Fill,
+                AutoEllipsis = true,
+                Font = AppFonts.Semibold(10f),
+                ForeColor = AppColors.TextPrimary,
+                TextAlign = ContentAlignment.MiddleLeft,
+                UseCompatibleTextRendering = false
+            };
+
+            _assignmentPreviewStatus = new Label
+            {
+                Dock = DockStyle.Fill,
+                AutoEllipsis = true,
+                Font = AppFonts.Semibold(9f),
+                ForeColor = AppColors.AccentBlue,
+                TextAlign = ContentAlignment.MiddleRight,
+                UseCompatibleTextRendering = false
+            };
+
+            _assignmentPreviewDetail = new Label
+            {
+                Dock = DockStyle.Fill,
+                AutoEllipsis = true,
+                Font = AppFonts.Caption,
+                ForeColor = AppColors.TextSecondary,
+                TextAlign = ContentAlignment.TopLeft,
+                UseCompatibleTextRendering = false
+            };
+
+            layout.Controls.Add(_assignmentPreviewTitle, 0, 0);
+            layout.Controls.Add(_assignmentPreviewStatus, 1, 0);
+            layout.Controls.Add(_assignmentPreviewDetail, 0, 1);
+            layout.SetColumnSpan(_assignmentPreviewDetail, 2);
+            _assignmentPreviewPanel.Controls.Add(layout);
+            UpdateAssignmentPreviewEmpty();
+            return _assignmentPreviewPanel;
+        }
+
+        private void UpdateSelectedAssignmentPreview()
+        {
+            var assignment = SelectedAssignment();
+            if (assignment == null)
+            {
+                UpdateAssignmentPreviewEmpty();
+                return;
+            }
+
+            AssignmentUxPresentation view = StudentAssignmentUxPresenter.Present(assignment, DateTime.Now);
+            _assignmentPreviewTitle.Text = assignment.Title;
+            _assignmentPreviewDetail.Text = view.DetailText;
+            _assignmentPreviewStatus.Text = view.StatusText;
+            _assignmentPreviewStatus.ForeColor = GetToneColor(view.Tone);
+            _detailButton.Text = view.ActionText;
+            _detailButton.Enabled = true;
+        }
+
+        private void UpdateAssignmentPreviewEmpty()
+        {
+            _assignmentPreviewTitle.Text = "Chọn một bài tập để xem nhanh trạng thái.";
+            _assignmentPreviewDetail.Text = "Thông tin hạn nộp, bài đã nộp và hành động tiếp theo sẽ hiển thị tại đây.";
+            _assignmentPreviewStatus.Text = "Chưa chọn";
+            _assignmentPreviewStatus.ForeColor = AppColors.TextSecondary;
+            _detailButton.Text = "Chi tiết / Nộp bài";
+            _detailButton.Enabled = false;
+        }
+
+        private StudentAssignmentRow? SelectedAssignment()
+        {
+            int assignmentId = CurrentInt("ID");
+            return assignmentId <= 0
+                ? null
+                : _assignments.FirstOrDefault(a => a.AssignmentId == assignmentId);
+        }
+
+        private static Color GetToneColor(string tone)
+        {
+            return tone switch
+            {
+                "Success" => AppColors.Success,
+                "Warning" => AppColors.Warning,
+                "Info" => AppColors.AccentBlue,
+                _ => AppColors.TextSecondary
+            };
         }
     }
 }

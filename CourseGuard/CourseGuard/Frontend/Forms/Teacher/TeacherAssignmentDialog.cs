@@ -12,15 +12,23 @@ namespace CourseGuard.Frontend.Forms.Teacher
 {
     public partial class TeacherAssignmentDialog : ThemedDialogBase
     {
+        private const long MaxAttachmentBytes = 10 * 1024 * 1024;
+        private const string DefaultValidationText = "Đặt hạn nộp rõ ràng; file đính kèm tối đa 10MB.";
+
         private readonly ComboBox _course = new();
         private readonly TextBox _title = new();
         private readonly TextBox _details = new();
         private readonly DateTimePicker _date = new();
         private readonly ComboBox _status = new();
+        private readonly Label _validationSummary = new();
         
         private readonly TextBox _file = new();
+        private readonly Label _fileSummary = new();
         private readonly Button _browse = TeacherTabChrome.SecondaryButton("Chọn file");
         private readonly Button _clearFile = TeacherTabChrome.SecondaryButton("Xóa file");
+        private string _selectedFilePath = string.Empty;
+        private string _existingFileName = string.Empty;
+        private bool _clearExistingFile;
 
         private class StatusItem
         {
@@ -36,7 +44,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
         public DateTime SelectedDate => _date.Value;
         public string Status => (_status.SelectedItem as StatusItem)?.Value ?? "OPEN";
         
-        public string SelectedFilePath => _file.Text.Trim();
+        public string SelectedFilePath => _selectedFilePath;
+        public bool ClearFileRequested => _clearExistingFile;
 
         public TeacherAssignmentDialog(IEnumerable<TeacherCourseModel> courses, TeacherAssignmentModel? existing = null)
         {
@@ -59,7 +68,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 _title.Text = existing.Title;
                 _details.Text = existing.Description;
                 if (existing.DueAt.HasValue) _date.Value = existing.DueAt.Value;
-                _file.Text = existing.FileName;
+                _existingFileName = existing.FileName;
+                _file.Text = _existingFileName;
             }
 
             _details.Multiline = true;
@@ -80,7 +90,24 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             _file.ReadOnly = true;
             _browse.Click += (_, _) => BrowseFile();
-            _clearFile.Click += (_, _) => _file.Text = string.Empty;
+            _clearFile.Click += (_, _) =>
+            {
+                _selectedFilePath = string.Empty;
+                _clearExistingFile = !string.IsNullOrWhiteSpace(_existingFileName);
+                _file.Text = string.Empty;
+                UpdateFileSummary();
+            };
+
+            ResetValidationSummary();
+            _validationSummary.Dock = DockStyle.Fill;
+            _validationSummary.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            _validationSummary.Font = MetaTheme.Fonts.BodyMd();
+            _validationSummary.AutoEllipsis = true;
+
+            _fileSummary.Dock = DockStyle.Fill;
+            _fileSummary.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            _fileSummary.Font = MetaTheme.Fonts.BodySm();
+            _fileSummary.ForeColor = AppColors.TextSecondary;
 
             var save = new Button { Text = "Lưu", DialogResult = DialogResult.OK, Width = 90 };
             var cancel = new Button { Text = "Hủy", DialogResult = DialogResult.Cancel, Width = 90 };
@@ -89,21 +116,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             save.Click += (s, e) =>
             {
-                if (CourseId <= 0 || string.IsNullOrWhiteSpace(ItemTitle))
-                {
-                    MetaTheme.ShowModernDialog("Vui lòng chọn khóa học và nhập tiêu đề.", "Thiếu thông tin");
+                if (!ValidateBeforeSave())
                     DialogResult = DialogResult.None;
-                }
-                
-                if (!string.IsNullOrEmpty(SelectedFilePath) && File.Exists(SelectedFilePath))
-                {
-                    var info = new FileInfo(SelectedFilePath);
-                    if (info.Length > 10 * 1024 * 1024)
-                    {
-                        MetaTheme.ShowModernDialog("File đính kèm không được vượt quá 10MB.", "Lỗi dung lượng");
-                        DialogResult = DialogResult.None;
-                    }
-                }
             };
 
             var grid = TeacherCourseDialog.CreateGrid();
@@ -112,7 +126,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
             grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
 
@@ -126,14 +140,18 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _details.Dock = DockStyle.Fill;
             grid.Controls.Add(_details, 1, 2);
             
-            var filePanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Margin = new Padding(0) };
+            var filePanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 2, Margin = new Padding(0) };
             filePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             filePanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             filePanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            filePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+            filePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             _file.Dock = DockStyle.Fill;
             filePanel.Controls.Add(_file, 0, 0);
             filePanel.Controls.Add(_browse, 1, 0);
             filePanel.Controls.Add(_clearFile, 2, 0);
+            filePanel.Controls.Add(_fileSummary, 0, 1);
+            filePanel.SetColumnSpan(_fileSummary, 3);
             
             grid.Controls.Add(new Label { Text = "File đính kèm", Dock = DockStyle.Fill, TextAlign = System.Drawing.ContentAlignment.MiddleLeft }, 0, 3);
             grid.Controls.Add(filePanel, 1, 3);
@@ -145,7 +163,14 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _status.Dock = DockStyle.Fill;
             grid.Controls.Add(_status, 1, 5);
 
-            ContentPanel.Controls.Add(grid);
+            var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0) };
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+            content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            content.Controls.Add(_validationSummary, 0, 0);
+            content.Controls.Add(grid, 0, 1);
+
+            UpdateFileSummary();
+            ContentPanel.Controls.Add(content);
             AddFooterButtons(cancel, save);
             AcceptButton = save;
             CancelButton = cancel;
@@ -159,7 +184,11 @@ namespace CourseGuard.Frontend.Forms.Teacher
         
         public void SetExistingFile(string fileName)
         {
-            _file.Text = fileName; // Display existing filename
+            _selectedFilePath = string.Empty;
+            _existingFileName = fileName;
+            _clearExistingFile = false;
+            _file.Text = fileName;
+            UpdateFileSummary();
         }
 
         private void BrowseFile()
@@ -169,7 +198,86 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 Filter = "Files (*.pdf;*.doc;*.docx;*.txt)|*.pdf;*.doc;*.docx;*.txt|All files (*.*)|*.*"
             };
             if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                _selectedFilePath = dialog.FileName;
+                _clearExistingFile = false;
                 _file.Text = dialog.FileName;
+                UpdateFileSummary();
+            }
+        }
+
+        private bool ValidateBeforeSave()
+        {
+            ResetValidationSummary();
+
+            if (CourseId <= 0 || string.IsNullOrWhiteSpace(ItemTitle))
+                return ShowValidationError("Vui lòng chọn khóa học và nhập tiêu đề.");
+
+            if (Status == "OPEN" && SelectedDate < DateTime.Now)
+                return ShowValidationError("Bài tập đang mở phải có hạn nộp trong tương lai.");
+
+            if (!string.IsNullOrWhiteSpace(SelectedFilePath) && !File.Exists(SelectedFilePath))
+                return ShowValidationError("File đính kèm đã chọn không còn tồn tại. Vui lòng chọn lại file.");
+
+            if (!string.IsNullOrWhiteSpace(SelectedFilePath))
+            {
+                var info = new FileInfo(SelectedFilePath);
+                MaterialFileValidation validation = MaterialFilePolicy.Validate(info.Name, info.Length);
+                if (!validation.IsValid)
+                {
+                    if (info.Length > MaxAttachmentBytes)
+                        return ShowValidationError("File đính kèm không được vượt quá 10MB.");
+
+                    return ShowValidationError(validation.ErrorMessage);
+                }
+
+                if (info.Length > MaxAttachmentBytes)
+                    return ShowValidationError("File đính kèm không được vượt quá 10MB.");
+            }
+
+            return true;
+        }
+
+        private bool ShowValidationError(string message)
+        {
+            _validationSummary.Text = message;
+            _validationSummary.ForeColor = AppColors.Danger;
+            return false;
+        }
+
+        private void ResetValidationSummary()
+        {
+            _validationSummary.Text = DefaultValidationText;
+            _validationSummary.ForeColor = AppColors.TextSecondary;
+        }
+
+        private void UpdateFileSummary()
+        {
+            if (_clearExistingFile)
+            {
+                _fileSummary.Text = "Chưa chọn file đính kèm.";
+                _fileSummary.ForeColor = AppColors.TextSecondary;
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_selectedFilePath) && File.Exists(_selectedFilePath))
+            {
+                var info = new FileInfo(_selectedFilePath);
+                double sizeMb = info.Length / 1024d / 1024d;
+                _fileSummary.Text = $"Đã chọn {info.Name} ({sizeMb:0.##} MB).";
+                _fileSummary.ForeColor = AppColors.TextSecondary;
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_existingFileName))
+            {
+                _fileSummary.Text = $"File hiện tại: {Path.GetFileName(_existingFileName)}";
+                _fileSummary.ForeColor = AppColors.TextSecondary;
+                return;
+            }
+
+            _fileSummary.Text = "Chưa chọn file đính kèm.";
+            _fileSummary.ForeColor = AppColors.TextSecondary;
         }
     }
 }

@@ -84,6 +84,9 @@ namespace CourseGuard.Backend.Controllers
         public bool UpdateExam(int teacherId, TeacherExamModel input) =>
             teacherId > 0 && _repository.UpdateExam(teacherId, input);
 
+        public bool ActivateExam(int teacherId, int examId) =>
+            teacherId > 0 && examId > 0 && _repository.ActivateExam(teacherId, examId);
+
         public bool CanActivateExam(int teacherId, int examId) =>
             teacherId > 0 && examId > 0 && _repository.CanActivateExam(teacherId, examId);
 
@@ -94,7 +97,7 @@ namespace CourseGuard.Backend.Controllers
             teacherId <= 0 || examId <= 0 ? new List<TeacherExamQuestionModel>() : _repository.GetExamQuestions(teacherId, examId);
 
         public string GetExamStatus(int teacherId, int examId) =>
-            teacherId <= 0 || examId <= 0 ? WorkflowConstants.ExamStatus.Draft : _repository.GetExamStatus(teacherId, examId);
+            teacherId <= 0 || examId <= 0 ? string.Empty : _repository.GetExamStatus(teacherId, examId);
 
         public int CreateExamQuestion(int teacherId, TeacherExamQuestionModel input) =>
             teacherId <= 0 ? 0 : _repository.CreateExamQuestion(teacherId, input);
@@ -176,10 +179,10 @@ namespace CourseGuard.Backend.Controllers
             teacherId <= 0 ? System.Threading.Tasks.Task.FromResult(new List<StudentSubmissionModel>()) : _repository.GetStudentSubmissionsAsync(teacherId, courseId);
 
         public System.Threading.Tasks.Task<byte[]?> GetSubmissionContentAsync(int teacherId, int submissionId) =>
-            teacherId <= 0 || submissionId <= 0 ? System.Threading.Tasks.Task.FromResult<byte[]?>(null) : _repository.GetSubmissionContentAsync(submissionId);
+            teacherId <= 0 || submissionId <= 0 ? System.Threading.Tasks.Task.FromResult<byte[]?>(null) : _repository.GetSubmissionContentAsync(teacherId, submissionId);
 
         public System.Threading.Tasks.Task<bool> UpdateGradeAsync(int teacherId, int submissionId, decimal score, string feedback) =>
-            teacherId > 0 && submissionId > 0 ? _repository.UpdateGradeAsync(submissionId, score, feedback) : System.Threading.Tasks.Task.FromResult(false);
+            teacherId > 0 && submissionId > 0 ? _repository.UpdateGradeAsync(teacherId, submissionId, score, feedback) : System.Threading.Tasks.Task.FromResult(false);
 
         public System.Threading.Tasks.Task<byte[]?> GetLessonFileContentAsync(int teacherId, int lessonId) =>
             teacherId <= 0 || lessonId <= 0 ? System.Threading.Tasks.Task.FromResult<byte[]?>(null) : _repository.GetLessonFileContentAsync(lessonId);
@@ -321,26 +324,26 @@ namespace CourseGuard.Backend.Controllers
             return results;
         }
 
-        public async System.Threading.Tasks.Task ImportQuestionsToExamAsync(int teacherId, int examId, int courseId, List<TeacherExamQuestionModel> questions)
+        public async System.Threading.Tasks.Task<int> ImportQuestionsToExamAsync(int teacherId, int examId, int courseId, List<TeacherExamQuestionModel> questions)
         {
-            if (teacherId > 0 && examId > 0 && courseId > 0)
-            {
-                await _dbContext.BulkInsertQuestionsAndMapToExamAsync(examId, courseId, questions);
-            }
+            if (teacherId <= 0 || examId <= 0 || courseId <= 0)
+                return 0;
+
+            return await _dbContext.BulkInsertQuestionsAndMapToExamAsync(teacherId, examId, courseId, questions);
         }
 
-        public async System.Threading.Tasks.Task AddQuestionsFromBankAsync(int teacherId, int examId, int courseId, IReadOnlyList<int> questionIds)
+        public async System.Threading.Tasks.Task<int> AddQuestionsFromBankAsync(int teacherId, int examId, int courseId, IReadOnlyList<int> questionIds)
         {
             if (teacherId <= 0 || examId <= 0 || courseId <= 0 || questionIds == null || questionIds.Count == 0)
-                return;
+                return 0;
 
             if (!_repository.GetCourses(teacherId).Any(c => c.Id == courseId))
-                return;
+                return 0;
 
             if (!string.Equals(_repository.GetExamStatus(teacherId, examId), WorkflowConstants.ExamStatus.Draft, System.StringComparison.OrdinalIgnoreCase))
-                return;
+                return 0;
 
-            await _dbContext.AddQuestionsFromBankAsync(examId, courseId, questionIds);
+            return await _dbContext.AddQuestionsFromBankAsync(examId, courseId, questionIds);
         }
 
         public List<TeacherExamQuestionModel> GetCourseQuestionBank(int teacherId, int courseId)
@@ -366,18 +369,18 @@ namespace CourseGuard.Backend.Controllers
             return _dbContext.GetRandomQuestionsByCriteria(courseId, criteria);
         }
 
-        public async System.Threading.Tasks.Task AddRandomQuestionsToExamAsync(int teacherId, int examId, int courseId, IReadOnlyList<RandomQuestionCriteria> criteria)
+        public async System.Threading.Tasks.Task<int> AddRandomQuestionsToExamAsync(int teacherId, int examId, int courseId, IReadOnlyList<RandomQuestionCriteria> criteria)
         {
             if (teacherId <= 0 || examId <= 0 || courseId <= 0 || criteria == null)
-                return;
+                return 0;
 
             if (!_repository.GetCourses(teacherId).Any(c => c.Id == courseId))
-                return;
+                return 0;
 
             if (!string.Equals(_repository.GetExamStatus(teacherId, examId), WorkflowConstants.ExamStatus.Draft, System.StringComparison.OrdinalIgnoreCase))
-                return;
+                return 0;
 
-            await _dbContext.AddRandomQuestionsToExamAsync(examId, courseId, criteria);
+            return await _dbContext.AddRandomQuestionsToExamAsync(examId, courseId, criteria);
         }
     }
 }

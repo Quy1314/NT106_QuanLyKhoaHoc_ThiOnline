@@ -17,6 +17,9 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private readonly string _emptyMessage;
         private readonly FlowLayoutPanel _headerActionPanel;
+        private TableLayoutPanel _contentLayout = null!;
+        private RowStyle _belowGridRow = null!;
+        private Control? _belowGridContent;
 
         protected readonly RoundedPanel GridBody;
         protected readonly Label EmptyStateLabel;
@@ -198,6 +201,21 @@ namespace CourseGuard.Frontend.UserControls.Student
             _headerActionPanel.Controls.Add(action);
         }
 
+        protected void SetBelowGridContent(Control content, int height)
+        {
+            if (_belowGridContent != null)
+            {
+                _contentLayout.Controls.Remove(_belowGridContent);
+                _belowGridContent.Dispose();
+            }
+
+            _belowGridContent = content;
+            _belowGridRow.Height = Math.Max(0, height);
+            content.Dock = DockStyle.Fill;
+            content.Margin = new Padding(0, 12, 0, 0);
+            _contentLayout.Controls.Add(content, 0, 1);
+        }
+
         protected int CurrentInt(string columnName)
         {
             if (!Grid.Visible || Grid.CurrentRow == null || Grid.CurrentRow.IsNewRow || !Grid.Columns.Contains(columnName))
@@ -236,19 +254,21 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private Control CreateContent(string cardTitle, string? hintText)
         {
-            if (string.IsNullOrWhiteSpace(hintText))
-                return StudentTabChrome.CreateDataCard(cardTitle, GridBody);
-
-            var content = new TableLayoutPanel
+            bool hasHint = !string.IsNullOrWhiteSpace(hintText);
+            _contentLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 BackColor = AppColors.BgBase,
                 ColumnCount = 1,
-                RowCount = 2
+                RowCount = hasHint ? 3 : 2
             };
-            content.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 42f));
-            content.Controls.Add(StudentTabChrome.CreateDataCard(cardTitle, GridBody), 0, 0);
+            _contentLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            _belowGridRow = new RowStyle(SizeType.Absolute, 0f);
+            _contentLayout.RowStyles.Add(_belowGridRow);
+            _contentLayout.Controls.Add(StudentTabChrome.CreateDataCard(cardTitle, GridBody), 0, 0);
+
+            if (!hasHint)
+                return _contentLayout;
 
             HintLabel = new Label
             {
@@ -262,8 +282,9 @@ namespace CourseGuard.Frontend.UserControls.Student
                 TextAlign = ContentAlignment.MiddleLeft,
                 UseCompatibleTextRendering = false
             };
-            content.Controls.Add(HintLabel, 0, 1);
-            return content;
+            _contentLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42f));
+            _contentLayout.Controls.Add(HintLabel, 0, 2);
+            return _contentLayout;
         }
 
         private static Button CreateButton(string text)

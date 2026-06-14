@@ -28,6 +28,8 @@ namespace CourseGuard.Frontend.Forms.Student
         private bool _submitted;
         private bool _connectionLostViolationRecorded;
         private bool _autoSubmitTriggered;
+        private Label _progressLabel = null!;
+        private Label _saveStatusLabel = null!;
 
         public DoExamForm() : this(0)
         {
@@ -86,6 +88,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 {
                     _session.Questions[_currentIndex].IsMarkedForReview = chkMark.Checked;
                     UpdateQuestionButtons();
+                    UpdateProgressSummary();
                 }
             };
             rbA.CheckedChanged += (_, _) => SaveSelectedAnswer("A");
@@ -124,6 +127,7 @@ namespace CourseGuard.Frontend.Forms.Student
             UpdateTimerText();
             _timer.Start();
             StartScreenMonitoring();
+            UpdateProgressSummary();
         }
 
         private void ShowErrorAndClose(string message)
@@ -291,6 +295,48 @@ namespace CourseGuard.Frontend.Forms.Student
             chkMark.ForeColor = AcademicTheme.TextSecondary;
             foreach (RadioButton option in Options())
                 option.ForeColor = AcademicTheme.TextPrimary;
+            EnsureProgressHeader();
+        }
+
+        private void EnsureProgressHeader()
+        {
+            if (_progressLabel != null && !_progressLabel.IsDisposed)
+                return;
+
+            const int statusRowGap = 4;
+            const int statusRowHeight = 28;
+            const int bottomPadding = 8;
+            int statusRowTop = Math.Max(lblExamName.Bottom, lblTimer.Bottom) + statusRowGap;
+            pnlHeader.Height = Math.Max(pnlHeader.Height, statusRowTop + statusRowHeight + bottomPadding);
+
+            _progressLabel = new Label
+            {
+                AutoSize = false,
+                Width = 260,
+                Height = statusRowHeight,
+                Top = statusRowTop,
+                Left = lblExamName.Left,
+                Font = AppFonts.Caption,
+                ForeColor = Color.White,
+                BackColor = Color.Transparent
+            };
+
+            _saveStatusLabel = new Label
+            {
+                AutoSize = false,
+                Width = 320,
+                Height = statusRowHeight,
+                Top = statusRowTop,
+                Left = _progressLabel.Right + 12,
+                Font = AppFonts.Caption,
+                ForeColor = Color.FromArgb(219, 234, 254),
+                BackColor = Color.Transparent
+            };
+
+            pnlHeader.Controls.Add(_progressLabel);
+            pnlHeader.Controls.Add(_saveStatusLabel);
+            _progressLabel.BringToFront();
+            _saveStatusLabel.BringToFront();
         }
 
         private void BuildQuestionButtons()
@@ -347,6 +393,7 @@ namespace CourseGuard.Frontend.Forms.Student
             btnPrev.Enabled = index > 0;
             btnNext.Enabled = index < _session.Questions.Count - 1;
             UpdateQuestionButtons();
+            UpdateProgressSummary();
         }
 
         private void MoveQuestion(int delta)
@@ -371,11 +418,48 @@ namespace CourseGuard.Frontend.Forms.Student
                 return;
 
             StudentExamTakingQuestionModel question = _session.Questions[_currentIndex];
-            if (_dbContext.SaveStudentExamAnswer(UserSessionContext.CurrentUserId ?? 0, _session.AttemptId, question.Id, option))
+            bool saved;
+            try
+            {
+                saved = _dbContext.SaveStudentExamAnswer(UserSessionContext.CurrentUserId ?? 0, _session.AttemptId, question.Id, option);
+            }
+            catch (Exception)
+            {
+                UpdateSaveStatus(false);
+                ShowQuestion(_currentIndex);
+                return;
+            }
+
+            if (saved)
             {
                 question.SelectedOption = option;
                 UpdateQuestionButtons();
+                UpdateProgressSummary();
+                UpdateSaveStatus(true);
+                return;
             }
+
+            UpdateSaveStatus(false);
+            ShowQuestion(_currentIndex);
+        }
+
+        private void UpdateProgressSummary()
+        {
+            if (_session == null || _progressLabel == null)
+                return;
+
+            int answered = _session.Questions.Count(q => !string.IsNullOrWhiteSpace(q.SelectedOption));
+            int marked = _session.Questions.Count(q => q.IsMarkedForReview);
+            _progressLabel.Text = ExamProgressPresenter.BuildProgressText(answered, _session.Questions.Count, marked);
+        }
+
+        private void UpdateSaveStatus(bool success)
+        {
+            if (_saveStatusLabel == null)
+                return;
+
+            _saveStatusLabel.Text = ExamProgressPresenter.BuildSaveStatus(success, DateTime.Now);
+            _saveStatusLabel.ForeColor = success ? Color.FromArgb(219, 234, 254) : Color.FromArgb(254, 202, 202);
         }
 
         private void SubmitExam(bool confirm)
@@ -386,35 +470,49 @@ namespace CourseGuard.Frontend.Forms.Student
             if (confirm)
             {
                 int unansweredCount = _session.Questions.Count(q => string.IsNullOrWhiteSpace(q.SelectedOption));
-                string message = unansweredCount > 0 
-                    ? $"Bạn còn {unansweredCount} câu chưa trả lời. Bạn có chắc chắn muốn nộp bài không?" 
-                    : "Bạn có chắc chắn muốn nộp bài không?";
+                int markedCount = _session.Questions.Count(q => q.IsMarkedForReview);
+                string message = ExamProgressPresenter.BuildSubmitConfirmMessage(unansweredCount, markedCount);
 
                 DialogResult res = MetaTheme.ShowModernDialog(this, message, "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (res != DialogResult.Yes)
                     return;
             }
 
-            StudentExamSubmitResultModel result = _dbContext.SubmitStudentExamAttempt(UserSessionContext.CurrentUserId ?? 0, _session.AttemptId);
-            if (!result.Success)
-            {
-                MetaTheme.ShowModernDialog(this, result.Message, "Thông báo");
-                return;
-            }
+            btnSubmit.Enabled = false;
+            string previousSubmitText = btnSubmit.Text;
+            btnSubmit.Text = "Đang nộp...";
 
-            _submitted = true;
-            int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
-            string username = UserSessionContext.CurrentUsername ?? "không xác định";
-            System.Threading.Tasks.Task.Run(() =>
+            try
             {
-                try
+                StudentExamSubmitResultModel result = _dbContext.SubmitStudentExamAttempt(UserSessionContext.CurrentUserId ?? 0, _session.AttemptId);
+                if (!result.Success)
                 {
-                    _authController.LogUserActivity(userId, "EXAM_SUBMIT", $"Người dùng {username} đã nộp bài thi ID={_examId}, điểm={result.Score:0.##}.", string.Empty);
+                    MetaTheme.ShowModernDialog(this, result.Message, "Thông báo");
+                    return;
                 }
-                catch { }
-            }).FireAndForgetSafe(this);
-            MetaTheme.ShowModernDialog(this, $"Đã nộp bài. Điểm của bạn: {result.Score:0.##}/10", "Hoàn tất");
-            Close();
+
+                _submitted = true;
+                int? userId = UserSessionContext.CurrentUserId > 0 ? UserSessionContext.CurrentUserId : null;
+                string username = UserSessionContext.CurrentUsername ?? "không xác định";
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    try
+                    {
+                        _authController.LogUserActivity(userId, "EXAM_SUBMIT", $"Người dùng {username} đã nộp bài thi ID={_examId}, điểm={result.Score:0.##}.", string.Empty);
+                    }
+                    catch { }
+                }).FireAndForgetSafe(this);
+                MetaTheme.ShowModernDialog(this, $"Đã nộp bài. Điểm của bạn: {result.Score:0.##}/10", "Hoàn tất");
+                Close();
+            }
+            finally
+            {
+                if (!_submitted && !IsDisposed)
+                {
+                    btnSubmit.Enabled = true;
+                    btnSubmit.Text = previousSubmitText;
+                }
+            }
         }
 
         private void UpdateTimerText()

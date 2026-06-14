@@ -177,20 +177,22 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             Controls.Add(_root);
 
-            Paint += (_, e) =>
-            {
-                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                e.Graphics.PixelOffsetMode = PixelOffsetMode.Half;
-                
-                RectangleF borderRect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
-                float clampedRadius = Math.Min(CornerRadius, Math.Min(borderRect.Width, borderRect.Height) / 2f);
-                
-                using var path = GraphicsHelpers.RoundedRectF(borderRect, clampedRadius);
-                using var bgBrush = new SolidBrush(AppColors.BgCard);
-                e.Graphics.FillPath(bgBrush, path);
-                using var pen = new Pen(AppColors.BorderStrong, 1f);
-                e.Graphics.DrawPath(pen, path);
-            };
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.PixelOffsetMode = PixelOffsetMode.Half;
+
+            RectangleF borderRect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            float clampedRadius = Math.Min(CornerRadius, Math.Min(borderRect.Width, borderRect.Height) / 2f);
+
+            using var path = GraphicsHelpers.RoundedRectF(borderRect, clampedRadius);
+            using var bgBrush = new SolidBrush(AppColors.BgCard);
+            e.Graphics.FillPath(bgBrush, path);
+            using var pen = new Pen(AppColors.BorderStrong, 1f);
+            e.Graphics.DrawPath(pen, path);
         }
 
         protected override void OnShown(EventArgs e)
@@ -198,7 +200,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             base.OnShown(e);
             ApplyRoundedRegion();
             AppColors.ApplyTheme(this);
-            
+
             // Restore BackColor which AppColors.ApplyTheme overwrites
             BackColor = AppColors.BorderStrong;
 
@@ -222,6 +224,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 int useImmersiveDarkMode = 1;
                 DwmSetWindowAttribute(Handle, 20, ref useImmersiveDarkMode, sizeof(int));
             }
+            ApplyRoundedRegion();
         }
 
         private void ApplyRoundedRegion()
