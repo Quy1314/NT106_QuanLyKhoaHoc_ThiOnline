@@ -677,8 +677,9 @@ namespace CourseGuard.Frontend.Theme
             {
                 base.OnPaint(e);
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                using var pen = new Pen(AppColors.BorderStrong, 1.5f);
+
                 using var path = GraphicsHelpers.RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), CornerRadius);
+                using var pen = new Pen(AppColors.BorderStrong, 1.5f);
                 e.Graphics.DrawPath(pen, path);
             }
 
@@ -709,10 +710,10 @@ namespace CourseGuard.Frontend.Theme
                 var header = new TableLayoutPanel
                 {
                     Dock = DockStyle.Fill,
-                    BackColor = AppColors.BgCard,
+                    BackColor = Color.Transparent,
                     ColumnCount = 2,
                     RowCount = 1,
-                    Padding = new Padding(20, 10, 20, 8),
+                    Padding = new Padding(20, 14, 20, 8),
                     Margin = new Padding(0)
                 };
                 header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 40f));
@@ -727,6 +728,7 @@ namespace CourseGuard.Frontend.Theme
                 var icon = new DialogIconView(_icon, _tone)
                 {
                     Dock = DockStyle.Fill,
+                    BackColor = Color.Transparent,
                     Margin = new Padding(0, 0, 10, 0)
                 };
 
@@ -737,7 +739,7 @@ namespace CourseGuard.Frontend.Theme
                     TextAlign = ContentAlignment.MiddleLeft,
                     Font = AppFonts.Semibold(13f),
                     ForeColor = AppColors.TextPrimary,
-                    BackColor = AppColors.BgCard,
+                    BackColor = Color.Transparent,
                     AutoEllipsis = true,
                     UseCompatibleTextRendering = false
                 };
@@ -768,7 +770,7 @@ namespace CourseGuard.Frontend.Theme
                     TextAlign = ContentAlignment.TopLeft,
                     Font = AppFonts.Body,
                     ForeColor = AppColors.TextSecondary,
-                    BackColor = AppColors.BgCard,
+                    BackColor = Color.Transparent,
                     UseCompatibleTextRendering = false
                 }, 0, 0);
                 body.Controls.Add(BuildToneBadge(), 1, 0);
@@ -807,7 +809,7 @@ namespace CourseGuard.Frontend.Theme
                 var footer = new TableLayoutPanel
                 {
                     Dock = DockStyle.Fill,
-                    BackColor = AppColors.BgCard,
+                    BackColor = Color.Transparent,
                     ColumnCount = 1,
                     RowCount = 1,
                     Padding = new Padding(16, 12, 16, 12),
@@ -1099,6 +1101,7 @@ namespace CourseGuard.Frontend.Theme
                 using var path = GraphicsHelpers.RoundedRect(new Rectangle(-1, -1, Width + 2, Height + 2), CornerRadius + 1);
                 Region = new Region(path);
             }
+
         }
 
         private sealed class DialogButtonSpec
@@ -1124,9 +1127,10 @@ namespace CourseGuard.Frontend.Theme
 
             public DialogIconView(MessageBoxIcon icon, DialogTone tone)
             {
+                SetStyle(ControlStyles.SupportsTransparentBackColor, true);
                 _icon = icon;
                 _tone = tone;
-                BackColor = AppColors.BgCard;
+                BackColor = Color.Transparent;
                 DoubleBuffered = true;
             }
 
