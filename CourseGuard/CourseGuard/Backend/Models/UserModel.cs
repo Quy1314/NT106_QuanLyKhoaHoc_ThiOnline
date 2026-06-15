@@ -19,5 +19,6 @@ namespace CourseGuard.Backend.Models
         public string Role { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public string AvatarPath { get; set; } = string.Empty;
+        public DateTime? TempPasswordExpiresAt { get; set; }
     }
 }

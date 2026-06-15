@@ -22,6 +22,45 @@ namespace CourseGuard.Backend.Controllers
             _dbContext = dbContext;
         }
 
+        private static bool IsPbkdf2Hash(string passwordHash)
+        {
+            return !string.IsNullOrWhiteSpace(passwordHash)
+                && passwordHash.StartsWith("PBKDF2$", StringComparison.Ordinal);
+        }
+
+        private LoginResultModel BuildSuccessfulLoginResult(UserModel user)
+        {
+            var result = LoginResultModel.Evaluate(user);
+
+            if (!result.Succeeded && result.ErrorCode == LoginErrorCodes.TempPasswordExpired)
+            {
+                _dbContext.LogUserActivity(
+                    user.Id,
+                    "TEMP_PASSWORD_EXPIRED",
+                    $"Mat khau tam thoi da het han: {user.Username}",
+                    string.Empty);
+            }
+
+            return result;
+        }
+
+        private void RehashLegacyPasswordIfNeeded(UserModel user, string password)
+        {
+            if (IsPbkdf2Hash(user.PasswordHash))
+            {
+                return;
+            }
+
+            string newHash = PasswordHasher.HashPassword(password);
+            _dbContext.UpdateUserPassword(user.Id, newHash, user.TempPasswordExpiresAt);
+            _dbContext.LogUserActivity(
+                user.Id,
+                "PASSWORD_HASH_UPGRADED",
+                $"Nang cap hash mat khau sang PBKDF2 cho: {user.Username}",
+                string.Empty);
+            user.PasswordHash = newHash;
+        }
+
         public UserModel? Login(string username, string password)
         {
             if (!UserIdentityBloomIndex.UsernameExists(_dbContext, username))
@@ -30,35 +69,41 @@ namespace CourseGuard.Backend.Controllers
             }
 
             var user = _dbContext.GetUserByUsername(username);
-            
             if (user == null)
             {
                 return null;
             }
 
-            if (PasswordHasher.VerifyPassword(password, user.PasswordHash))
+            if (!PasswordHasher.VerifyPassword(password, user.PasswordHash))
             {
-                return user;
+                return null;
             }
 
-            return null;
+            RehashLegacyPasswordIfNeeded(user, password);
+            LoginResultModel result = BuildSuccessfulLoginResult(user);
+            return result.Succeeded ? result.User : null;
         }
 
-        public async Task<UserModel?> LoginAsync(string username, string password, CancellationToken cancellationToken = default)
+        public async Task<LoginResultModel> LoginAsync(string username, string password, CancellationToken cancellationToken = default)
         {
             if (!UserIdentityBloomIndex.UsernameExists(_dbContext, username))
             {
-                return null;
+                return LoginResultModel.Failed();
             }
 
             var user = await _dbContext.GetUserByUsernameAsync(username, cancellationToken);
-
             if (user == null)
             {
-                return null;
+                return LoginResultModel.Failed();
             }
 
-            return PasswordHasher.VerifyPassword(password, user.PasswordHash) ? user : null;
+            if (!PasswordHasher.VerifyPassword(password, user.PasswordHash))
+            {
+                return LoginResultModel.Failed();
+            }
+
+            RehashLegacyPasswordIfNeeded(user, password);
+            return BuildSuccessfulLoginResult(user);
         }
 
         public Task<UserModel?> GetUserProfileAsync(string username, CancellationToken cancellationToken = default)

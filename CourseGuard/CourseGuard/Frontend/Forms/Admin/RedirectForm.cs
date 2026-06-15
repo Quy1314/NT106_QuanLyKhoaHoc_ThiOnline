@@ -48,10 +48,10 @@ namespace CourseGuard.Frontend.Forms.Admin
                                 dashboard = new AdminDashboard(user);
                                 break;
                             case "TEACHER":
-                                dashboard = new TeacherDashboard(user);
+                                dashboard = new TeacherDashboard(user, login.ForceChangePassword);
                                 break;
                             case "STUDENT":
-                                dashboard = new StudentDashboard(user);
+                                dashboard = new StudentDashboard(user, login.ForceChangePassword);
                                 break;
                             default:
                                 CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog($"Quyền không xác định: {user.Role}");

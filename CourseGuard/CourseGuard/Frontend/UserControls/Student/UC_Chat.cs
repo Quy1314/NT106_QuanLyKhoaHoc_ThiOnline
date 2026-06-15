@@ -22,6 +22,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         private readonly System.Windows.Forms.Timer _pollTimer;
         private readonly List<ChatCourseModel> _courses = new();
         private readonly ChatMessageListControl _messageList = new();
+        private readonly int _userId;
         private readonly ChatImagePreviewStripControl _imagePreviewStrip = new();
         private readonly Button _imageButton = new() { Text = "Ảnh" };
         private TableLayoutPanel? _messageGrid;
@@ -34,7 +35,15 @@ namespace CourseGuard.Frontend.UserControls.Student
         private int _nextTemporaryMessageId = -1;
 
         public UC_Chat()
+            : this(UserSessionContext.CurrentUserId ?? 0, new ChatController(new CourseGuardDbContext("")))
         {
+        }
+
+        public UC_Chat(int userId, ChatController chatController)
+        {
+            _userId = userId;
+            _chatController = chatController ?? throw new ArgumentNullException(nameof(chatController));
+
             InitializeComponent();
             BuildCardLayout();
             ApplyCardStyle();
@@ -44,7 +53,6 @@ namespace CourseGuard.Frontend.UserControls.Student
             DragDrop += async (_, e) => await OnChatDragDropAsync(e);
             _messageList.DragEnter += OnChatDragEnter;
             _messageList.DragDrop += async (_, e) => await OnChatDragDropAsync(e);
-            _chatController = new ChatController(new CourseGuardDbContext(""));
             _pollTimer = new System.Windows.Forms.Timer { Interval = 3000 };
             _pollTimer.Tick += async (_, _) => await RefreshMessagesAsync();
             Disposed += (_, _) =>
@@ -294,7 +302,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 lstContacts.Items.Clear();
                 _messageList.ClearMessages();
 
-                int userId = UserSessionContext.CurrentUserId ?? 0;
+                int userId = _userId;
                 if (userId <= 0)
                 {
                     return;
@@ -366,7 +374,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 return;
             }
 
-            int userId = UserSessionContext.CurrentUserId ?? 0;
+            int userId = _userId;
             int courseId = _selectedCourseId;
             if (userId <= 0)
             {
@@ -434,7 +442,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 return;
             }
 
-            int userId = UserSessionContext.CurrentUserId ?? 0;
+            int userId = _userId;
             int courseId = _selectedCourseId;
             if (userId <= 0)
             {
@@ -460,7 +468,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private Task MarkDisplayedMessagesReadAsync(int courseId)
         {
-            int userId = UserSessionContext.CurrentUserId ?? 0;
+            int userId = _userId;
             if (userId <= 0 || courseId <= 0)
             {
                 return Task.CompletedTask;
@@ -484,7 +492,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             if (string.IsNullOrWhiteSpace(content))
                 return;
 
-            int userId = UserSessionContext.CurrentUserId ?? 0;
+            int userId = _userId;
             if (userId <= 0 || _selectedCourseId <= 0)
             {
                 MetaTheme.ShowModernDialog("Không tìm thấy phòng chat hợp lệ.", "Chat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -609,7 +617,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             if (_isSending)
                 return;
 
-            int userId = UserSessionContext.CurrentUserId ?? 0;
+            int userId = _userId;
             if (userId <= 0 || _selectedCourseId <= 0)
             {
                 MetaTheme.ShowModernDialog("Không tìm thấy phòng chat hợp lệ.", "Chat", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -701,7 +709,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private async Task VotePollAsync(PollVoteEventArgs args)
         {
-            int userId = UserSessionContext.CurrentUserId ?? 0;
+            int userId = _userId;
             int courseId = _selectedCourseId;
             if (userId <= 0 || courseId <= 0)
             {

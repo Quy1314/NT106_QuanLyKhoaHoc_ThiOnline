@@ -19,6 +19,7 @@ namespace CourseGuard.Frontend.UserControls.Student
     public partial class UC_MyCourses : UserControl, IStudentSearchTarget
     {
         private readonly CourseController _controller;
+        private readonly int _studentId;
         private List<EnrollmentModel> _allEnrollments = new();
         private bool _isLoadingEnrollments;
         private string _globalSearchKeyword = string.Empty;
@@ -26,16 +27,20 @@ namespace CourseGuard.Frontend.UserControls.Student
         private Label _emptyStateLabel = null!;
 
         public UC_MyCourses()
+            : this(UserSessionContext.CurrentUserId ?? 0, new CourseController(new CourseGuardDbContext("")))
         {
+        }
+
+        public UC_MyCourses(int studentId, CourseController controller)
+        {
+            _studentId = studentId;
+            _controller = controller ?? throw new ArgumentNullException(nameof(controller));
+
             InitializeComponent();
             BuildCardLayout();
 
-            _controller = new CourseController(new CourseGuardDbContext(""));
-
-            // Pill-shaped buttons
             RoundedButtonHelper.Apply(10, btnRefresh, btnViewDetail, btnDrop);
 
-            // Dark background
             BackColor = AppColors.BgBase;
             pnlCourseInfo.BorderStyle = BorderStyle.None;
             pnlCourseInfo.BackColor = AppColors.BgCard;
@@ -50,7 +55,6 @@ namespace CourseGuard.Frontend.UserControls.Student
             cboStatusFilter.MinimumSize = new Size(cboStatusFilter.MinimumSize.Width, 38);
             cboStatusFilter.Height = 38;
 
-            // Events
             cboStatusFilter.SelectedIndex = 0;
             Load += (_, _) => { StudentDropdownStyler.StyleComboBox(cboStatusFilter, useCustomPopup: true); };
             cboStatusFilter.SelectedIndexChanged += (s, e) => ApplyFilter();
@@ -59,10 +63,8 @@ namespace CourseGuard.Frontend.UserControls.Student
             btnViewDetail.Click += BtnViewDetail_Click;
             dgvMyCourses.SelectionChanged += DgvMyCourses_SelectionChanged;
 
-            // Dark DataGridView styling
             MetaTheme.StyleGrid(dgvMyCourses);
 
-            // Load dữ liệu thực
             _ = LoadEnrollments();
         }
 
@@ -108,7 +110,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             this.ShowSkeleton(SkeletonType.TableWithToolbarAndDetailPanel);
             try
             {
-                int studentId = UserSessionContext.CurrentUserId ?? 0;
+                int studentId = _studentId;
                 if (studentId == 0)
                 {
                     MetaTheme.ShowModernDialog("Không xác định được tài khoản. Vui lòng đăng nhập lại.",
@@ -399,7 +401,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             if (result != DialogResult.Yes) return;
 
-            int studentId = UserSessionContext.CurrentUserId ?? 0;
+            int studentId = _studentId;
             string message = _controller.DropCourse(courseId, studentId);
             MetaTheme.ShowModernDialog(message, "Kết quả", MessageBoxButtons.OK, MessageBoxIcon.Information);
 

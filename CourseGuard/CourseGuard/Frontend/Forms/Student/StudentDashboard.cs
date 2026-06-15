@@ -40,6 +40,7 @@ namespace CourseGuard.Frontend.Forms.Student
         private Dictionary<string, Func<UserControl>> _nav = new();
         private CourseGuard.Backend.Models.UserModel currentUser;
         private readonly CourseGuardDbContext _dbContext = new("");
+        private readonly CourseController _courseController;
         private readonly ChatController _chatController;
         private SidebarPanel _sidebar;
         private TopbarPanel _topbar;
@@ -49,12 +50,13 @@ namespace CourseGuard.Frontend.Forms.Student
         private string _pendingGlobalSearchKeyword = string.Empty;
         private int _chatUnreadLoadVersion;
 
-        public StudentDashboard(CourseGuard.Backend.Models.UserModel user)
+        public StudentDashboard(CourseGuard.Backend.Models.UserModel user, bool focusSecurityOnStart = false)
         {
             currentUser = user;
             AppColors.IsDarkMode = false;
             InitializeComponent();
             _chatController = new ChatController(_dbContext);
+            _courseController = new CourseController(_dbContext);
             SearchFocusManager.Install(this);
 
             StudentProfileModel? profile = SafeGetProfile(user.Id);
@@ -134,7 +136,14 @@ namespace CourseGuard.Frontend.Forms.Student
             _reminderService.NotificationCreated += DeadlineReminderService_NotificationCreated;
             _reminderService.Start();
 
-            NavigateToPage(OverviewPage);
+            if (focusSecurityOnStart)
+            {
+                NavigateToPage(ProfilePage, focusSecurity: true);
+            }
+            else
+            {
+                NavigateToPage(OverviewPage);
+            }
         }
 
         private StudentProfileModel? SafeGetProfile(int userId)
@@ -253,14 +262,14 @@ namespace CourseGuard.Frontend.Forms.Student
             _nav = new Dictionary<string, Func<UserControl>>
             {
                 { "Tổng quan",    CreateStudentOverviewPage },
-                { "Tìm khóa học", () => new UC_CourseList() },
-                { "Khóa học của tôi", () => new UC_MyCourses() },
+                { "Tìm khóa học", () => new UC_CourseList(currentUser.Id, _courseController) },
+                { "Khóa học của tôi", () => new UC_MyCourses(currentUser.Id, _courseController) },
                 { "Bài kiểm tra", () => new UC_TakeExam() },
                 { "Bài tập",      () => new UC_StudentAssignments() },
                 { "Kết quả",      () => new UC_Result() },
                 { "Tài liệu",     () => new UC_StudentLessons() },
                 { "Lịch học",     () => new UC_Schedule() },
-                { ChatPage,     () => new UC_Chat() },
+                { ChatPage,     () => new UC_Chat(currentUser.Id, _chatController) },
                 { NotificationPage,    () => new UC_Notification() },
                 { "Hồ sơ",        () => new UC_Profile() }
             };

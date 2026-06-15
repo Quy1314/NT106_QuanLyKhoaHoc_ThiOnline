@@ -763,12 +763,24 @@ namespace CourseGuard.Frontend.Forms.Login
             try
             {
                 SetLoginUiBusy(true);
+                ForceChangePassword = false;
                 Stopwatch stopwatch = Stopwatch.StartNew();
                 LogLoginTiming("start login", stopwatch);
 
-                UserModel? user = await AuthService.LoginAsync(username, password);
+                LoginResultModel loginResult = await AuthService.LoginAsync(username, password);
                 LogLoginTiming("auth response", stopwatch);
 
+                if (loginResult.ErrorCode == LoginErrorCodes.TempPasswordExpired)
+                {
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(
+                        "Mat khau tam thoi da het han. Vui long gui lai yeu cau quen mat khau de Admin cap mat khau moi.",
+                        "Mat khau tam thoi het han",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
+
+                UserModel? user = loginResult.User;
                 if (user == null)
                 {
                     CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Tên đăng nhập hoặc mật khẩu không đúng!", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -795,9 +807,20 @@ namespace CourseGuard.Frontend.Forms.Login
                     return;
                 }
 
+                if (loginResult.MustChangePassword && normalizedRole == "ADMIN")
+                {
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(
+                        "Tai khoan Admin dang dung mat khau tam thoi nhung man hinh Admin hien chua co khu vuc doi mat khau. Vui long nho Admin khac dat lai mat khau chinh thuc.",
+                        "Can doi mat khau",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
+
                 // Login Success
                 finalUser.Role = normalizedRole;
                 CurrentUser = finalUser;
+                ForceChangePassword = loginResult.MustChangePassword;
                 UserSessionContext.SetCurrentUser(finalUser.Id, finalUser.Role, finalUser.Username, finalUser.FullName, finalUser.AvatarPath);
 
                 // Non-blocking post-login tasks
@@ -882,5 +905,6 @@ namespace CourseGuard.Frontend.Forms.Login
         }
 
         public UserModel? CurrentUser { get; private set; }
+        public bool ForceChangePassword { get; private set; }
     }
 }
