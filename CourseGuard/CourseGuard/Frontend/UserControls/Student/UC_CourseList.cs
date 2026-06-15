@@ -21,6 +21,7 @@ namespace CourseGuard.Frontend.UserControls.Student
     {
         private readonly BindingSource _coursesBinding = new();
         private readonly CourseController _controller;
+        private readonly int _studentId;
         private List<CourseModel> _allCourses = new();
         private bool _isLoadingCourses;
         private int? _activeCourseId;
@@ -29,17 +30,21 @@ namespace CourseGuard.Frontend.UserControls.Student
         private Label _emptyStateLabel = null!;
 
         public UC_CourseList()
+            : this(UserSessionContext.CurrentUserId ?? 0, new CourseController(new CourseGuardDbContext("")))
         {
+        }
+
+        public UC_CourseList(int studentId, CourseController controller)
+        {
+            _studentId = studentId;
+            _controller = controller ?? throw new ArgumentNullException(nameof(controller));
+
             InitializeComponent();
             BuildCardLayout();
             ApplyMetaStyle();
 
-            _controller = new CourseController(new CourseGuardDbContext(""));
-
-            // Pill-shaped buttons per DESIGN.md
             RoundedButtonHelper.Apply(10, btnSearch, btnJoin, btnViewDetails, btnRefresh);
 
-            // Events
             txtSearch.KeyDown += (s, e) =>
             {
                 if (e.KeyCode == Keys.Enter)
@@ -57,13 +62,11 @@ namespace CourseGuard.Frontend.UserControls.Student
             dgvCourses.MouseDown += DgvCourses_MouseDown;
             dgvCourses.SelectionChanged += DgvCourses_SelectionChanged;
 
-            // Style — use MetaTheme.StyleGrid
             MetaTheme.StyleGrid(dgvCourses);
             dgvCourses.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvCourses.MultiSelect = false;
             dgvCourses.ReadOnly = true;
 
-            // Load dữ liệu thực
             LoadAvailableCourses();
         }
 
@@ -134,7 +137,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             try
             {
-                int studentId = UserSessionContext.CurrentUserId ?? 0;
+                int studentId = _studentId;
                 if (studentId == 0)
                 {
                     MetaTheme.ShowModernDialog("Không xác định được tài khoản. Vui lòng đăng nhập lại.",
@@ -430,7 +433,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             if (confirm != DialogResult.Yes) return;
 
-            int studentId = UserSessionContext.CurrentUserId ?? 0;
+            int studentId = _studentId;
             string result = _controller.RequestEnrollment(courseId, studentId);
 
             MetaTheme.ShowModernDialog(result, "Kết quả", MessageBoxButtons.OK, MessageBoxIcon.Information);

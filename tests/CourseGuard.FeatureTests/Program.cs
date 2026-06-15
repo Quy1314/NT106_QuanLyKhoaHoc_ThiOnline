@@ -15,6 +15,7 @@ using CourseGuard.Frontend.UserControls.Teacher;
 using System.Data;
 using System.Drawing;
 using System.Reflection;
+using System.Threading;
 using System.Windows.Forms;
 using EmitOpCode = System.Reflection.Emit.OpCode;
 using EmitOpCodes = System.Reflection.Emit.OpCodes;
@@ -87,6 +88,280 @@ Run("teacher grid pages accept shared teacher controller", () =>
             $"{pageType.Name} must expose public constructor (int, TeacherController)");
     }
 });
+
+Run("plan 04 login result contract exists", () =>
+{
+    Type type = typeof(LoginResultModel);
+
+    AssertTrue(type.GetProperty(nameof(LoginResultModel.User)) != null,
+        "LoginResultModel must expose User");
+    AssertTrue(type.GetProperty(nameof(LoginResultModel.ErrorCode)) != null,
+        "LoginResultModel must expose ErrorCode");
+    AssertTrue(type.GetProperty(nameof(LoginResultModel.MustChangePassword)) != null,
+        "LoginResultModel must expose MustChangePassword");
+    AssertTrue(typeof(LoginErrorCodes).GetField(nameof(LoginErrorCodes.TempPasswordExpired)) != null,
+        "LoginErrorCodes must expose TempPasswordExpired");
+});
+
+Run("plan 04 login async returns structured result", () =>
+{
+    MethodInfo? method = typeof(AuthController).GetMethod(
+        nameof(AuthController.LoginAsync),
+        new[] { typeof(string), typeof(string), typeof(CancellationToken) });
+
+    AssertTrue(method != null, "AuthController.LoginAsync must exist");
+    AssertEqual(typeof(Task<LoginResultModel>), method!.ReturnType);
+});
+
+Run("plan 04 temp password schema and mappings are guarded", () =>
+{
+    string root = RepoRoot();
+    string dbSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Backend", "Data", "CourseGuardDbContext.cs"));
+    string userModelSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Backend", "Models", "UserModel.cs"));
+    string migrationPath = Path.Combine(root, "CourseGuard", "CourseGuard", "Backend", "Database", "Scripts", "Migrations", "20260615_security_temp_password_expiry.sql");
+
+    AssertTrue(userModelSource.Contains("DateTime? TempPasswordExpiresAt"),
+        "UserModel must carry temp password expiry");
+    AssertTrue(dbSource.Contains("EnsureUserSecuritySchema"),
+        "CourseGuardDbContext must add a runtime schema guard for users security columns");
+    AssertTrue(dbSource.Contains("temp_password_expires_at"),
+        "CourseGuardDbContext must read and write temp_password_expires_at");
+    AssertTrue(File.Exists(migrationPath),
+        "temp password expiry migration must be present");
+});
+
+Run("plan 04 keeps student code computed with HS prefix", () =>
+{
+    string root = RepoRoot();
+    string profileSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Backend", "Models", "StudentProfileModel.cs"));
+    string dbSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Backend", "Data", "CourseGuardDbContext.cs"));
+    string migrations = string.Join(
+        Environment.NewLine,
+        Directory.GetFiles(Path.Combine(root, "CourseGuard", "CourseGuard", "Backend", "Database", "Scripts", "Migrations"), "*.sql")
+            .Select(File.ReadAllText));
+
+    AssertTrue(profileSource.Contains("$\"HS{UserId:00000}\""),
+        "StudentProfileModel must keep computed HS student code");
+    AssertTrue(dbSource.Contains("$\"HS{userId:00000}\""),
+        "CourseGuardDbContext score lookups must keep HS student code");
+    AssertFalse(migrations.Contains("student_code", StringComparison.OrdinalIgnoreCase),
+        "Plan 04 must not add a persisted student_code column");
+});
+
+Run("plan 04 student pages accept shared controllers", () =>
+{
+    ConstructorInfo? courseListCtor = typeof(UC_CourseList).GetConstructor(new[] { typeof(int), typeof(CourseController) });
+    ConstructorInfo? myCoursesCtor = typeof(UC_MyCourses).GetConstructor(new[] { typeof(int), typeof(CourseController) });
+    ConstructorInfo? chatCtor = typeof(UC_Chat).GetConstructor(new[] { typeof(int), typeof(ChatController) });
+
+    AssertTrue(courseListCtor != null, "UC_CourseList must accept studentId and shared CourseController");
+    AssertTrue(myCoursesCtor != null, "UC_MyCourses must accept studentId and shared CourseController");
+    AssertTrue(chatCtor != null, "UC_Chat must accept userId and shared ChatController");
+
+    string root = RepoRoot();
+    string dashboardSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Student", "StudentDashboard.cs"));
+
+    AssertTrue(dashboardSource.Contains("new UC_CourseList(currentUser.Id, _courseController)"),
+        "StudentDashboard must pass the shared course controller to UC_CourseList");
+    AssertTrue(dashboardSource.Contains("new UC_MyCourses(currentUser.Id, _courseController)"),
+        "StudentDashboard must pass the shared course controller to UC_MyCourses");
+    AssertTrue(dashboardSource.Contains("new UC_Chat(currentUser.Id, _chatController)"),
+        "StudentDashboard must pass the existing shared chat controller to UC_Chat");
+});
+
+// ── plan 04 behavioral security tests (no DB required) ──────────────
+
+Run("plan 04 legacy SHA-256 hash is verified and detected for rehash", () =>
+{
+    // Simulate legacy SHA-256 hash (pre-PBKDF2 migration)
+    string password = "TestPassword123";
+    using var sha256 = System.Security.Cryptography.SHA256.Create();
+    byte[] bytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password));
+    string legacyHash = string.Concat(bytes.Select(b => b.ToString("x2")));
+
+    // Legacy hash must still verify correctly (backward compat)
+    AssertTrue(PasswordHasher.VerifyPassword(password, legacyHash),
+        "PasswordHasher must accept legacy SHA-256 hashes");
+    AssertFalse(PasswordHasher.VerifyPassword("wrong", legacyHash),
+        "PasswordHasher must reject wrong password against legacy hash");
+
+    // Legacy hash must NOT start with PBKDF2$ prefix → rehash needed
+    AssertFalse(legacyHash.StartsWith("PBKDF2$", StringComparison.Ordinal),
+        "legacy SHA-256 hash must not carry PBKDF2 prefix");
+
+    // After rehash, new hash must be PBKDF2
+    string rehashed = PasswordHasher.HashPassword(password);
+    AssertTrue(rehashed.StartsWith("PBKDF2$", StringComparison.Ordinal),
+        "rehashed password must use PBKDF2 format");
+    AssertTrue(PasswordHasher.VerifyPassword(password, rehashed),
+        "rehashed PBKDF2 hash must verify the same password");
+});
+
+Run("plan 04 PBKDF2 hash round-trips and rejects wrong password", () =>
+{
+    string password = "Secure#Pass99";
+    string hash = PasswordHasher.HashPassword(password);
+
+    AssertTrue(hash.StartsWith("PBKDF2$", StringComparison.Ordinal),
+        "HashPassword must produce PBKDF2 format");
+    string[] parts = hash.Split('$');
+    AssertEqual(4, parts.Length);
+    AssertEqual("120000", parts[1]);
+
+    AssertTrue(PasswordHasher.VerifyPassword(password, hash),
+        "correct password must verify");
+    AssertFalse(PasswordHasher.VerifyPassword("WrongPassword", hash),
+        "wrong password must not verify");
+    AssertFalse(PasswordHasher.VerifyPassword("", hash),
+        "empty password must not verify");
+    AssertFalse(PasswordHasher.VerifyPassword(password, ""),
+        "empty hash must not verify");
+});
+
+Run("plan 04 expired temp password returns TEMP_PASSWORD_EXPIRED error", () =>
+{
+    var user = new UserModel
+    {
+        Id = 999,
+        Username = "test_expired",
+        PasswordHash = PasswordHasher.HashPassword("temp123"),
+        FullName = "Test User",
+        Email = "test@example.com",
+        Role = "STUDENT",
+        Status = "ACTIVE",
+        TempPasswordExpiresAt = DateTime.Now.AddHours(-1) // expired 1 hour ago
+    };
+
+    // Use the pure helper to test logic directly without DB dependencies
+    LoginResultModel expiredResult = LoginResultModel.Evaluate(user);
+
+    AssertFalse(expiredResult.Succeeded, "expired temp password must not succeed");
+    AssertEqual(LoginErrorCodes.TempPasswordExpired, expiredResult.ErrorCode);
+    AssertEqual(null, expiredResult.User);
+});
+
+Run("plan 04 valid temp password sets MustChangePassword flag", () =>
+{
+    var user = new UserModel
+    {
+        Id = 888,
+        Username = "test_temp",
+        FullName = "Temp User",
+        Role = "STUDENT",
+        Status = "ACTIVE",
+        TempPasswordExpiresAt = DateTime.Now.AddHours(23) // still valid
+    };
+
+    // Evaluate the pure logic
+    LoginResultModel result = LoginResultModel.Evaluate(user);
+
+    AssertTrue(result.Succeeded, "valid temp password login must succeed");
+    AssertTrue(result.MustChangePassword, "valid temp password must force password change");
+    AssertEqual(user.Id, result.User!.Id);
+    AssertEqual(string.Empty, result.ErrorCode);
+});
+
+Run("plan 04 normal login has no MustChangePassword flag", () =>
+{
+    var user = new UserModel
+    {
+        Id = 777,
+        Username = "normal_user",
+        FullName = "Normal User",
+        Role = "STUDENT",
+        Status = "ACTIVE",
+        TempPasswordExpiresAt = null // no temp password
+    };
+
+    // Evaluate the pure logic
+    LoginResultModel result = LoginResultModel.Evaluate(user);
+
+    AssertTrue(result.Succeeded, "normal login must succeed");
+    AssertFalse(result.MustChangePassword, "normal login must not force password change");
+    AssertEqual(user.Id, result.User!.Id);
+});
+
+Run("plan 04 LoginResultModel.Failed returns non-succeeded result", () =>
+{
+    LoginResultModel failed = LoginResultModel.Failed();
+    AssertFalse(failed.Succeeded, "failed login must not succeed");
+    AssertEqual(null, failed.User);
+    AssertFalse(failed.MustChangePassword, "failed login must not set MustChangePassword");
+});
+
+Run("plan 04 ChangePassword clears temp_password_expires_at via default parameter", () =>
+{
+    // The UpdateUserPassword signature: (int userId, string passwordHash, DateTime? tempPasswordExpiresAt = null)
+    // When ChangePassword calls _dbContext.UpdateUserPassword(userId, newPasswordHash) with 2 args,
+    // the default null for tempPasswordExpiresAt means it clears the expiry column.
+    MethodInfo? updateMethod = typeof(CourseGuardDbContext).GetMethod(
+        "UpdateUserPassword",
+        new[] { typeof(int), typeof(string), typeof(DateTime?) });
+    AssertTrue(updateMethod != null, "UpdateUserPassword must accept 3 params (int, string, DateTime?)");
+
+    ParameterInfo[] parameters = updateMethod!.GetParameters();
+    AssertEqual(3, parameters.Length);
+    AssertTrue(parameters[2].HasDefaultValue, "tempPasswordExpiresAt parameter must have a default value");
+    AssertEqual(null, parameters[2].DefaultValue);
+
+    // Verify ChangePassword source calls UpdateUserPassword with only 2 args (relying on default null)
+    string root = RepoRoot();
+    string authSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Backend", "Controllers", "AuthController.cs"));
+    string changePasswordBody = ExtractMethodSource(authSource, "public bool ChangePassword(");
+    AssertTrue(
+        changePasswordBody.Contains("UpdateUserPassword(userId, newPasswordHash)"),
+        "ChangePassword must call UpdateUserPassword with 2 args so default null clears temp expiry");
+    AssertFalse(
+        changePasswordBody.Contains("UpdateUserPassword(userId, newPasswordHash, "),
+        "ChangePassword must not pass an explicit third argument");
+});
+
+Run("plan 04 RehashLegacyPasswordIfNeeded preserves temp expiry during rehash", () =>
+{
+    // When rehashing, the temp_password_expires_at must be carried over (not cleared)
+    string root = RepoRoot();
+    string authSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Backend", "Controllers", "AuthController.cs"));
+    string rehashBody = ExtractMethodSource(authSource, "private void RehashLegacyPasswordIfNeeded(");
+
+    AssertTrue(
+        rehashBody.Contains("user.TempPasswordExpiresAt"),
+        "RehashLegacyPasswordIfNeeded must preserve TempPasswordExpiresAt during hash upgrade");
+    AssertTrue(
+        rehashBody.Contains("UpdateUserPassword(user.Id, newHash, user.TempPasswordExpiresAt)"),
+        "RehashLegacyPasswordIfNeeded must pass the existing expiry to UpdateUserPassword");
+});
+
+Run("plan 04 UserController sets temp expiry when approving password reset", () =>
+{
+    string root = RepoRoot();
+    string userCtrlSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Backend", "Controllers", "UserController.cs"));
+
+    // The RESET branch must set a tempPasswordExpiresAt
+    AssertTrue(
+        userCtrlSource.Contains("DateTime.Now.AddHours(24)"),
+        "UserController RESET action must set 24-hour temp password expiry");
+    AssertTrue(
+        userCtrlSource.Contains("UpdateUserPassword(userId, passwordHash, tempPasswordExpiresAt)"),
+        "UserController RESET action must pass expiry to UpdateUserPassword");
+});
+
+Run("plan 04 LoginPage handles TempPasswordExpired error code", () =>
+{
+    string root = RepoRoot();
+    string loginPageSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Login", "LoginPage.cs"));
+
+    AssertTrue(
+        loginPageSource.Contains("LoginErrorCodes.TempPasswordExpired"),
+        "LoginPage must check for TempPasswordExpired error code");
+    AssertTrue(
+        loginPageSource.Contains("LoginResultModel loginResult"),
+        "LoginPage must use LoginResultModel for login results");
+    AssertTrue(
+        loginPageSource.Contains("loginResult.MustChangePassword"),
+        "LoginPage must check MustChangePassword flag");
+});
+
+// ── end plan 04 behavioral security tests ────────────────────────────
 
 Run("student exam launch preloads session before opening form", () =>
 {

@@ -37,6 +37,38 @@ namespace CourseGuard.Backend.Data
             return new NpgsqlConnection(_connectionString);
         }
 
+        private static void EnsureUserSecuritySchema(NpgsqlConnection connection)
+        {
+            const string sql = @"
+                ALTER TABLE users
+                    ADD COLUMN IF NOT EXISTS temp_password_expires_at TIMESTAMP;
+
+                CREATE INDEX IF NOT EXISTS idx_users_temp_password_expires_at
+                    ON users (temp_password_expires_at)
+                    WHERE temp_password_expires_at IS NOT NULL;";
+
+            using var command = new NpgsqlCommand(sql, connection);
+            command.ExecuteNonQuery();
+        }
+
+        private static UserModel ReadUser(NpgsqlDataReader reader, int tempPasswordExpiresAtIndex, int? avatarPathIndex = null)
+        {
+            return new UserModel
+            {
+                Id = reader.GetInt32(0),
+                Username = reader.GetString(1),
+                PasswordHash = reader.GetString(2),
+                FullName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                Email = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                Role = reader.GetString(5),
+                Status = reader.GetString(6),
+                TempPasswordExpiresAt = reader.IsDBNull(tempPasswordExpiresAtIndex) ? null : reader.GetDateTime(tempPasswordExpiresAtIndex),
+                AvatarPath = avatarPathIndex.HasValue && !reader.IsDBNull(avatarPathIndex.Value)
+                    ? reader.GetString(avatarPathIndex.Value)
+                    : string.Empty
+            };
+        }
+
         public void EnsureCourseWorkflowSchema()
         {
             using var connection = CreateConnection();
@@ -58,8 +90,10 @@ namespace CourseGuard.Backend.Data
         {
             using var connection = CreateConnection();
             connection.Open();
+            EnsureUserSecuritySchema(connection);
 
             string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status,
+                                    u.temp_password_expires_at,
                                     COALESCE(sp.avatar_path, tp.avatar_path, '') AS avatar_path
                              FROM USERS u
                              JOIN ROLES r ON u.role_id = r.id
@@ -72,17 +106,7 @@ namespace CourseGuard.Backend.Data
             using var reader = command.ExecuteReader();
             if (reader.Read())
             {
-                return new UserModel
-                {
-                    Id = reader.GetInt32(0),
-                    Username = reader.GetString(1),
-                    PasswordHash = reader.GetString(2),
-                    FullName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
-                    Email = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-                    Role = reader.GetString(5),
-                    Status = reader.GetString(6),
-                    AvatarPath = reader.IsDBNull(7) ? string.Empty : reader.GetString(7)
-                };
+                return ReadUser(reader, tempPasswordExpiresAtIndex: 7, avatarPathIndex: 8);
             }
 
             return null;
@@ -92,8 +116,10 @@ namespace CourseGuard.Backend.Data
         {
             using var connection = CreateConnection();
             await connection.OpenAsync(cancellationToken);
+            EnsureUserSecuritySchema(connection);
 
             const string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status,
+                                    u.temp_password_expires_at,
                                     COALESCE(sp.avatar_path, tp.avatar_path, '') AS avatar_path
                              FROM USERS u
                              JOIN ROLES r ON u.role_id = r.id
@@ -106,17 +132,7 @@ namespace CourseGuard.Backend.Data
             using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
             if (await reader.ReadAsync(cancellationToken))
             {
-                return new UserModel
-                {
-                    Id = reader.GetInt32(0),
-                    Username = reader.GetString(1),
-                    PasswordHash = reader.GetString(2),
-                    FullName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
-                    Email = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-                    Role = reader.GetString(5),
-                    Status = reader.GetString(6),
-                    AvatarPath = reader.IsDBNull(7) ? string.Empty : reader.GetString(7)
-                };
+                return ReadUser(reader, tempPasswordExpiresAtIndex: 7, avatarPathIndex: 8);
             }
 
             return null;
@@ -164,14 +180,21 @@ namespace CourseGuard.Backend.Data
             command.ExecuteNonQuery();
         }
 
-        public void UpdateUserPassword(int userId, string passwordHash)
+        public void UpdateUserPassword(int userId, string passwordHash, DateTime? tempPasswordExpiresAt = null)
         {
             using var connection = CreateConnection();
             connection.Open();
+            EnsureUserSecuritySchema(connection);
 
-            string query = "UPDATE Users SET password_hash = @password_hash WHERE id = @id";
+            const string query = @"
+                UPDATE Users
+                SET password_hash = @password_hash,
+                    temp_password_expires_at = @temp_password_expires_at
+                WHERE id = @id";
+
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@password_hash", passwordHash);
+            command.Parameters.AddWithValue("@temp_password_expires_at", (object?)tempPasswordExpiresAt ?? DBNull.Value);
             command.Parameters.AddWithValue("@id", userId);
 
             command.ExecuteNonQuery();
@@ -1984,8 +2007,10 @@ namespace CourseGuard.Backend.Data
         {
             using var connection = CreateConnection();
             connection.Open();
+            EnsureUserSecuritySchema(connection);
 
-            string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status 
+            string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status,
+                                    u.temp_password_expires_at
                             FROM USERS u 
                             JOIN ROLES r ON u.role_id = r.id 
                             WHERE LOWER(u.username) = LOWER(@username) AND u.email = @email";
@@ -1996,16 +2021,7 @@ namespace CourseGuard.Backend.Data
             using var reader = command.ExecuteReader();
             if (reader.Read())
             {
-                return new UserModel
-                {
-                    Id = reader.GetInt32(0),
-                    Username = reader.GetString(1),
-                    PasswordHash = reader.GetString(2),
-                    FullName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
-                    Email = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-                    Role = reader.GetString(5),
-                    Status = reader.GetString(6)
-                };
+                return ReadUser(reader, tempPasswordExpiresAtIndex: 7);
             }
 
             return null;
@@ -2015,8 +2031,10 @@ namespace CourseGuard.Backend.Data
         {
             using var connection = CreateConnection();
             connection.Open();
+            EnsureUserSecuritySchema(connection);
 
-            const string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status
+            const string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status,
+                                   u.temp_password_expires_at
                                    FROM USERS u
                                    JOIN ROLES r ON u.role_id = r.id
                                    WHERE u.id = @id";
@@ -2027,16 +2045,7 @@ namespace CourseGuard.Backend.Data
             using var reader = command.ExecuteReader();
             if (reader.Read())
             {
-                return new UserModel
-                {
-                    Id = reader.GetInt32(0),
-                    Username = reader.GetString(1),
-                    PasswordHash = reader.GetString(2),
-                    FullName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
-                    Email = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-                    Role = reader.GetString(5),
-                    Status = reader.GetString(6)
-                };
+                return ReadUser(reader, tempPasswordExpiresAtIndex: 7);
             }
 
             return null;

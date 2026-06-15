@@ -33,11 +33,11 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private Panel _content = null!;
         private string _currentPageName = OverviewPage;
 
-        public TeacherDashboard() : this(new UserModel { Id = 0, Username = "teacher", FullName = "Teacher" })
+        public TeacherDashboard() : this(new UserModel { Id = 0, Username = "teacher", FullName = "Teacher" }, focusSecurityOnStart: false)
         {
         }
 
-        public TeacherDashboard(UserModel user)
+        public TeacherDashboard(UserModel user, bool focusSecurityOnStart = false)
         {
             _currentUser = user ?? new UserModel { Id = 0, Username = "teacher", FullName = "Teacher" };
             _teacherId = _currentUser.Id;
@@ -53,7 +53,14 @@ namespace CourseGuard.Frontend.Forms.Teacher
             SearchFocusManager.Install(this);
             BuildStudentStyleShell();
             InitializeNavigation();
-            NavigateToPage(OverviewPage);
+            if (focusSecurityOnStart)
+            {
+                NavigateToPage(ProfilePage, focusSecurity: true);
+            }
+            else
+            {
+                NavigateToPage(OverviewPage);
+            }
         }
 
         private void BuildStudentStyleShell()

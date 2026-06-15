@@ -170,11 +170,13 @@ namespace CourseGuard.Backend.Controllers
                 }
 
                 string temporaryPassword = GenerateTemporaryPassword();
+                DateTime tempPasswordExpiresAt = DateTime.Now.AddHours(24);
                 string emailBody =
-                    $"Xin chào {user.FullName},\n\n" +
-                    "Admin đã duyệt yêu cầu quên mật khẩu cho tài khoản CourseGuard của bạn.\n" +
-                    $"Mật khẩu tạm thời của bạn là: {temporaryPassword}\n\n" +
-                    "Vui lòng đăng nhập và đổi mật khẩu ngay sau khi vào hệ thống.\n\n" +
+                    $"Xin chao {user.FullName},\n\n" +
+                    "Admin da duyet yeu cau quen mat khau cho tai khoan CourseGuard cua ban.\n" +
+                    $"Mat khau tam thoi cua ban la: {temporaryPassword}\n" +
+                    $"Mat khau tam thoi het han luc: {tempPasswordExpiresAt:dd/MM/yyyy HH:mm}.\n\n" +
+                    "Vui long dang nhap va doi mat khau ngay sau khi vao he thong.\n\n" +
                     "CourseGuard Admin";
 
                 var smtpEmailService = new SmtpEmailService();
@@ -191,9 +193,9 @@ namespace CourseGuard.Backend.Controllers
                 }
 
                 string passwordHash = PasswordHasher.HashPassword(temporaryPassword);
-                _dbContext.UpdateUserPassword(userId, passwordHash);
+                _dbContext.UpdateUserPassword(userId, passwordHash, tempPasswordExpiresAt);
                 _dbContext.UpdateUserStatus(userId, "ACTIVE");
-                _dbContext.LogUserActivity(userId, "FORGOT_PASSWORD_APPROVED", $"Admin đã gửi mật khẩu tạm thời cho: {user.Username}", string.Empty);
+                _dbContext.LogUserActivity(userId, "FORGOT_PASSWORD_APPROVED", $"Admin da gui mat khau tam thoi cho: {user.Username}", string.Empty);
                 return true;
             }
             else if (action == "REJECT")
