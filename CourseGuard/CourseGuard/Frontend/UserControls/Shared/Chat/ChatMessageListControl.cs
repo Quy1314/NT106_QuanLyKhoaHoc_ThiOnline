@@ -12,6 +12,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
     {
         private readonly DoubleBufferedFlowLayoutPanel _panel = new();
         private readonly AvatarImageLoader _avatarImageLoader = new();
+        private readonly ChatImageLoader _chatImageLoader = new();
         private bool _suppressTopReached;
 
         public event EventHandler? TopReached;
@@ -63,7 +64,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             _panel.SuspendLayout();
             try
             {
-                _panel.Controls.Clear();
+                DisposePanelChildren();
             }
             finally
             {
@@ -88,7 +89,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             _panel.SuspendLayout();
             try
             {
-                _panel.Controls.Clear();
+                DisposePanelChildren();
                 AddBubbleRange(ordered, currentUserId, insertAtTop: false);
             }
             finally
@@ -136,6 +137,75 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             }
         }
 
+        public void AppendTemporaryMessage(ChatMessageModel message, int currentUserId)
+        {
+            if (message == null)
+            {
+                return;
+            }
+
+            _panel.SuspendLayout();
+            try
+            {
+                _panel.Controls.Add(CreateBubble(message, currentUserId));
+            }
+            finally
+            {
+                _panel.ResumeLayout(true);
+                ResizeBubbles();
+                ScrollToBottom();
+            }
+        }
+
+        public void ReplaceMessage(int temporaryMessageId, ChatMessageModel replacement, int currentUserId)
+        {
+            if (replacement == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _panel.Controls.Count; i++)
+            {
+                if (GetMessageId(_panel.Controls[i]) != temporaryMessageId)
+                {
+                    continue;
+                }
+
+                Control oldBubble = _panel.Controls[i];
+                Control newBubble = CreateBubble(replacement, currentUserId);
+                _panel.SuspendLayout();
+                try
+                {
+                    _panel.Controls.RemoveAt(i);
+                    oldBubble.Dispose();
+                    _panel.Controls.Add(newBubble);
+                    _panel.Controls.SetChildIndex(newBubble, i);
+                }
+                finally
+                {
+                    _panel.ResumeLayout(true);
+                    ResizeBubbles();
+                    ScrollToBottom();
+                }
+
+                return;
+            }
+
+            AppendTemporaryMessage(replacement, currentUserId);
+        }
+
+        public void MarkMessageFailed(int temporaryMessageId, string errorMessage)
+        {
+            foreach (ChatBubbleControl bubble in _panel.Controls.OfType<ChatBubbleControl>())
+            {
+                if (bubble.MessageId == temporaryMessageId)
+                {
+                    bubble.MarkFailed(errorMessage);
+                    return;
+                }
+            }
+        }
+
         public void PrependOlderMessages(IEnumerable<ChatMessageModel> messages, int currentUserId)
         {
             if (messages == null)
@@ -145,7 +215,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
 
             var existing = LoadedMessageIds.ToHashSet();
             var ordered = messages
-                .Where(message => !existing.Contains(message.Id))
+                .Where(message => message.Id <= 0 || !existing.Contains(message.Id))
                 .OrderBy(message => message.SentAt)
                 .ThenBy(message => message.Id)
                 .ToList();
@@ -217,7 +287,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
                 return pollBubble;
             }
 
-            var bubble = new ChatBubbleControl(message, currentUserId, _avatarImageLoader);
+            var bubble = new ChatBubbleControl(message, currentUserId, _avatarImageLoader, _chatImageLoader);
             bubble.UpdateContainerWidth(_panel.ClientSize.Width);
             return bubble;
         }
@@ -331,11 +401,23 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             _panel.PerformLayout();
         }
 
+        private void DisposePanelChildren()
+        {
+            var children = _panel.Controls.Cast<Control>().ToArray();
+            _panel.Controls.Clear();
+            foreach (Control child in children)
+            {
+                child.Dispose();
+            }
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
+                DisposePanelChildren();
                 _avatarImageLoader.Dispose();
+                _chatImageLoader.Dispose();
             }
 
             base.Dispose(disposing);

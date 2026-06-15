@@ -3058,26 +3058,47 @@ namespace CourseGuard.Backend.Data
             return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
         }
 
-        public async Task<int> SendChatMessageAsync(int courseId, int senderId, string content, CancellationToken cancellationToken = default)
+        public async Task<ChatMessageModel?> SendChatMessageAsync(int courseId, int senderId, string content, CancellationToken cancellationToken = default)
         {
             await using var connection = CreateConnection();
             await connection.OpenAsync(cancellationToken);
             EnsureChatSchema(connection);
 
             const string query = @"
-                INSERT INTO MESSAGES (COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, SENT_AT)
-                VALUES (@course_id, @sender_id, @content, 'TEXT', CURRENT_TIMESTAMP)
-                RETURNING ID";
+                WITH inserted AS (
+                    INSERT INTO MESSAGES (COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, SENT_AT)
+                    VALUES (@course_id, @sender_id, @content, 'TEXT', CURRENT_TIMESTAMP)
+                    RETURNING ID, COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, FILE_URL, FILE_NAME, FILE_SIZE, MIME_TYPE, POLL_ID, SENT_AT
+                )
+                SELECT i.ID,
+                       i.COURSE_ID,
+                       i.SENDER_ID,
+                       COALESCE(u.FULL_NAME, u.USERNAME, 'Unknown') AS SENDER_NAME,
+                       COALESCE(r.NAME, '') AS SENDER_ROLE,
+                       COALESCE(i.CONTENT, '') AS CONTENT,
+                       COALESCE(i.MESSAGE_TYPE, 'TEXT') AS MESSAGE_TYPE,
+                       COALESCE(i.FILE_URL, '') AS FILE_URL,
+                       COALESCE(i.FILE_NAME, '') AS FILE_NAME,
+                       COALESCE(i.FILE_SIZE, 0) AS FILE_SIZE,
+                       COALESCE(i.MIME_TYPE, '') AS MIME_TYPE,
+                       i.POLL_ID,
+                       COALESCE(tp.avatar_path, sp.avatar_path, '') AS SENDER_AVATAR,
+                       i.SENT_AT
+                FROM inserted i
+                JOIN USERS u ON u.ID = i.SENDER_ID
+                LEFT JOIN ROLES r ON r.ID = u.ROLE_ID
+                LEFT JOIN student_profiles sp ON sp.user_id = u.ID
+                LEFT JOIN teacher_profiles tp ON tp.user_id = u.ID";
 
             await using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@course_id", courseId);
             command.Parameters.AddWithValue("@sender_id", senderId);
             command.Parameters.AddWithValue("@content", content);
-            object? result = await command.ExecuteScalarAsync(cancellationToken);
-            return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            return await reader.ReadAsync(cancellationToken) ? ReadChatMessage(reader) : null;
         }
 
-        public async Task<int> SendChatFileMessageAsync(
+        public async Task<ChatMessageModel?> SendChatFileMessageAsync(
             int courseId,
             int senderId,
             string content,
@@ -3087,25 +3108,92 @@ namespace CourseGuard.Backend.Data
             string mimeType,
             CancellationToken cancellationToken = default)
         {
+            return await SendChatFileMessageAsync(
+                courseId,
+                senderId,
+                content,
+                fileUrl,
+                fileName,
+                fileSize,
+                mimeType,
+                "FILE",
+                cancellationToken);
+        }
+
+        public async Task<ChatMessageModel?> SendChatImageGroupMessageAsync(
+            int courseId,
+            int senderId,
+            string content,
+            string attachmentJson,
+            string fileName,
+            long totalFileSize,
+            string mimeType,
+            CancellationToken cancellationToken = default)
+        {
+            return await SendChatFileMessageAsync(
+                courseId,
+                senderId,
+                content,
+                attachmentJson,
+                fileName,
+                totalFileSize,
+                mimeType,
+                ChatMessageModel.ImageGroupMessageType,
+                cancellationToken);
+        }
+
+        private async Task<ChatMessageModel?> SendChatFileMessageAsync(
+            int courseId,
+            int senderId,
+            string content,
+            string fileUrl,
+            string fileName,
+            long fileSize,
+            string mimeType,
+            string messageType,
+            CancellationToken cancellationToken)
+        {
             await using var connection = CreateConnection();
             await connection.OpenAsync(cancellationToken);
             EnsureChatSchema(connection);
 
             const string query = @"
-                INSERT INTO MESSAGES (COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, FILE_URL, FILE_NAME, FILE_SIZE, MIME_TYPE, SENT_AT)
-                VALUES (@course_id, @sender_id, @content, 'FILE', @file_url, @file_name, @file_size, @mime_type, CURRENT_TIMESTAMP)
-                RETURNING ID";
+                WITH inserted AS (
+                    INSERT INTO MESSAGES (COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, FILE_URL, FILE_NAME, FILE_SIZE, MIME_TYPE, SENT_AT)
+                    VALUES (@course_id, @sender_id, @content, @message_type, @file_url, @file_name, @file_size, @mime_type, CURRENT_TIMESTAMP)
+                    RETURNING ID, COURSE_ID, SENDER_ID, CONTENT, MESSAGE_TYPE, FILE_URL, FILE_NAME, FILE_SIZE, MIME_TYPE, POLL_ID, SENT_AT
+                )
+                SELECT i.ID,
+                       i.COURSE_ID,
+                       i.SENDER_ID,
+                       COALESCE(u.FULL_NAME, u.USERNAME, 'Unknown') AS SENDER_NAME,
+                       COALESCE(r.NAME, '') AS SENDER_ROLE,
+                       COALESCE(i.CONTENT, '') AS CONTENT,
+                       COALESCE(i.MESSAGE_TYPE, 'TEXT') AS MESSAGE_TYPE,
+                       COALESCE(i.FILE_URL, '') AS FILE_URL,
+                       COALESCE(i.FILE_NAME, '') AS FILE_NAME,
+                       COALESCE(i.FILE_SIZE, 0) AS FILE_SIZE,
+                       COALESCE(i.MIME_TYPE, '') AS MIME_TYPE,
+                       i.POLL_ID,
+                       COALESCE(tp.avatar_path, sp.avatar_path, '') AS SENDER_AVATAR,
+                       i.SENT_AT
+                FROM inserted i
+                JOIN USERS u ON u.ID = i.SENDER_ID
+                LEFT JOIN ROLES r ON r.ID = u.ROLE_ID
+                LEFT JOIN student_profiles sp ON sp.user_id = u.ID
+                LEFT JOIN teacher_profiles tp ON tp.user_id = u.ID";
 
             await using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@course_id", courseId);
             command.Parameters.AddWithValue("@sender_id", senderId);
             command.Parameters.AddWithValue("@content", content ?? string.Empty);
+            command.Parameters.AddWithValue("@message_type", string.IsNullOrWhiteSpace(messageType) ? "FILE" : messageType);
             command.Parameters.AddWithValue("@file_url", fileUrl ?? string.Empty);
             command.Parameters.AddWithValue("@file_name", fileName ?? string.Empty);
             command.Parameters.AddWithValue("@file_size", fileSize);
             command.Parameters.AddWithValue("@mime_type", mimeType ?? string.Empty);
-            object? result = await command.ExecuteScalarAsync(cancellationToken);
-            return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            return await reader.ReadAsync(cancellationToken) ? ReadChatMessage(reader) : null;
         }
 
         public List<ChatMessageModel> GetChatMessages(int courseId, int limit = 100)
@@ -3337,7 +3425,7 @@ namespace CourseGuard.Backend.Data
 
         private static ChatMessageModel ReadChatMessage(NpgsqlDataReader reader)
         {
-            return new ChatMessageModel
+            var message = new ChatMessageModel
             {
                 Id = reader.GetInt32(0),
                 CourseId = reader.GetInt32(1),
@@ -3354,6 +3442,13 @@ namespace CourseGuard.Backend.Data
                 SenderAvatar = reader.IsDBNull(12) ? string.Empty : reader.GetString(12),
                 SentAt = reader.GetDateTime(13)
             };
+
+            if (CourseGuard.Frontend.Helpers.ChatImageHelper.TryParseImageAttachments(message.FileUrl, out var attachments))
+            {
+                message.ImageAttachments = attachments;
+            }
+
+            return message;
         }
 
         public async Task<int> CreatePollMessageAsync(int teacherId, int courseId, string question, IReadOnlyList<string> options, CancellationToken cancellationToken = default)

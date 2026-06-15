@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services;
+using CourseGuard.Frontend.Helpers;
 
 namespace CourseGuard.Backend.Controllers
 {
@@ -139,30 +141,38 @@ namespace CourseGuard.Backend.Controllers
             return true;
         }
 
-        public async Task<bool> SendMessageAsync(int userId, int courseId, string content, CancellationToken cancellationToken = default)
+        public async Task<ChatMessageModel?> SendMessageAsync(int userId, int courseId, string content, CancellationToken cancellationToken = default)
         {
             LastErrorMessage = string.Empty;
             if (string.IsNullOrWhiteSpace(content))
             {
                 LastErrorMessage = "Nội dung tin nhắn không được để trống.";
-                return false;
+                return null;
             }
 
             if (!_dbContext.CanAccessCourseChat(userId, courseId))
             {
                 LastErrorMessage = "Bạn không có quyền gửi tin nhắn trong phòng chat này.";
-                return false;
+                return null;
             }
 
-            int messageId = await _dbContext.SendChatMessageAsync(courseId, userId, content.Trim(), cancellationToken);
-            if (messageId <= 0)
+            ChatMessageModel? createdMessage = await _dbContext.SendChatMessageAsync(courseId, userId, content.Trim(), cancellationToken);
+            if (createdMessage == null || createdMessage.Id <= 0)
             {
                 LastErrorMessage = "Gửi tin nhắn thất bại.";
-                return false;
+                return null;
             }
 
-            await _dbContext.LogUserActivityAsync(userId, "CHAT_USE", $"Gửi tin nhắn chat trong khóa học ID={courseId}", string.Empty, cancellationToken);
-            return true;
+            try
+            {
+                await Task.Run(() => _dbContext.LogUserActivity(userId, "CHAT_USE", $"Gửi tin nhắn chat trong khóa học ID={courseId}", string.Empty), cancellationToken);
+            }
+            catch
+            {
+                // Logging failure must not roll back or delay the already-created chat message.
+            }
+
+            return createdMessage;
         }
 
         public bool SendFileMessage(int userId, int courseId, string sourceFilePath, string caption = "")
@@ -205,6 +215,159 @@ namespace CourseGuard.Backend.Controllers
         {
             // Keep implementation simple and stable for WinForms flow.
             return await Task.Run(() => SendFileMessage(userId, courseId, sourceFilePath, caption), cancellationToken);
+        }
+
+        public async Task<ChatMessageModel?> SendImageMessageAsync(
+            int userId,
+            int courseId,
+            string compressedImagePath,
+            string originalFileName,
+            string caption = "",
+            CancellationToken cancellationToken = default)
+        {
+            LastErrorMessage = string.Empty;
+            if (!_dbContext.CanAccessCourseChat(userId, courseId))
+            {
+                LastErrorMessage = "Bạn không có quyền gửi ảnh trong phòng chat này.";
+                return null;
+            }
+
+            if (!ChatImageHelper.IsSupportedImage(originalFileName) && !ChatImageHelper.IsSupportedImage(compressedImagePath))
+            {
+                LastErrorMessage = "Chỉ hỗ trợ gửi ảnh JPG, JPEG hoặc PNG.";
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(compressedImagePath) || !File.Exists(compressedImagePath))
+            {
+                LastErrorMessage = "Không tìm thấy ảnh đã xử lý để gửi.";
+                return null;
+            }
+
+            var saved = await Task.Run(
+                () => _fileStorageService.SaveChatImage(courseId, userId, compressedImagePath, originalFileName),
+                cancellationToken);
+            string mimeType = ChatImageHelper.GetMimeType(saved.SavedPath);
+
+            ChatMessageModel? message = await _dbContext.SendChatFileMessageAsync(
+                courseId,
+                userId,
+                caption,
+                saved.SavedPath,
+                saved.SavedFileName,
+                saved.FileSize,
+                mimeType,
+                cancellationToken);
+
+            if (message == null)
+            {
+                LastErrorMessage = "Gửi ảnh thất bại.";
+                return null;
+            }
+
+            try
+            {
+                await Task.Run(() => _dbContext.LogUserActivity(userId, "CHAT_USE", $"Gửi ảnh chat trong khóa học ID={courseId}: {saved.SavedFileName}", string.Empty), cancellationToken);
+            }
+            catch
+            {
+                // Logging failure must not block a successful image message.
+            }
+
+            return message;
+        }
+
+        public async Task<ChatMessageModel?> SendImageGroupMessageAsync(
+            int userId,
+            int courseId,
+            IReadOnlyList<CompressedChatImageResult> compressedImages,
+            string caption = "",
+            CancellationToken cancellationToken = default)
+        {
+            LastErrorMessage = string.Empty;
+            if (!_dbContext.CanAccessCourseChat(userId, courseId))
+            {
+                LastErrorMessage = "Bạn không có quyền gửi ảnh trong phòng chat này.";
+                return null;
+            }
+
+            var images = (compressedImages ?? Array.Empty<CompressedChatImageResult>())
+                .Where(image => image != null)
+                .ToList();
+
+            if (images.Count == 0)
+            {
+                LastErrorMessage = "Vui lòng chọn ít nhất một ảnh để gửi.";
+                return null;
+            }
+
+            if (images.Count > ChatImageHelper.MaxImageCountPerMessage)
+            {
+                LastErrorMessage = $"Chỉ được gửi tối đa {ChatImageHelper.MaxImageCountPerMessage} ảnh trong một tin nhắn.";
+                return null;
+            }
+
+            foreach (var image in images)
+            {
+                if (string.IsNullOrWhiteSpace(image.FilePath) || !File.Exists(image.FilePath))
+                {
+                    LastErrorMessage = "Không tìm thấy ảnh đã xử lý để gửi.";
+                    return null;
+                }
+
+                if (!ChatImageHelper.IsSupportedImage(image.OriginalFileName) && !ChatImageHelper.IsSupportedImage(image.FilePath))
+                {
+                    LastErrorMessage = "Chỉ hỗ trợ gửi ảnh JPG, JPEG hoặc PNG.";
+                    return null;
+                }
+            }
+
+            var saveTasks = images.Select(image => Task.Run(() =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var saved = _fileStorageService.SaveChatImage(courseId, userId, image.FilePath, image.OriginalFileName);
+                return new ChatImageAttachmentModel
+                {
+                    Url = saved.SavedPath,
+                    Name = saved.SavedFileName,
+                    Size = saved.FileSize,
+                    Mime = ChatImageHelper.GetMimeType(saved.SavedPath)
+                };
+            }, cancellationToken)).ToArray();
+
+            ChatImageAttachmentModel[] attachments = await Task.WhenAll(saveTasks);
+            string attachmentJson = ChatImageHelper.SerializeImageAttachments(attachments);
+            long totalFileSize = attachments.Sum(item => item.Size);
+            string fileName = attachments.Length == 1 ? attachments[0].Name : $"{attachments.Length} ảnh";
+
+            ChatMessageModel? message = await _dbContext.SendChatImageGroupMessageAsync(
+                courseId,
+                userId,
+                caption ?? string.Empty,
+                attachmentJson,
+                fileName,
+                totalFileSize,
+                ChatImageHelper.ImageGroupMimeType,
+                cancellationToken);
+
+            if (message == null)
+            {
+                LastErrorMessage = "Gửi ảnh thất bại.";
+                return null;
+            }
+
+            message.ImageAttachments = attachments.ToList();
+
+            try
+            {
+                await Task.Run(() => _dbContext.LogUserActivity(userId, "CHAT_USE", $"Gửi {attachments.Length} ảnh chat trong khóa học ID={courseId}", string.Empty), cancellationToken);
+            }
+            catch
+            {
+                // Logging failure must not block a successful image group message.
+            }
+
+            return message;
         }
 
         public async Task<int> CreatePollAsync(int teacherId, int courseId, string question, IReadOnlyList<string> options, CancellationToken cancellationToken = default)
