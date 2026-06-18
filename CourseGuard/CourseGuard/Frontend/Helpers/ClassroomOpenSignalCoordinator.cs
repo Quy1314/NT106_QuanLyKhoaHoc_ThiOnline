@@ -12,7 +12,11 @@ namespace CourseGuard.Frontend.Helpers
         private readonly int _replayCount;
         private readonly TimeSpan _replayDelay;
         private readonly object _startLock = new();
+        private readonly object _sessionStateLock = new();
         private bool _hasStartedListening;
+        private int _sessionGeneration;
+        private int? _currentOpenSessionId;
+        private bool _isCurrentSessionOpen;
 
         public ClassroomOpenSignalCoordinator(
             IClassroomSignalService signalService,
@@ -34,8 +38,16 @@ namespace CourseGuard.Frontend.Helpers
         public async Task BroadcastClassOpenedAsync(int sessionId)
         {
             EnsureListeningStarted();
+            int generation = MarkSessionOpened(sessionId);
             await _signalService.BroadcastClassOpened(sessionId);
-            QueueClassOpenedReplays(sessionId);
+            QueueClassOpenedReplays(sessionId, generation);
+        }
+
+        public async Task BroadcastClassClosedAsync(int sessionId)
+        {
+            EnsureListeningStarted();
+            MarkSessionClosed(sessionId);
+            await _signalService.BroadcastClassClosed(sessionId);
         }
 
         public void EnsureListeningStarted()
@@ -53,21 +65,57 @@ namespace CourseGuard.Frontend.Helpers
             }
         }
 
-        private void QueueClassOpenedReplays(int sessionId)
+        private int MarkSessionOpened(int sessionId)
+        {
+            lock (_sessionStateLock)
+            {
+                _sessionGeneration++;
+                _currentOpenSessionId = sessionId;
+                _isCurrentSessionOpen = true;
+                return _sessionGeneration;
+            }
+        }
+
+        private void MarkSessionClosed(int sessionId)
+        {
+            lock (_sessionStateLock)
+            {
+                if (_currentOpenSessionId == sessionId && _isCurrentSessionOpen)
+                {
+                    _sessionGeneration++;
+                    _isCurrentSessionOpen = false;
+                }
+            }
+        }
+
+        private bool ShouldReplayClassOpened(int sessionId, int generation)
+        {
+            lock (_sessionStateLock)
+            {
+                return _isCurrentSessionOpen
+                    && _currentOpenSessionId == sessionId
+                    && _sessionGeneration == generation;
+            }
+        }
+
+        private void QueueClassOpenedReplays(int sessionId, int generation)
         {
             if (_replayCount == 0)
                 return;
 
-            _ = ReplayClassOpenedAsync(sessionId);
+            _ = ReplayClassOpenedAsync(sessionId, generation);
         }
 
-        private async Task ReplayClassOpenedAsync(int sessionId)
+        private async Task ReplayClassOpenedAsync(int sessionId, int generation)
         {
             try
             {
                 for (int attempt = 0; attempt < _replayCount; attempt++)
                 {
                     await Task.Delay(_replayDelay).ConfigureAwait(false);
+                    if (!ShouldReplayClassOpened(sessionId, generation))
+                        return;
+
                     await _signalService.BroadcastClassOpened(sessionId).ConfigureAwait(false);
                 }
             }

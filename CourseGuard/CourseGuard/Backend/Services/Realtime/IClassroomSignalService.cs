@@ -6,5 +6,6 @@ namespace CourseGuard.Backend.Services.Realtime
     {
         void StartListening();
         Task BroadcastClassOpened(int sessionId);
+        Task BroadcastClassClosed(int sessionId);
     }
 }

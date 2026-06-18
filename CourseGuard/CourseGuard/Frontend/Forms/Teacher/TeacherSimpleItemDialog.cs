@@ -20,6 +20,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         protected TableLayoutPanel? ContentGrid { get; private set; }
 
         private readonly bool _enableTimeRange;
+        private readonly Label _validationSummary = new();
 
         public int CourseId => CourseCombo.SelectedItem is TeacherCourseModel course ? course.Id : 0;
         public string ItemTitle => TitleTextBox.Text.Trim();
@@ -74,6 +75,15 @@ namespace CourseGuard.Frontend.Forms.Teacher
             if (StatusCombo.SelectedIndex < 0)
                 StatusCombo.SelectedIndex = 1;
 
+            _validationSummary.Dock = DockStyle.Fill;
+            _validationSummary.TextAlign = ContentAlignment.MiddleLeft;
+            _validationSummary.Font = MetaTheme.Fonts.BodyMd();
+            _validationSummary.ForeColor = AppColors.TextSecondary;
+            _validationSummary.AutoEllipsis = true;
+            _validationSummary.Text = string.Empty;
+            _validationSummary.Visible = false;
+            HookValidationInputs();
+
             var save = new Button { Text = "Lưu", DialogResult = DialogResult.OK, Width = 90 };
             var cancel = new Button { Text = "Hủy", DialogResult = DialogResult.Cancel, Width = 90 };
             TeacherTabChrome.StylePrimaryButton(save);
@@ -112,7 +122,19 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 grid.Controls.Add(StatusCombo, 1, 4);
             }
 
-            ContentPanel.Controls.Add(grid);
+            var content = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Margin = Padding.Empty
+            };
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+            content.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            content.Controls.Add(_validationSummary, 0, 0);
+            content.Controls.Add(grid, 0, 1);
+
+            ContentPanel.Controls.Add(content);
             AddFooterButtons(cancel, save);
             AcceptButton = save;
             CancelButton = cancel;
@@ -120,19 +142,67 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         protected virtual bool ValidateBeforeSave()
         {
-            if (CourseId <= 0 || string.IsNullOrWhiteSpace(ItemTitle))
+            if (CourseId <= 0)
+                return ShowValidationSummary("Vui lòng chọn khóa học.");
+
+            if (string.IsNullOrWhiteSpace(ItemTitle))
+                return ShowValidationSummary("Vui lòng nhập tiêu đề.");
+
+            if (_enableTimeRange && SelectedEndTime <= SelectedStartTime)
+                return ShowValidationSummary("Thời gian kết thúc phải sau thời gian bắt đầu.");
+
+            ClearValidationSummary();
+            return true;
+        }
+
+        private bool ShowValidationSummary(string message)
+        {
+            _validationSummary.Text = message;
+            _validationSummary.ForeColor = AppColors.Danger;
+            _validationSummary.Visible = true;
+            return false;
+        }
+
+        private void HookValidationInputs()
+        {
+            CourseCombo.SelectedIndexChanged += (_, _) => RefreshValidationSummaryIfVisible();
+            TitleTextBox.TextChanged += (_, _) => RefreshValidationSummaryIfVisible();
+            DatePicker.ValueChanged += (_, _) => RefreshValidationSummaryIfVisible();
+            StartTimePicker.ValueChanged += (_, _) => RefreshValidationSummaryIfVisible();
+            EndTimePicker.ValueChanged += (_, _) => RefreshValidationSummaryIfVisible();
+        }
+
+        private void RefreshValidationSummaryIfVisible()
+        {
+            if (!_validationSummary.Visible)
+                return;
+
+            if (CourseId <= 0)
             {
-                MetaTheme.ShowModernDialog("Vui lòng chọn khóa học và nhập tiêu đề.");
-                return false;
+                ShowValidationSummary("Vui lòng chọn khóa học.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(ItemTitle))
+            {
+                ShowValidationSummary("Vui lòng nhập tiêu đề.");
+                return;
             }
 
             if (_enableTimeRange && SelectedEndTime <= SelectedStartTime)
             {
-                MetaTheme.ShowModernDialog("Thời gian kết thúc phải sau thời gian bắt đầu.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return false;
+                ShowValidationSummary("Thời gian kết thúc phải sau thời gian bắt đầu.");
+                return;
             }
 
-            return true;
+            ClearValidationSummary();
+        }
+
+        private void ClearValidationSummary()
+        {
+            _validationSummary.Text = string.Empty;
+            _validationSummary.ForeColor = AppColors.TextSecondary;
+            _validationSummary.Visible = false;
         }
 
         private static void ConfigureGrid(TableLayoutPanel grid, bool enableTimeRange)
@@ -201,7 +271,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 ColumnCount = 4,
                 RowCount = 1,
                 BackColor = AppColors.BgCard,
-                Margin = new Padding(0, 0, 0, 0)
+                Margin = Padding.Empty
             };
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42));

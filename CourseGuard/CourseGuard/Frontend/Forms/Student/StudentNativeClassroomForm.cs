@@ -2,6 +2,7 @@ using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Services.Classroom;
+using CourseGuard.Frontend.Extensions;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
@@ -16,6 +17,7 @@ namespace CourseGuard.Frontend.Forms.Student
         private int _attendanceLogId;
         private Task? _attendanceInTask;
         private Label _statusLabel = null!;
+        private Label _mediaStateLabel = null!;
         private ListBox _eventsList = null!;
         private PictureBox _teacherVideo = null!;
         private PictureBox _studentPreview = null!;
@@ -31,7 +33,11 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private ClassroomCameraManager _cameraManager = null!;
         private ClassroomScreenShareManager _screenShareManager = null!;
+        private bool _isConnectedToClassroom;
+        private bool _isCameraOn;
         private bool _isMicOn = true;
+        private bool _isSharingScreen;
+        private bool _hasActiveLiveStatus;
         private bool _isClosing;
         private bool _cleanupComplete;
 
@@ -71,16 +77,18 @@ namespace CourseGuard.Frontend.Forms.Student
                 if (_isClosing)
                     return;
 
+                _isConnectedToClassroom = true;
+                UpdateClassroomPresentation();
+
                 _attendanceInTask = LogAttendanceInIfPossibleAsync();
                 await _attendanceInTask;
                 if (_isClosing)
                     return;
-
-                _statusLabel.Text = $"Đã vào lớp native: {_sessionName}. Đang chờ video từ giáo viên...";
             }
             catch (Exception ex)
             {
-                _statusLabel.Text = "Không kết nối được classroom socket.";
+                _isConnectedToClassroom = false;
+                UpdateClassroomPresentation(forceStatus: true);
                 MetaTheme.ShowModernDialog("Không kết nối được lớp học native: " + ex.Message, "Thông báo");
             }
         }
@@ -147,7 +155,7 @@ namespace CourseGuard.Frontend.Forms.Student
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 76));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 108));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
             Controls.Add(root);
 
@@ -344,6 +352,30 @@ namespace CourseGuard.Frontend.Forms.Student
             };
             root.Controls.Add(controlBar, 0, 1);
 
+            var controlLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty
+            };
+            controlLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+            controlLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            controlBar.Controls.Add(controlLayout);
+
+            _mediaStateLabel = new Label
+            {
+                Dock = DockStyle.Fill,
+                ForeColor = AppColors.TextSecondary,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = MetaTheme.Fonts.BodySmBold(),
+                BackColor = Color.Transparent,
+                AutoEllipsis = true,
+                Margin = Padding.Empty
+            };
+            controlLayout.Controls.Add(_mediaStateLabel, 0, 0);
+
             var buttons = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -351,7 +383,7 @@ namespace CourseGuard.Frontend.Forms.Student
                 WrapContents = false,
                 BackColor = Color.Transparent
             };
-            controlBar.Controls.Add(buttons);
+            controlLayout.Controls.Add(buttons, 0, 1);
 
             _btnCamera = CreateActionButton("Bật Camera", AppColors.AccentBlue);
             _btnMic = CreateActionButton("Tắt Mic", AppColors.Warning);
@@ -375,6 +407,8 @@ namespace CourseGuard.Frontend.Forms.Student
             };
             root.SetColumnSpan(_statusLabel, 2);
             root.Controls.Add(_statusLabel, 0, 2);
+
+            UpdateClassroomPresentation();
         }
 
         private static Button CreateActionButton(string text, Color color)
@@ -398,8 +432,19 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private void WireClientEvents()
         {
-            _client.StatusChanged += (_, e) => SafeAddEvent(e.Status);
+            _client.StatusChanged += (_, e) => HandleClientStatusChanged(e.Status);
             _client.SignalReceived += (_, e) => HandleSignal(e.Signal);
+        }
+
+        private void HandleClientStatusChanged(string status)
+        {
+            if (string.Equals(status, "Disconnected from classroom server.", StringComparison.Ordinal))
+            {
+                _isConnectedToClassroom = false;
+                SafeUpdateClassroomPresentation(forceStatus: true);
+            }
+
+            SafeAddEvent(status);
         }
 
         private void InitializeMediaManagers()
@@ -421,6 +466,47 @@ namespace CourseGuard.Frontend.Forms.Student
                 throttleMilliseconds: 220,
                 canSendFrame: () => _client.IsConnected,
                 sendFrameAsync: SendCameraFrameAsync);
+        }
+
+        private void UpdateClassroomPresentation(bool forceStatus = false)
+        {
+            if (IsDisposed ||
+                _statusLabel == null ||
+                _mediaStateLabel == null ||
+                _btnCamera == null ||
+                _btnMic == null ||
+                _btnShareScreen == null ||
+                _statusLabel.IsDisposed ||
+                _mediaStateLabel.IsDisposed ||
+                _btnCamera.IsDisposed ||
+                _btnMic.IsDisposed ||
+                _btnShareScreen.IsDisposed)
+            {
+                return;
+            }
+
+            ClassroomUxPresentation view = ClassroomUxPresenter.Present(
+                isTeacher: false,
+                isConnected: _isConnectedToClassroom,
+                isCameraOn: _isCameraOn,
+                isMicOn: _isMicOn,
+                isSharingScreen: _isSharingScreen,
+                participantCount: 0);
+
+            if (forceStatus)
+            {
+                ClearLiveStatus();
+            }
+
+            if (forceStatus || !_hasActiveLiveStatus)
+            {
+                _statusLabel.Text = view.StatusText;
+            }
+
+            _mediaStateLabel.Text = view.DetailText;
+            _btnCamera.Text = view.CameraActionText;
+            _btnMic.Text = view.MicActionText;
+            _btnShareScreen.Text = view.ShareActionText;
         }
 
         private async Task SendScreenFrameAsync(ClassroomScreenShareFrame frame)
@@ -535,9 +621,8 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private void AppendChatMessage(string senderName, string message, bool isTeacher)
         {
-            if (IsDisposed || !IsHandleCreated) return;
             string label = isTeacher ? "GV" : "HS";
-            BeginInvoke(() =>
+            this.InvokeIfRequired(() =>
             {
                 _chatList.Items.Add($"[{DateTime.Now:HH:mm}] {label} {senderName}: {message}");
                 _chatList.TopIndex = Math.Max(0, _chatList.Items.Count - 1);
@@ -549,8 +634,9 @@ namespace CourseGuard.Frontend.Forms.Student
             if (_cameraManager.IsRunning)
             {
                 StopCamera();
-                _btnCamera.Text = "Bật Camera";
                 _btnCamera.BackColor = AppColors.AccentBlue;
+                _isCameraOn = false;
+                UpdateClassroomPresentation();
                 await SendStateAsync(ClassroomMessageType.CamOff);
                 return;
             }
@@ -563,9 +649,9 @@ namespace CourseGuard.Frontend.Forms.Student
                     return;
                 }
 
-                _btnCamera.Text = "Tắt Camera";
                 _btnCamera.BackColor = AppColors.Danger;
-                _statusLabel.Text = "Camera học sinh đang bật - giáo viên có thể nhìn thấy bạn.";
+                _isCameraOn = true;
+                UpdateClassroomPresentation();
                 await SendStateAsync(ClassroomMessageType.CamOn);
             }
             catch (Exception ex)
@@ -577,8 +663,8 @@ namespace CourseGuard.Frontend.Forms.Student
         private async Task ToggleMicAsync()
         {
             _isMicOn = !_isMicOn;
-            _btnMic.Text = _isMicOn ? "Tắt Mic" : "Bật Mic";
             _btnMic.BackColor = _isMicOn ? AppColors.Warning : AppColors.AccentBlue;
+            UpdateClassroomPresentation();
             await SendStateAsync(_isMicOn ? ClassroomMessageType.MicOn : ClassroomMessageType.MicOff);
         }
 
@@ -610,9 +696,9 @@ namespace CourseGuard.Frontend.Forms.Student
                 return;
             }
 
-            _btnShareScreen.Text = "Dừng trình bày";
             _btnShareScreen.BackColor = AppColors.Danger;
-            _statusLabel.Text = $"Bạn đang trình bày: {picker.SelectedTitle}";
+            _isSharingScreen = true;
+            UpdateClassroomPresentation();
             SafeAddEvent($"Đang trình bày {picker.SelectedTitle} cho giáo viên.");
             await SendStateAsync(ClassroomMessageType.ScreenShareOn);
 
@@ -656,11 +742,11 @@ namespace CourseGuard.Frontend.Forms.Student
                         if (_teacherCameraPip.Visible)
                         {
                             _teacherCameraPip.BringToFront();
-                            _statusLabel.Text = $"Đang xem giáo viên trình bày, camera thu nhỏ - {DateTime.Now:HH:mm:ss}";
+                            SetLiveStatus($"\u0110ang xem gi\u00e1o vi\u00ean tr\u00ecnh b\u00e0y, camera thu nh\u1ecf - {DateTime.Now:HH:mm:ss}");
                         }
                         else
                         {
-                            _statusLabel.Text = $"Đang xem video giáo viên - {DateTime.Now:HH:mm:ss}";
+                            SetLiveStatus($"\u0110ang xem video gi\u00e1o vi\u00ean - {DateTime.Now:HH:mm:ss}");
                         }
                     });
             }
@@ -696,7 +782,7 @@ namespace CourseGuard.Frontend.Forms.Student
                         _teacherCameraPip.Visible = true;
                         _teacherCameraPip.BringToFront();
                         string sourceTitle = signal.Payload.TryGetValue("sourceTitle", out string? title) ? title : "màn hình";
-                        _statusLabel.Text = $"Đang xem giáo viên trình bày: {sourceTitle} - {DateTime.Now:HH:mm:ss}";
+                        SetLiveStatus($"\u0110ang xem gi\u00e1o vi\u00ean tr\u00ecnh b\u00e0y: {sourceTitle} - {DateTime.Now:HH:mm:ss}");
                     });
             }
             catch
@@ -707,8 +793,7 @@ namespace CourseGuard.Frontend.Forms.Student
 
         private void SafeShowTeacherPlaceholder(string text)
         {
-            if (IsDisposed || !IsHandleCreated) return;
-            BeginInvoke(() =>
+            this.InvokeIfRequired(() =>
             {
                 _videoPlaceholder.Text = text;
                 _videoPlaceholder.Visible = true;
@@ -720,25 +805,40 @@ namespace CourseGuard.Frontend.Forms.Student
                 Image? oldPip = _teacherCameraPipPreview.Image;
                 _teacherCameraPipPreview.Image = null;
                 oldPip?.Dispose();
-                _statusLabel.Text = text;
+                SetLiveStatus(text);
             });
+        }
+
+        private void SetLiveStatus(string text)
+        {
+            _hasActiveLiveStatus = true;
+            _statusLabel.Text = text;
+        }
+
+        private void ClearLiveStatus()
+        {
+            _hasActiveLiveStatus = false;
         }
 
         private void SafeSetStatus(string text)
         {
-            if (IsDisposed || !IsHandleCreated) return;
-            BeginInvoke(() => _statusLabel.Text = text);
+            _statusLabel.InvokeIfRequired(() => SetLiveStatus(text));
         }
 
         private void SafeAddEvent(string text)
         {
-            if (IsDisposed || !IsHandleCreated) return;
-            BeginInvoke(() => _eventsList.Items.Insert(0, $"{DateTime.Now:HH:mm:ss} - {text}"));
+            _eventsList.InvokeIfRequired(() => _eventsList.Items.Insert(0, $"{DateTime.Now:HH:mm:ss} - {text}"));
+        }
+
+        private void SafeUpdateClassroomPresentation(bool forceStatus = false)
+        {
+            this.InvokeIfRequired(() => UpdateClassroomPresentation(forceStatus));
         }
 
         private void StopCamera()
         {
             _cameraManager.Stop();
+            _isCameraOn = false;
 
             Image? old = _studentPreview.Image;
             _studentPreview.Image = null;
@@ -748,9 +848,9 @@ namespace CourseGuard.Frontend.Forms.Student
         private void StopScreenShare()
         {
             _screenShareManager.Stop();
-            _btnShareScreen.Text = "Share màn hình";
+            _isSharingScreen = false;
             _btnShareScreen.BackColor = Color.FromArgb(139, 92, 246);
-            _statusLabel.Text = $"Đã dừng trình bày {_screenShareManager.SelectedTitle}.";
+            UpdateClassroomPresentation();
         }
 
         private async void StudentNativeClassroomForm_FormClosing(object? sender, FormClosingEventArgs e)
@@ -809,6 +909,8 @@ namespace CourseGuard.Frontend.Forms.Student
             catch
             {
             }
+
+            _isConnectedToClassroom = false;
         }
         private sealed class ScreenSharePickerDialog : Form
         {
