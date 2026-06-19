@@ -13,6 +13,7 @@ using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Student
@@ -20,12 +21,17 @@ namespace CourseGuard.Frontend.UserControls.Student
     public partial class UC_CourseList : UserControl, IStudentSearchTarget
     {
         private readonly BindingSource _coursesBinding = new();
+        private const int DetailActionHeight = 20;
+        private const int DetailActionBottomPadding = 4;
+        private const int DetailActionGap = 4;
+        private const int DetailDescriptionMinHeight = 18;
         private readonly CourseController _controller;
         private readonly int _studentId;
         private List<CourseModel> _allCourses = new();
         private bool _isLoadingCourses;
         private int? _activeCourseId;
         private string _activeCourseName = string.Empty;
+        private readonly Label _detailAction = new();
         private RoundedPanel _coursesBody = null!;
         private Label _emptyStateLabel = null!;
 
@@ -81,7 +87,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             foreach (Control c in pnlCourseDetail.Controls)
             {
-                if (c is Label lbl && lbl != lblDetailName && lbl != lblDetailStudents)
+                if (c is Label lbl && lbl != lblDetailName && lbl != lblDetailStudents && lbl != _detailAction)
                     lbl.ForeColor = AppColors.TextSecondary;
             }
 
@@ -128,6 +134,33 @@ namespace CourseGuard.Frontend.UserControls.Student
             root.Controls.Add(content, 0, 1);
 
             StudentTabChrome.EnableNaturalFocusClear(this, dgvCourses);
+
+            pnlCourseDetail.MinimumSize = new Size(
+                0,
+                lblDetailDesc.Top + DetailDescriptionMinHeight + DetailActionGap + DetailActionHeight + DetailActionBottomPadding);
+
+            _detailAction.AutoSize = false;
+            _detailAction.Height = DetailActionHeight;
+            _detailAction.Font = MetaTheme.Fonts.BodySmBold();
+            _detailAction.ForeColor = AppColors.AccentBlue;
+            _detailAction.TextAlign = ContentAlignment.MiddleLeft;
+            _detailAction.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top;
+            pnlCourseDetail.Controls.Add(_detailAction);
+            _detailAction.BringToFront();
+            PositionDetailActionLabel();
+            pnlCourseDetail.Resize += (_, _) => PositionDetailActionLabel();
+        }
+
+        private void PositionDetailActionLabel()
+        {
+            int left = lblDetailDesc.Left;
+            int top = Math.Max(
+                lblDetailDesc.Top + DetailDescriptionMinHeight + DetailActionGap,
+                pnlCourseDetail.ClientSize.Height - DetailActionBottomPadding - DetailActionHeight);
+            int width = Math.Max(120, pnlCourseDetail.ClientSize.Width - left - 16);
+            lblDetailDesc.Height = Math.Max(DetailDescriptionMinHeight, top - lblDetailDesc.Top - DetailActionGap);
+            _detailAction.Location = new Point(left, top);
+            _detailAction.Size = new Size(width, DetailActionHeight);
         }
 
         // ── Load khóa học khả dụng ───────────────────────────────────────
@@ -199,16 +232,30 @@ namespace CourseGuard.Frontend.UserControls.Student
             dt.Columns.Add("Tên khóa học", typeof(string));
             dt.Columns.Add("Giảng viên", typeof(string));
             dt.Columns.Add("Trạng thái", typeof(string));
+            dt.Columns.Add("Hành động", typeof(string));
             dt.Columns.Add("Bắt đầu", typeof(string));
             dt.Columns.Add("Kết thúc", typeof(string));
 
             foreach (var c in courses)
             {
+                int enrolledCount = 0;
+                try
+                {
+                    enrolledCount = _controller.GetEnrolledCount(c.Id);
+                }
+                catch
+                {
+                    enrolledCount = 0;
+                }
+
+                LearningUxPresentation view = StudentCourseUxPresenter.PresentAvailableCourse(c, enrolledCount, DateTime.Now);
+
                 dt.Rows.Add(
                     c.Id,
                     c.Name,
                     c.TeacherName,
-                    c.Status,
+                    view.StatusText,
+                    view.PrimaryActionText,
                     c.StartDate != DateTime.MinValue ? c.StartDate.ToString("dd/MM/yyyy") : "N/A",
                     c.EndDate != DateTime.MinValue ? c.EndDate.ToString("dd/MM/yyyy") : "N/A"
                 );
@@ -268,7 +315,10 @@ namespace CourseGuard.Frontend.UserControls.Student
                 return;
 
             if (dgvCourses.CurrentRow == null || dgvCourses.CurrentRow.IsNewRow)
+            {
+                ClearDetailPanel();
                 return;
+            }
 
             LoadCourseDetailsFromRow(dgvCourses.CurrentRow);
         }
@@ -302,15 +352,22 @@ namespace CourseGuard.Frontend.UserControls.Student
                 lblDetailDates.Text = "📅 Chưa xác định";
 
             // Đếm số sinh viên đã đăng ký
+            int count = 0;
             try
             {
-                int count = _controller.GetEnrolledCount(courseId);
+                count = _controller.GetEnrolledCount(courseId);
                 lblDetailStudents.Text = $"👥 Số sinh viên đã đăng ký: {count}";
             }
             catch
             {
                 lblDetailStudents.Text = "👥 Không thể tải";
             }
+
+            LearningUxPresentation view = StudentCourseUxPresenter.PresentAvailableCourse(course, count, DateTime.Now);
+            _detailAction.Text = $"Hành động tiếp theo: {view.PrimaryActionText}";
+            btnJoin.Text = view.PrimaryActionText;
+            btnJoin.Enabled = view.CanUsePrimaryAction;
+            btnViewDetails.Enabled = true;
 
             lblDetailDesc.Text = string.IsNullOrWhiteSpace(course.Description)
                 ? "(Không có mô tả)"
@@ -359,8 +416,21 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private void ClearCourseGridSelection()
         {
-            dgvCourses.ClearSelection();
-            dgvCourses.CurrentCell = null;
+            bool wasLoading = _isLoadingCourses;
+            _isLoadingCourses = true;
+            try
+            {
+                dgvCourses.ClearSelection();
+                dgvCourses.CurrentCell = null;
+            }
+            finally
+            {
+                _isLoadingCourses = wasLoading;
+            }
+
+            _activeCourseId = null;
+            _activeCourseName = string.Empty;
+            ClearDetailPanel();
         }
 
         private static DataGridViewCell? GetFirstVisibleCell(DataGridViewRow row)
@@ -382,6 +452,10 @@ namespace CourseGuard.Frontend.UserControls.Student
             lblDetailDates.Text = "";
             lblDetailStudents.Text = "";
             lblDetailDesc.Text = "";
+            _detailAction.Text = "";
+            btnJoin.Text = "Gửi yêu cầu";
+            btnJoin.Enabled = false;
+            btnViewDetails.Enabled = false;
             _activeCourseId = null;
             _activeCourseName = string.Empty;
         }

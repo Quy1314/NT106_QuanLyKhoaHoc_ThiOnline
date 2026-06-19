@@ -3,6 +3,7 @@ using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Services;
+using CourseGuard.Backend.Services.Classroom;
 using CourseGuard.Backend.Services.Monitoring;
 using CourseGuard.Backend.Services.Realtime;
 using CourseGuard.Frontend.Forms.Student;
@@ -15,6 +16,7 @@ using CourseGuard.Frontend.UserControls.Teacher;
 using System.Data;
 using System.Drawing;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Windows.Forms;
 using EmitOpCode = System.Reflection.Emit.OpCode;
@@ -1508,6 +1510,796 @@ Run("teacher exam UX exposes draft readiness and explicit activation", () =>
     AssertTrue(questionDialog.Contains("_readOnlyHint"), "question dialog must show read-only hint for non-draft exams");
 });
 
+Run("phase 4 student course presenter exposes next actions", () =>
+{
+    var now = new DateTime(2026, 6, 15, 9, 0, 0);
+    var active = new EnrollmentModel
+    {
+        CourseId = 10,
+        CourseName = "Lap trinh mang",
+        TeacherName = "Nguyen Van A",
+        Status = "ACTIVE",
+        CourseStatus = WorkflowConstants.CourseStatus.Active,
+        CourseStartDate = new DateTime(2026, 6, 1),
+        CourseEndDate = new DateTime(2026, 8, 1),
+        CourseDescription = "TCP/IP co ban"
+    };
+    var pending = new EnrollmentModel
+    {
+        CourseId = 11,
+        CourseName = "Co so du lieu",
+        TeacherName = "Tran Thi B",
+        Status = "PENDING",
+        CourseStatus = WorkflowConstants.CourseStatus.Active,
+        CourseStartDate = new DateTime(2026, 7, 1),
+        CourseEndDate = new DateTime(2026, 9, 1)
+    };
+
+    LearningUxPresentation activeView = StudentCourseUxPresenter.PresentEnrollment(active, now);
+    LearningUxPresentation pendingView = StudentCourseUxPresenter.PresentEnrollment(pending, now);
+
+    AssertEqual("Đang học", activeView.StatusText);
+    AssertEqual("Mở bài học", activeView.PrimaryActionText);
+    AssertFalse(activeView.CanUsePrimaryAction, "cross-tab learning action is display-only in Phase 4");
+    AssertEqual(NextActionKinds.OpenStudentLessonsTab, activeView.NextActionKind);
+    AssertEqual(NavigationTargets.StudentLessons, activeView.TargetTab);
+    AssertEqual(10, activeView.TargetCourseId);
+    AssertEqual("Chờ duyệt", pendingView.StatusText);
+    AssertEqual("Chờ giảng viên/Admin duyệt", pendingView.PrimaryActionText);
+    AssertFalse(pendingView.CanUsePrimaryAction, "pending enrollment should not expose learning action");
+    AssertEqual(NextActionKinds.None, pendingView.NextActionKind);
+});
+
+Run("phase 4 learning presenter hides DateTime.MinValue course ranges", () =>
+{
+    var now = new DateTime(2026, 6, 15, 9, 0, 0);
+    var course = new CourseModel
+    {
+        Id = 12,
+        Name = "Mang can ban",
+        TeacherName = "Nguyen Van A",
+        Status = WorkflowConstants.CourseStatus.Active,
+        StartDate = DateTime.MinValue,
+        EndDate = DateTime.MinValue
+    };
+    var enrollment = new EnrollmentModel
+    {
+        CourseId = 13,
+        CourseName = "Bao mat mang",
+        TeacherName = "Tran Thi B",
+        Status = WorkflowConstants.EnrollmentStatus.Active,
+        CourseStartDate = DateTime.MinValue,
+        CourseEndDate = DateTime.MinValue
+    };
+
+    LearningUxPresentation courseView = StudentCourseUxPresenter.PresentAvailableCourse(course, enrolledCount: 0, now);
+    LearningUxPresentation enrollmentView = StudentCourseUxPresenter.PresentEnrollment(enrollment, now);
+
+    AssertFalse(courseView.DetailText.Contains("0001"), "available course detail must not expose DateTime.MinValue");
+    AssertFalse(enrollmentView.DetailText.Contains("0001"), "enrollment detail must not expose DateTime.MinValue");
+    AssertTrue(courseView.DetailText.Contains("chưa có ngày bắt đầu"), "available course detail must render missing start date fallback");
+    AssertTrue(courseView.DetailText.Contains("chưa có ngày kết thúc"), "available course detail must render missing end date fallback");
+    AssertTrue(enrollmentView.DetailText.Contains("chưa có ngày bắt đầu"), "enrollment detail must render missing start date fallback");
+    AssertTrue(enrollmentView.DetailText.Contains("chưa có ngày kết thúc"), "enrollment detail must render missing end date fallback");
+});
+
+Run("phase 4 student course pages use learning presenters", () =>
+{
+    string root = RepoRoot();
+    string courseList = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_CourseList.cs"));
+    string myCourses = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_MyCourses.cs"));
+
+    AssertTrue(courseList.Contains("StudentCourseUxPresenter.PresentAvailableCourse"),
+        "UC_CourseList must use StudentCourseUxPresenter for available course status/action text");
+    AssertTrue(courseList.Contains("\"Hành động\""),
+        "UC_CourseList table must expose an action column");
+    AssertTrue(courseList.Contains("_detailAction"),
+        "UC_CourseList must show selected course next action in the detail panel");
+
+    AssertTrue(myCourses.Contains("StudentCourseUxPresenter.PresentEnrollment"),
+        "UC_MyCourses must use StudentCourseUxPresenter for enrollment status/action text");
+    AssertTrue(myCourses.Contains("\"Hành động\""),
+        "UC_MyCourses table must expose an action column");
+    AssertTrue(myCourses.Contains("_courseNextAction"),
+        "UC_MyCourses must show selected enrollment next action in the detail panel");
+});
+
+Run("phase 4 schedule pages use schedule presenter and selectable calendar sessions", () =>
+{
+    string root = RepoRoot();
+    string studentSchedule = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_Schedule.cs"));
+    string teacherSchedule = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherSchedule.cs"));
+    string teacherDialog = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherSimpleItemDialog.cs"));
+
+    AssertTrue(studentSchedule.Contains("ScheduleUxPresenter.PresentStudent"),
+        "UC_Schedule must use ScheduleUxPresenter.PresentStudent");
+    AssertTrue(studentSchedule.Contains("SelectSessionFromCalendar"),
+        "UC_Schedule must expose SelectSessionFromCalendar");
+    AssertTrue(studentSchedule.Contains("_selectedSessionSummary"),
+        "UC_Schedule must track the selected session summary");
+    AssertTrue(studentSchedule.Contains("_selectedCalendarSessionId"),
+        "UC_Schedule must track calendar-selected session id");
+    AssertTrue(studentSchedule.Contains("private static DateTime StartOfWeek(DateTime value)"),
+        "UC_Schedule must centralize Monday-first week calculation in StartOfWeek");
+    AssertTrue(studentSchedule.Contains("lblSession.Text = string.Empty"),
+        "student pooled calendar labels must clear stale text");
+    AssertTrue(studentSchedule.Contains("lblSession.Cursor = Cursors.Default"),
+        "student pooled calendar labels must reset cursor when unused");
+
+    string studentCalendarSelection = ExtractMethodSource(studentSchedule, "private void SelectSessionFromCalendar(int sessionId)");
+    AssertFalse(studentCalendarSelection.Contains("_isCalendarView = false"),
+        "student calendar selection must not force table view");
+
+    AssertTrue(teacherSchedule.Contains("ScheduleUxPresenter.PresentTeacher"),
+        "UC_TeacherSchedule must use ScheduleUxPresenter.PresentTeacher");
+    AssertTrue(teacherSchedule.Contains("SelectSessionFromCalendar"),
+        "UC_TeacherSchedule must expose SelectSessionFromCalendar");
+    AssertTrue(teacherSchedule.Contains("_selectedSessionSummary"),
+        "UC_TeacherSchedule must track the selected session summary");
+    AssertTrue(teacherSchedule.Contains("_selectedCalendarSessionId"),
+        "UC_TeacherSchedule must track calendar-selected session id");
+    AssertTrue(teacherSchedule.Contains("private static DateTime StartOfWeek(DateTime value)"),
+        "UC_TeacherSchedule must centralize Monday-first week calculation in StartOfWeek");
+    AssertTrue(teacherSchedule.Contains("ClearScheduleStateAfterLoadFailure"),
+        "UC_TeacherSchedule must clear stale state after load failure");
+
+    string teacherCalendarSelection = ExtractMethodSource(teacherSchedule, "private void SelectSessionFromCalendar(int sessionId)");
+    AssertFalse(teacherCalendarSelection.Contains("_isCalendarView = false"),
+        "teacher calendar selection must not force table view");
+    string teacherLoadData = ExtractMethodSource(teacherSchedule, "private async Task LoadDataAsync()");
+    AssertTrue(teacherLoadData.Contains("ClearScheduleStateAfterLoadFailure"),
+        "teacher schedule load failure path must clear stale state");
+
+    AssertTrue(teacherDialog.Contains("_validationSummary"),
+        "TeacherSimpleItemDialog must show inline validation summary");
+    AssertTrue(teacherDialog.Contains("HookValidationInputs"),
+        "TeacherSimpleItemDialog must wire live validation input hooks");
+    AssertTrue(teacherDialog.Contains("CourseCombo.SelectedIndexChanged"),
+        "TeacherSimpleItemDialog must react to course changes");
+    AssertTrue(teacherDialog.Contains("TitleTextBox.TextChanged"),
+        "TeacherSimpleItemDialog must react to title changes");
+    AssertTrue(teacherDialog.Contains("StartTimePicker.ValueChanged"),
+        "TeacherSimpleItemDialog must react to start time changes");
+    AssertTrue(teacherDialog.Contains("EndTimePicker.ValueChanged"),
+        "TeacherSimpleItemDialog must react to end time changes");
+});
+
+Run("phase 4 schedule week helper keeps Sunday in current week", () =>
+{
+    MethodInfo? studentMethod = typeof(UC_Schedule).GetMethod("StartOfWeek", BindingFlags.NonPublic | BindingFlags.Static);
+    MethodInfo? teacherMethod = typeof(UC_TeacherSchedule).GetMethod("StartOfWeek", BindingFlags.NonPublic | BindingFlags.Static);
+
+    AssertTrue(studentMethod != null, "UC_Schedule must expose non-public static StartOfWeek for filtering");
+    AssertTrue(teacherMethod != null, "UC_TeacherSchedule must expose non-public static StartOfWeek for filtering");
+
+    DateTime sunday = Enumerable.Range(0, 7)
+        .Select(offset => new DateTime(2026, 6, 1).AddDays(offset))
+        .First(day => day.DayOfWeek == DayOfWeek.Sunday);
+    DateTime expectedMonday = sunday.Date.AddDays(-6);
+
+    DateTime studentWeekStart = (DateTime)studentMethod!.Invoke(null, new object[] { sunday })!;
+    DateTime teacherWeekStart = (DateTime)teacherMethod!.Invoke(null, new object[] { sunday })!;
+
+    AssertEqual(DayOfWeek.Sunday, sunday.DayOfWeek);
+    AssertEqual(expectedMonday, studentWeekStart);
+    AssertEqual(expectedMonday, teacherWeekStart);
+    AssertEqual(DayOfWeek.Monday, studentWeekStart.DayOfWeek);
+    AssertEqual(DayOfWeek.Monday, teacherWeekStart.DayOfWeek);
+});
+
+Run("phase 4 teacher schedule failure cleanup clears stale runtime state", RunTeacherScheduleFailureCleanupTests);
+Run("phase 4 teacher simple dialog updates inline validation while inputs are fixed", RunTeacherSimpleItemDialogValidationTests);
+Run("phase 4 student pooled calendar labels reset stale session state on reuse", RunStudentScheduleCalendarLabelReuseTests);
+Run("phase 4 student schedule latest failure cleanup clears stale runtime state", RunStudentScheduleFailureCleanupTests);
+Run("phase 4 teacher classroom lifecycle defers status changes until native server startup", () =>
+{
+    string root = RepoRoot();
+    string teacherSchedule = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherSchedule.cs"));
+    string teacherClassroom = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherNativeClassroomForm.cs"));
+
+    string openClass = ExtractMethodSource(teacherSchedule, "private async Task OpenClassAsync()");
+    int formCreationIndex = openClass.IndexOf("new TeacherNativeClassroomForm(", StringComparison.Ordinal);
+    int markOpenedIndex = openClass.IndexOf("UpdateSessionStatusAsync(_teacherId, selectedSession.Id, true)", StringComparison.Ordinal);
+    int broadcastOpenedIndex = openClass.IndexOf("BroadcastClassOpenedAsync(selectedSession.Id)", StringComparison.Ordinal);
+
+    AssertTrue(formCreationIndex >= 0, "teacher schedule must create the native classroom form when opening class");
+    AssertTrue(markOpenedIndex >= 0, "teacher schedule must still mark a session opened after startup succeeds");
+    AssertTrue(broadcastOpenedIndex >= 0, "teacher schedule must still broadcast classroom open after startup succeeds");
+    AssertTrue(formCreationIndex < markOpenedIndex,
+        "teacher schedule must defer opened status updates until after the native classroom form owns startup");
+    AssertTrue(formCreationIndex < broadcastOpenedIndex,
+        "teacher schedule must defer open broadcasts until after the native classroom form owns startup");
+    AssertTrue(openClass.Contains("UpdateSessionStatusAsync(_teacherId, selectedSession.Id, false)"),
+        "teacher schedule must mark a session closed when the classroom ends after opening");
+    AssertTrue(openClass.Contains("BroadcastClassClosedAsync(selectedSession.Id)"),
+        "teacher schedule must broadcast classroom close when the classroom ends after opening");
+    AssertTrue(openClass.Contains("bool updated = await _controller.UpdateSessionStatusAsync(_teacherId, selectedSession.Id, false)"),
+        "teacher schedule close callback must capture the false/true result from closing the session in storage");
+    AssertTrue(openClass.Contains("if (!updated)"),
+        "teacher schedule close callback must stop when the session close update fails");
+
+    int closeUpdateIndex = openClass.IndexOf("bool updated = await _controller.UpdateSessionStatusAsync(_teacherId, selectedSession.Id, false)", StringComparison.Ordinal);
+    int closeGuardIndex = openClass.IndexOf("if (!updated)", StringComparison.Ordinal);
+    int closeBroadcastIndex = openClass.IndexOf("BroadcastClassClosedAsync(selectedSession.Id)", StringComparison.Ordinal);
+    int closeReloadIndex = openClass.IndexOf("await LoadDataAsync();", closeBroadcastIndex >= 0 ? closeBroadcastIndex : 0, StringComparison.Ordinal);
+
+    AssertTrue(closeUpdateIndex >= 0 && closeGuardIndex > closeUpdateIndex,
+        "teacher schedule must guard the close callback after reading the persisted close result");
+    AssertTrue(closeBroadcastIndex > closeGuardIndex,
+        "teacher schedule must not broadcast close before the persisted close result is accepted");
+    AssertTrue(closeReloadIndex > closeBroadcastIndex,
+        "teacher schedule must only reload after the close broadcast succeeds");
+
+    AssertTrue(teacherClassroom.Contains("Func<Task>? onClassroomOpenedAsync"),
+        "teacher native classroom form must accept an async startup callback so the schedule page keeps controller work outside the form");
+    AssertTrue(teacherClassroom.Contains("Func<Task>? onClassroomClosedAsync"),
+        "teacher native classroom form must accept an async close callback so the schedule page keeps controller work outside the form");
+
+    string shown = ExtractMethodSource(teacherClassroom, "protected override async void OnShown(EventArgs e)");
+    AssertTrue(shown.Contains("await _server.StartAsync(_sessionId);"),
+        "teacher native classroom form must still start the classroom server on show");
+    AssertTrue(shown.Contains("await _onClassroomOpenedAsync"),
+        "teacher native classroom form must invoke the opened callback only after server startup succeeds");
+});
+
+Run("phase 4 teacher native classroom end-class path requires confirmation before teardown", () =>
+{
+    string root = RepoRoot();
+    string teacherClassroom = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherNativeClassroomForm.cs"));
+
+    AssertFalse(teacherClassroom.Contains("_btnEndClass.Click += (_, _) => Close();"),
+        "teacher native classroom end button must not tear down the class immediately");
+    AssertTrue(
+        teacherClassroom.Contains("MessageBoxButtons.YesNo")
+        || teacherClassroom.Contains("DialogResult.Yes"),
+        "teacher native classroom must prompt for destructive end-class confirmation");
+
+    string formClosing = ExtractMethodSource(teacherClassroom, "private async void TeacherNativeClassroomForm_FormClosing(object? sender, FormClosingEventArgs e)");
+    AssertTrue(formClosing.Contains("e.Cancel = true"),
+        "teacher native classroom close handling must be able to cancel the first close attempt until confirmation completes");
+    AssertTrue(formClosing.Contains("_onClassroomClosedAsync"),
+        "teacher native classroom close handling must invoke the close lifecycle callback before shutdown completes");
+});
+
+Run("phase 4 teacher native classroom notifies close before local teardown", () =>
+{
+    string root = RepoRoot();
+    string teacherClassroom = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherNativeClassroomForm.cs"));
+    string shutdown = ExtractMethodSource(teacherClassroom, "private async Task PerformClassroomShutdownAsync(bool notifyCloseAsync)");
+
+    int callbackIndex = shutdown.IndexOf("await _onClassroomClosedAsync()", StringComparison.Ordinal);
+    AssertTrue(callbackIndex >= 0,
+        "teacher native classroom shutdown must still await the close lifecycle callback");
+
+    string[] destructiveOperations =
+    {
+        "StopScreenShare();",
+        "StopCamera();",
+        "_studentVideoBoxes.Clear();",
+        "_studentVideoLabels.Clear();",
+        "_screenShareManager.Dispose();",
+        "_cameraManager.Dispose();",
+        "_isServerReady = false;",
+        "await _server.StopAsync();"
+    };
+
+    foreach (string operation in destructiveOperations)
+    {
+        int operationIndex = shutdown.IndexOf(operation, StringComparison.Ordinal);
+        AssertTrue(operationIndex >= 0,
+            $"teacher native classroom shutdown must still perform local teardown operation: {operation}");
+        AssertTrue(callbackIndex < operationIndex,
+            $"teacher native classroom must notify closed before local teardown operation: {operation}");
+    }
+});
+
+Run("phase 4 teacher lesson and material deletes require confirmation before delete", () =>
+{
+    string root = RepoRoot();
+    string lessons = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherLessons.cs"));
+    string materials = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherMaterials.cs"));
+
+    AssertTeacherDeleteRequiresConfirmation(
+        ExtractMethodSource(lessons, "protected override async Task DeleteAsync()"),
+        "Controller.DeleteLesson",
+        "teacher lesson delete");
+    AssertTeacherDeleteRequiresConfirmation(
+        ExtractMethodSource(materials, "protected override async Task DeleteAsync()"),
+        "Controller.DeleteMaterial",
+        "teacher material delete");
+});
+
+Run("phase 4 student lesson detail button honors primary action availability", () =>
+{
+    string studentLessons = File.ReadAllText(Path.Combine(
+        RepoRoot(),
+        "CourseGuard",
+        "CourseGuard",
+        "Frontend",
+        "UserControls",
+        "Student",
+        "UC_StudentLessons.cs"));
+    string syncDetailButton = ExtractMethodSource(studentLessons, "private void SyncDetailButton()");
+
+    AssertTrue(syncDetailButton.Contains("view.CanUsePrimaryAction"),
+        "student lesson detail button must read the presenter's CanUsePrimaryAction flag");
+    AssertTrue(syncDetailButton.Contains("_detailButton.Enabled = view.CanUsePrimaryAction"),
+        "student lesson detail button must be disabled when the selected item has no actionable primary action");
+    AssertFalse(syncDetailButton.Contains("_detailButton.Enabled = true"),
+        "student lesson detail button must not enable every selected row unconditionally");
+});
+
+Run("phase 4 classroom lifecycle visible strings use Vietnamese Unicode", () =>
+{
+    string root = RepoRoot();
+    string teacherSchedule = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherSchedule.cs"));
+    string teacherClassroom = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherNativeClassroomForm.cs"));
+
+    string openClass = ExtractMethodSource(teacherSchedule, "private async Task OpenClassAsync()");
+    AssertNoMojibakeMarkers(openClass, "teacher schedule classroom lifecycle messages");
+    AssertTrue(openClass.Contains("Không thể cập nhật trạng thái buổi học sang đang mở."),
+        "teacher schedule open callback must show readable Vietnamese when open-status persistence fails");
+    AssertTrue(openClass.Contains("Không thể cập nhật trạng thái buổi học sang đã đóng."),
+        "teacher schedule close callback must show readable Vietnamese when close-status persistence fails");
+    AssertTrue(openClass.Contains("Lỗi khi vào dạy online: "),
+        "teacher schedule open failure dialog must show readable Vietnamese");
+
+    string requestClose = ExtractMethodSource(teacherClassroom, "private async Task RequestEndClassCloseAsync()");
+    string formClosing = ExtractMethodSource(teacherClassroom, "private async void TeacherNativeClassroomForm_FormClosing(object? sender, FormClosingEventArgs e)");
+    AssertNoMojibakeMarkers(requestClose, "teacher native classroom end-class confirmation");
+    AssertNoMojibakeMarkers(formClosing, "teacher native classroom end-class error");
+    AssertTrue(requestClose.Contains("Bạn có chắc chắn muốn kết thúc lớp học này không?"),
+        "teacher native classroom end-class confirmation must render readable Vietnamese");
+    AssertTrue(requestClose.Contains("\"Kết thúc lớp\""),
+        "teacher native classroom end-class title must render readable Vietnamese");
+    AssertTrue(formClosing.Contains("Không thể kết thúc lớp học: "),
+        "teacher native classroom end-class failure message must render readable Vietnamese");
+    AssertTrue(formClosing.Contains("\"Thông báo\""),
+        "teacher native classroom end-class failure title must render readable Vietnamese");
+});
+
+Run("phase 4 student schedule tracks load generations to ignore stale schedule refreshes", () =>
+{
+    string root = RepoRoot();
+    string studentSchedule = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_Schedule.cs"));
+    string loadSchedule = ExtractMethodSource(studentSchedule, "private async System.Threading.Tasks.Task LoadSchedule()");
+
+    AssertTrue(studentSchedule.Contains("_loadVersion"),
+        "UC_Schedule must track load generations so overlapping refreshes cannot overwrite newer state");
+    AssertTrue(loadSchedule.Contains("int loadVersion = ++_loadVersion"),
+        "UC_Schedule must increment the load generation at the start of LoadSchedule");
+    AssertTrue(loadSchedule.Contains("if (IsDisposed || loadVersion != _loadVersion)"),
+        "UC_Schedule must ignore stale successful refreshes before rebinding rows");
+    AssertTrue(loadSchedule.Contains("if (loadVersion != _loadVersion)"),
+        "UC_Schedule must ignore stale failures before clearing or replacing current schedule state");
+    AssertTrue(loadSchedule.Contains("if (loadVersion == _loadVersion)"),
+        "UC_Schedule must hide skeletons only for the latest in-flight refresh");
+    AssertTrue(studentSchedule.Contains("ClearScheduleStateAfterLoadFailure"),
+        "UC_Schedule must define a focused cleanup path for latest-load failures");
+    AssertTrue(loadSchedule.Contains("ClearScheduleStateAfterLoadFailure"),
+        "UC_Schedule latest load failure path must clear stale schedule state instead of rebinding an empty table alone");
+});
+
+Run("phase 4 student course pages show next actions and safe detail states", () =>
+{
+    string root = RepoRoot();
+    string courseList = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_CourseList.cs"));
+    string myCourses = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_MyCourses.cs"));
+
+    AssertTrue(courseList.Contains("StudentCourseUxPresenter.Present"),
+        "UC_CourseList must use StudentCourseUxPresenter.Present for available course status/action text");
+    AssertTrue(courseList.Contains("\"Hành động\""),
+        "UC_CourseList table must expose an action column");
+    AssertTrue(courseList.Contains("_detailAction"),
+        "UC_CourseList must show selected course next action in the detail panel");
+
+    AssertTrue(myCourses.Contains("StudentCourseUxPresenter.Present"),
+        "UC_MyCourses must use StudentCourseUxPresenter.Present for enrollment status/action text");
+    AssertTrue(myCourses.Contains("\"Hành động\""),
+        "UC_MyCourses table must expose an action column");
+    AssertTrue(myCourses.Contains("_courseNextAction"),
+        "UC_MyCourses must show selected enrollment next action in the detail panel");
+
+    string courseListClearDetail = ExtractMethodSource(courseList, "private void ClearDetailPanel");
+    string courseListClearGrid = ExtractMethodSource(courseList, "private void ClearCourseGridSelection");
+    string courseListSelectionChanged = ExtractMethodSource(courseList, "private void DgvCourses_SelectionChanged");
+    string courseListPosition = ExtractMethodSource(courseList, "private void PositionDetailActionLabel");
+    string myCoursesClearDetail = ExtractMethodSource(myCourses, "private void ClearDetailPanel");
+    string myCoursesPosition = ExtractMethodSource(myCourses, "private void PositionCourseNextActionLabel");
+
+    AssertTrue(courseListClearDetail.Contains("btnJoin.Enabled = false"),
+        "UC_CourseList ClearDetailPanel must disable join while no course is selected");
+    AssertTrue(courseListClearDetail.Contains("btnViewDetails.Enabled = false"),
+        "UC_CourseList ClearDetailPanel must disable details while no course is selected");
+    AssertTrue(courseListClearGrid.Contains("_activeCourseId = null"),
+        "UC_CourseList grid selection clearing must clear the active course id");
+    AssertTrue(courseListClearGrid.Contains("_activeCourseName = string.Empty"),
+        "UC_CourseList grid selection clearing must clear the active course name");
+    AssertTrue(courseListSelectionChanged.Contains("ClearDetailPanel()"),
+        "UC_CourseList selection changed must clear detail when the current row is empty");
+    AssertTrue(myCoursesClearDetail.Contains("btnViewDetail.Enabled = false"),
+        "UC_MyCourses ClearDetailPanel must disable detail while no enrollment is selected");
+
+    AssertFalse(courseList.Contains("_detailAction.Dock = DockStyle.Bottom"),
+        "UC_CourseList next-action label must not be bottom-docked over designer labels");
+    AssertFalse(myCourses.Contains("_courseNextAction.Dock = DockStyle.Bottom"),
+        "UC_MyCourses next-action label must not be bottom-docked over designer labels");
+    AssertFalse(courseListPosition.Contains("lblDetailDesc.Bottom + 8"),
+        "UC_CourseList next-action label must not be placed after the current description bottom");
+    AssertFalse(myCoursesPosition.Contains("lblDescription.Bottom + 8"),
+        "UC_MyCourses next-action label must not be placed after the current description bottom");
+    AssertTrue(courseList.Contains("DetailActionBottomPadding"),
+        "UC_CourseList must keep a named bottom padding constant for the next-action label");
+    AssertTrue(courseListPosition.Contains("pnlCourseDetail.ClientSize.Height - DetailActionBottomPadding - DetailActionHeight"),
+        "UC_CourseList next-action label must be placed within the visible detail panel height");
+    AssertTrue(courseListPosition.Contains("lblDetailDesc.Height"),
+        "UC_CourseList must reserve visible space by resizing the description label");
+    AssertTrue(myCourses.Contains("CourseNextActionBottomPadding"),
+        "UC_MyCourses must keep a named bottom padding constant for the next-action label");
+    AssertTrue(myCoursesPosition.Contains("pnlCourseInfo.ClientSize.Height - CourseNextActionBottomPadding - CourseNextActionHeight"),
+        "UC_MyCourses next-action label must be placed within the visible detail panel height");
+    AssertTrue(myCoursesPosition.Contains("lblDescription.Height"),
+        "UC_MyCourses must reserve visible space by resizing the description label");
+});
+
+Run("phase 4 learning item presenter distinguishes lessons and materials", () =>
+{
+    var lesson = new TeacherLessonModel
+    {
+        Id = 5,
+        CourseName = "Lap trinh mang",
+        Title = "Socket TCP",
+        PublishAt = new DateTime(2026, 6, 10, 8, 0, 0),
+        FileName = "socket.pdf",
+        FileSize = 2048,
+        HasStoredContent = true
+    };
+    var material = new TeacherLessonModel
+    {
+        Id = -7,
+        CourseName = "Lap trinh mang",
+        Title = "Slide UDP",
+        FileName = "udp.pdf",
+        PublishAt = new DateTime(2026, 6, 11, 8, 0, 0),
+        FileSize = 1024,
+        HasStoredContent = true
+    };
+
+    LearningUxPresentation lessonView = StudentLearningItemUxPresenter.Present(lesson);
+    LearningUxPresentation materialView = StudentLearningItemUxPresenter.Present(material);
+
+    AssertEqual("Bài học", lessonView.StatusText);
+    AssertEqual("Xem bài học", lessonView.PrimaryActionText);
+    AssertEqual(NextActionKinds.OpenCurrentLesson, lessonView.NextActionKind);
+    AssertEqual(5, lessonView.TargetItemId);
+    AssertEqual("Tải tài liệu", materialView.PrimaryActionText);
+    AssertEqual(NextActionKinds.DownloadCurrentMaterial, materialView.NextActionKind);
+    AssertEqual(7, materialView.TargetItemId);
+    AssertTrue(materialView.DetailText.Contains("1 KB"), "material detail should include readable size");
+});
+
+Run("phase 4 learning presenter treats DateTime.MinValue publish time as missing", () =>
+{
+    var lesson = new TeacherLessonModel
+    {
+        Id = 8,
+        CourseName = "Lap trinh mang",
+        Title = "Socket UDP",
+        PublishAt = DateTime.MinValue,
+        FileName = "udp.pdf",
+        FileSize = 1024,
+        HasStoredContent = true
+    };
+
+    LearningUxPresentation view = TeacherContentUxPresenter.PresentLesson(lesson);
+
+    AssertFalse(view.DetailText.Contains("0001"), "learning item detail must not expose DateTime.MinValue");
+    AssertTrue(view.DetailText.Contains("chưa rõ"), "learning item detail must render missing publish time fallback");
+});
+
+Run("phase 4 student material presenter treats DateTime.MinValue upload time as missing", () =>
+{
+    LearningUxPresentation view = StudentLearningItemUxPresenter.PresentMaterial(
+        "Lap trinh mang",
+        "missing.pdf",
+        DateTime.MinValue,
+        2048,
+        true);
+
+    AssertFalse(view.DetailText.Contains("0001"), "student material detail must not expose DateTime.MinValue year");
+    AssertFalse(view.DetailText.Contains("01/01 00:00"), "student material detail must not expose DateTime.MinValue timestamp");
+    AssertTrue(view.DetailText.Contains("chưa rõ"), "student material detail must render missing upload time fallback");
+});
+
+Run("phase 4 learning presenter hides non-positive file sizes", () =>
+{
+    var zeroSizeLesson = new TeacherLessonModel
+    {
+        Id = 9,
+        CourseName = "Lap trinh mang",
+        Title = "Tai lieu rong",
+        PublishAt = new DateTime(2026, 6, 12, 8, 0, 0),
+        FileName = "empty.pdf",
+        FileSize = 0,
+        HasStoredContent = true
+    };
+    var negativeSizeMaterial = new TeacherMaterialModel
+    {
+        Id = 10,
+        CourseId = 3,
+        CourseName = "Lap trinh mang",
+        FileName = "broken.pdf",
+        FileSize = -5,
+        HasStoredContent = true
+    };
+
+    LearningUxPresentation zeroSizeView = StudentLearningItemUxPresenter.Present(zeroSizeLesson);
+    LearningUxPresentation negativeSizeView = TeacherContentUxPresenter.PresentMaterial(negativeSizeMaterial);
+
+    AssertTrue(zeroSizeView.DetailText.Contains("không rõ dung lượng"), "zero-byte learning item must render unknown size");
+    AssertTrue(negativeSizeView.DetailText.Contains("không rõ dung lượng"), "negative-size material must render unknown size");
+    AssertFalse(negativeSizeView.DetailText.Contains("-5 B"), "negative-size material must not expose a negative byte count");
+});
+
+Run("phase 4 student learning content pages show selected content context", () =>
+{
+    string root = RepoRoot();
+    string studentLessonsSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_StudentLessons.cs"));
+    string documentsSource = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Student", "UC_Documents.cs"));
+
+    AssertTrue(studentLessonsSource.Contains("StudentLearningItemUxPresenter.Present"),
+        "UC_StudentLessons must use StudentLearningItemUxPresenter for selected content context");
+    AssertTrue(studentLessonsSource.Contains("_selectedItemSummary"),
+        "UC_StudentLessons must define a selected item summary panel");
+    AssertTrue(studentLessonsSource.Contains("UpdateSelectedItemSummary"),
+        "UC_StudentLessons must update selected item summary when the selection changes");
+    AssertTrue(studentLessonsSource.Contains("ClearGridSelection"),
+        "UC_StudentLessons must clear both selection and current cell when switching grids");
+    AssertTrue(studentLessonsSource.Contains("grid.CurrentCell = null"),
+        "UC_StudentLessons grid clearing must reset CurrentCell to avoid stale CurrentRow context");
+    AssertTrue(studentLessonsSource.Contains("ClearSelectedContextAfterLoadFailure"),
+        "UC_StudentLessons failed refresh path must clear stale selected content context");
+
+    AssertTrue(documentsSource.Contains("SetBelowGridContent"),
+        "UC_Documents must host a preview panel below the grid");
+    AssertTrue(documentsSource.Contains("_documentPreviewTitle"),
+        "UC_Documents must define a document preview title label");
+    AssertTrue(documentsSource.Contains("StudentLearningItemUxPresenter.PresentMaterial"),
+        "UC_Documents must use StudentLearningItemUxPresenter for document preview context");
+    AssertTrue(documentsSource.Contains("PrepareDocumentRefresh"),
+        "UC_Documents must clear stale preview/action before refresh attempts because base preserves old rows on failure");
+    AssertTrue(documentsSource.Contains("IsDocumentActionable"),
+        "UC_Documents must keep the open action disabled when no stored content or usable path exists");
+    AssertTrue(documentsSource.Contains("SelectedDocument"),
+        "UC_Documents open path must use the backing document row instead of trusting grid cells");
+    AssertFalse(documentsSource.Contains("Convert.ToBoolean(Grid.CurrentRow.Cells[\"HasContent\"].Value)"),
+        "UC_Documents must not convert the HasContent grid cell without null/DBNull protection");
+});
+
+Run("phase 4 teacher content pages expose course context and selected item summaries", () =>
+{
+    string root = RepoRoot();
+    string basePage = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "TeacherGridPageBase.cs"));
+    string courses = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherCourses.cs"));
+    string lessons = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherLessons.cs"));
+    string materials = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherMaterials.cs"));
+
+    AssertTrue(basePage.Contains("SetBelowGridContent"),
+        "TeacherGridPageBase.cs must expose SetBelowGridContent");
+    AssertTrue(basePage.Contains("_loadVersion"),
+        "TeacherGridPageBase.cs must track load generation to ignore stale refresh results");
+    AssertTrue(basePage.Contains("int loadVersion = ++_loadVersion"),
+        "TeacherGridPageBase.cs must increment load generation at the start of LoadDataAsync");
+    AssertTrue(basePage.Contains("if (loadVersion != _loadVersion)"),
+        "TeacherGridPageBase.cs must ignore stale load completions before binding or reporting errors");
+    AssertTrue(courses.Contains("TeacherCourseUxPresenter.Present"),
+        "UC_TeacherCourses.cs must use TeacherCourseUxPresenter.Present");
+    AssertTrue(lessons.Contains("_courseFilter"),
+        "UC_TeacherLessons.cs must expose a course filter");
+    AssertTrue(lessons.Contains("TeacherContentUxPresenter.PresentLesson"),
+        "UC_TeacherLessons.cs must use TeacherContentUxPresenter.PresentLesson");
+    AssertTrue(lessons.Contains("_isLoadingCourseFilter"),
+        "UC_TeacherLessons.cs must suppress re-entrant loads while course filter items are being populated");
+    AssertTrue(lessons.Contains("if (_isLoadingCourseFilter)"),
+        "UC_TeacherLessons.cs SelectedIndexChanged path must guard against filter population re-entry");
+    AssertTrue(lessons.Contains("SelectCourseFilter(selectedCourseId, suppressLoad: true)"),
+        "UC_TeacherLessons.cs must restore course filter selection without relying on SelectedIndexChanged reloads");
+    AssertTrue(lessons.Contains("await Task.Run"),
+        "UC_TeacherLessons.cs must fetch lesson rows off the UI thread");
+    AssertTrue(lessons.Contains("_lessons = rows;"),
+        "UC_TeacherLessons.cs must assign cached lesson rows after the background fetch completes");
+    AssertFalse(lessons.Contains("Task.FromResult(table)"),
+        "UC_TeacherLessons.cs must not build the table from a synchronous Task.FromResult fetch path");
+    AssertTrue(materials.Contains("TeacherContentUxPresenter.PresentMaterial"),
+        "UC_TeacherMaterials.cs must use TeacherContentUxPresenter.PresentMaterial");
+    AssertTrue(materials.Contains("_isLoadingCourseFilter"),
+        "UC_TeacherMaterials.cs must suppress re-entrant loads while course filter items are being populated");
+    AssertTrue(materials.Contains("if (_isLoadingCourseFilter)"),
+        "UC_TeacherMaterials.cs SelectedIndexChanged path must guard against filter population re-entry");
+    AssertTrue(materials.Contains("SelectCourseFilter(request.ParentId ?? 0, suppressLoad: true)"),
+        "UC_TeacherMaterials.cs quick-search filter selection must not rely on unsuppressed SelectedIndexChanged reloads");
+    AssertTrue(materials.Contains("await Task.Run"),
+        "UC_TeacherMaterials.cs must fetch material rows off the UI thread");
+    AssertTrue(materials.Contains("_materials = rows;"),
+        "UC_TeacherMaterials.cs must assign cached material rows after the background fetch completes");
+    AssertFalse(materials.Contains("Task.FromResult(table)"),
+        "UC_TeacherMaterials.cs must not build the table from a synchronous Task.FromResult fetch path");
+});
+
+Run("phase 4 schedule presenter gates student and teacher classroom actions", () =>
+{
+    var now = new DateTime(2026, 6, 15, 9, 30, 0);
+    var currentClosed = new StudentScheduleItemModel
+    {
+        SessionId = 1,
+        CourseName = "Lap trinh mang",
+        Title = "TCP",
+        TeacherName = "Nguyen Van A",
+        StartTime = new DateTime(2026, 6, 15, 9, 0, 0),
+        EndTime = new DateTime(2026, 6, 15, 10, 0, 0),
+        IsOpened = false
+    };
+    var currentOpen = new StudentScheduleItemModel
+    {
+        SessionId = 2,
+        CourseName = "Lap trinh mang",
+        Title = "UDP",
+        TeacherName = "Nguyen Van A",
+        StartTime = new DateTime(2026, 6, 15, 9, 0, 0),
+        EndTime = new DateTime(2026, 6, 15, 10, 0, 0),
+        IsOpened = true
+    };
+    var teacherFuture = new TeacherScheduleItemModel
+    {
+        Id = 3,
+        CourseName = "Lap trinh mang",
+        Title = "DNS",
+        StartTime = new DateTime(2026, 6, 15, 11, 0, 0),
+        EndTime = new DateTime(2026, 6, 15, 12, 0, 0)
+    };
+
+    ScheduleUxPresentation waiting = ScheduleUxPresenter.PresentStudent(currentClosed, now);
+    ScheduleUxPresentation joinable = ScheduleUxPresenter.PresentStudent(currentOpen, now);
+    ScheduleUxPresentation teacherBlocked = ScheduleUxPresenter.PresentTeacher(teacherFuture, now);
+
+    AssertEqual("Chờ giáo viên mở lớp", waiting.StatusText);
+    AssertEqual("Chờ mở lớp", waiting.PrimaryActionText);
+    AssertFalse(waiting.CanJoin, "student cannot join until teacher opens class");
+    AssertEqual("Đang mở", joinable.StatusText);
+    AssertEqual("Vào lớp", joinable.PrimaryActionText);
+    AssertTrue(joinable.CanJoin, "student can join an opened current class");
+    AssertEqual(NextActionKinds.JoinStudentClassroom, joinable.NextActionKind);
+    AssertEqual(NavigationTargets.StudentSchedule, joinable.TargetTab);
+    AssertEqual(2, joinable.TargetSessionId);
+    AssertEqual("Chưa đến giờ", teacherBlocked.StatusText);
+    AssertFalse(teacherBlocked.CanOpenClass, "teacher cannot open a future class");
+    AssertEqual(NextActionKinds.None, teacherBlocked.NextActionKind);
+});
+
+Run("phase 4 schedule presenter keeps student session joinable when end time is unknown", () =>
+{
+    var now = new DateTime(2026, 6, 15, 9, 30, 0);
+    var currentOpen = new StudentScheduleItemModel
+    {
+        SessionId = 4,
+        CourseName = "Lap trinh mang",
+        Title = "TCP",
+        TeacherName = "Nguyen Van A",
+        StartTime = new DateTime(2026, 6, 15, 9, 0, 0),
+        EndTime = null,
+        IsOpened = true
+    };
+
+    ScheduleUxPresentation view = ScheduleUxPresenter.PresentStudent(currentOpen, now);
+
+    AssertEqual("Đang mở", view.StatusText);
+    AssertTrue(view.CanJoin, "opened student session with unknown end time must remain joinable after start");
+    AssertFalse(view.IsPast, "opened student session with unknown end time must not be marked past");
+    AssertEqual(NextActionKinds.JoinStudentClassroom, view.NextActionKind);
+    AssertTrue(view.DetailText.Contains("chưa rõ"), "student current detail must render unknown end time fallback");
+});
+
+Run("phase 4 schedule presenter keeps teacher session openable when end time is unknown", () =>
+{
+    var now = new DateTime(2026, 6, 15, 9, 30, 0);
+    var currentSession = new TeacherScheduleItemModel
+    {
+        Id = 5,
+        CourseName = "Lap trinh mang",
+        Title = "UDP",
+        StartTime = new DateTime(2026, 6, 15, 9, 0, 0),
+        EndTime = null,
+        IsOpened = false
+    };
+
+    ScheduleUxPresentation view = ScheduleUxPresenter.PresentTeacher(currentSession, now);
+
+    AssertTrue(view.CanOpenClass, "teacher session with unknown end time must remain openable after start");
+    AssertFalse(view.IsPast, "teacher session with unknown end time must not be marked past");
+    AssertEqual(NextActionKinds.OpenTeacherClassroom, view.NextActionKind);
+    AssertTrue(view.DetailText.Contains("chưa rõ"), "teacher current detail must render unknown end time fallback");
+});
+
+Run("phase 4 classroom presenter describes connection and media state", () =>
+{
+    ClassroomUxPresentation disconnected = ClassroomUxPresenter.Present(
+        isTeacher: false,
+        isConnected: false,
+        isCameraOn: false,
+        isMicOn: true,
+        isSharingScreen: false,
+        participantCount: 0);
+    ClassroomUxPresentation teacherLive = ClassroomUxPresenter.Present(
+        isTeacher: true,
+        isConnected: true,
+        isCameraOn: true,
+        isMicOn: false,
+        isSharingScreen: true,
+        participantCount: 12);
+
+    AssertEqual("Mất kết nối", disconnected.StatusText);
+    AssertEqual("Bật Camera", disconnected.CameraActionText);
+    AssertEqual("Đang dạy trực tuyến", teacherLive.StatusText);
+    AssertEqual("Tắt Camera", teacherLive.CameraActionText);
+    AssertEqual("Bật Mic", teacherLive.MicActionText);
+    AssertEqual("Dừng trình bày", teacherLive.ShareActionText);
+    AssertTrue(teacherLive.DetailText.Contains("12 người tham gia"), "teacher detail should show participants");
+});
+
+Run("phase 4 native classroom forms use classroom presenter", () =>
+{
+    string root = RepoRoot();
+    string studentClassroom = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Student", "StudentNativeClassroomForm.cs"));
+    string teacherClassroom = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherNativeClassroomForm.cs"));
+
+    AssertTrue(studentClassroom.Contains("ClassroomUxPresenter.Present"), "student native classroom must use ClassroomUxPresenter.Present");
+    AssertTrue(studentClassroom.Contains("_mediaStateLabel"), "student native classroom must define _mediaStateLabel");
+    AssertTrue(studentClassroom.Contains("UpdateClassroomPresentation"), "student native classroom must update presenter-driven classroom copy");
+
+    AssertTrue(teacherClassroom.Contains("ClassroomUxPresenter.Present"), "teacher native classroom must use ClassroomUxPresenter.Present");
+    AssertTrue(teacherClassroom.Contains("_participantStateLabel"), "teacher native classroom must define _participantStateLabel");
+    AssertTrue(teacherClassroom.Contains("UpdateClassroomPresentation"), "teacher native classroom must update presenter-driven classroom copy");
+});
+
+Run("phase 4 native classroom disconnect and invoke handling stay fresh", () =>
+{
+    string root = RepoRoot();
+    string studentClassroom = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Student", "StudentNativeClassroomForm.cs"));
+    string teacherClassroom = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Forms", "Teacher", "TeacherNativeClassroomForm.cs"));
+
+    AssertTrue(studentClassroom.Contains("Disconnected from classroom server."), "student native classroom must react to client disconnect status");
+    AssertTrue(studentClassroom.Contains("_isConnectedToClassroom = false;"), "student native classroom must clear connected state on disconnect");
+    AssertTrue(studentClassroom.Contains("InvokeIfRequired"), "student native classroom should use safe invoke helper instead of raw BeginInvoke paths");
+
+    AssertTrue(teacherClassroom.Contains("SafeRemoveStudentVideo"), "teacher native classroom must keep a shared student tile cleanup path");
+    AssertTrue(teacherClassroom.Contains("_server.ClientDisconnected"), "teacher native classroom must handle client disconnect events");
+    AssertTrue(teacherClassroom.Contains("SafeRemoveStudentVideo(e.Client.UserId)"), "teacher native classroom must remove stale student tiles on disconnect");
+    AssertTrue(teacherClassroom.Contains("private void SafeResetStageIfDisconnectedStudentWasActivePresenter"), "teacher native classroom must keep a UI-safe wrapper for presenter disconnect cleanup");
+    AssertTrue(teacherClassroom.Contains("WrapContents = true"), "teacher native classroom control bar buttons should wrap at narrow widths");
+    AssertTrue(teacherClassroom.Contains("InvokeIfRequired"), "teacher native classroom should use safe invoke helper instead of raw BeginInvoke paths");
+
+    int disconnectStart = teacherClassroom.IndexOf("_server.ClientDisconnected += (_, e) =>", StringComparison.Ordinal);
+    int disconnectEnd = teacherClassroom.IndexOf("_server.SignalReceived += (_, e) => HandleIncomingSignal(e.Signal);", StringComparison.Ordinal);
+    AssertTrue(disconnectStart >= 0 && disconnectEnd > disconnectStart, "teacher native classroom must keep the disconnect handler source shape");
+
+    string disconnectBlock = teacherClassroom.Substring(disconnectStart, disconnectEnd - disconnectStart);
+    AssertTrue(
+        disconnectBlock.Contains("SafeResetStageIfDisconnectedStudentWasActivePresenter(e.Client.UserId, e.Client.DisplayName)"),
+        "teacher native classroom disconnect handler must marshal presenter reset through a safe wrapper");
+    AssertFalse(
+        disconnectBlock.Contains("bool resetLivePresenter"),
+        "teacher native classroom disconnect handler must not rely on a stale bool captured before BeginInvoke runs");
+    int removeIndex = disconnectBlock.IndexOf("SafeRemoveStudentVideo(e.Client.UserId)", StringComparison.Ordinal);
+    int resetIndex = disconnectBlock.IndexOf("SafeResetStageIfDisconnectedStudentWasActivePresenter(e.Client.UserId, e.Client.DisplayName)", StringComparison.Ordinal);
+    int refreshIndex = disconnectBlock.IndexOf("SafeUpdateClassroomPresentation()", StringComparison.Ordinal);
+    AssertTrue(refreshIndex >= 0,
+        "teacher native classroom disconnect handler must refresh presentation after every client disconnect");
+    AssertTrue(refreshIndex > removeIndex && refreshIndex > resetIndex,
+        "teacher native classroom disconnect presentation refresh must happen after tile and presenter cleanup are requested");
+});
+
+Run("native classroom live status survives presenter refresh until forced baseline update", RunNativeClassroomLiveStatusRefreshTests);
+
 Run("teacher exam activation uses guarded status-only backend update", () =>
 {
     string exams = File.ReadAllText(Path.Combine(RepoRoot(), "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherExams.cs"));
@@ -1903,6 +2695,20 @@ Run("classroom open signal coordinator replays open signal for reconnecting clie
     AssertEqual("42,42,42", string.Join(",", signalService.BroadcastSessionIds));
 });
 
+Run("classroom open signal coordinator suppresses pending open replays after close", async () =>
+{
+    var signalService = new FakeClassroomSignalService();
+    var coordinator = new ClassroomOpenSignalCoordinator(signalService, replayCount: 2, replayDelay: TimeSpan.FromMilliseconds(20));
+
+    await coordinator.BroadcastClassOpenedAsync(42).ConfigureAwait(false);
+    await coordinator.BroadcastClassClosedAsync(42).ConfigureAwait(false);
+    await Task.Delay(120).ConfigureAwait(false);
+
+    AssertEqual(1, signalService.StartCount);
+    AssertEqual("42", string.Join(",", signalService.BroadcastSessionIds));
+    AssertEqual("42", string.Join(",", signalService.ClosedBroadcastSessionIds));
+});
+
 Run("classroom open signal coordinator retries start after failure without broadcasting", async () =>
 {
     var signalService = new FakeClassroomSignalService { ThrowOnStartListening = true };
@@ -1993,6 +2799,23 @@ Run("classroom open signal coordinator starts once for concurrent broadcasts", a
     int[] broadcastIds = signalService.BroadcastSessionIds.OrderBy(id => id).ToArray();
     AssertEqual(1, signalService.StartCount);
     AssertEqual("42,43", string.Join(",", broadcastIds));
+});
+
+Run("phase 4 classroom signal stack supports broadcasting closed status", () =>
+{
+    string root = RepoRoot();
+    string signalInterface = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Backend", "Services", "Realtime", "IClassroomSignalService.cs"));
+    string coordinator = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Frontend", "Helpers", "ClassroomOpenSignalCoordinator.cs"));
+    string tcpService = File.ReadAllText(Path.Combine(root, "CourseGuard", "CourseGuard", "Backend", "Services", "Realtime", "TcpClassroomService.cs"));
+
+    AssertTrue(signalInterface.Contains("Task BroadcastClassClosed(int sessionId);"),
+        "IClassroomSignalService must expose a closed-status broadcast");
+    AssertTrue(coordinator.Contains("BroadcastClassClosedAsync"),
+        "ClassroomOpenSignalCoordinator must provide a close broadcast entry point");
+
+    string closeBroadcast = ExtractMethodSource(tcpService, "public async Task BroadcastClassClosed(int sessionId)");
+    AssertTrue(closeBroadcast.Contains("payload[0] = 0"),
+        "TcpClassroomService must encode classroom close as payload[0] = 0 so existing clients interpret the session as closed");
 });
 
 Run("student exam form constructor does not invoke before handle exists", () =>
@@ -2644,6 +3467,7 @@ Run("student grid page base appends derived actions to header action strip", Run
 Run("student grid page base shows error empty state on initial failure", RunStudentGridPageInitialFailureTests);
 Run("student grid page base preserves initial error state across search rebind", RunStudentGridPageInitialFailureRebindTests);
 Run("student grid page base preserves bound rows across failed refresh and rebind", RunStudentGridPageRefreshFailureTests);
+Run("teacher grid page base ignores stale overlapping load completions and failures", RunTeacherGridPageStaleLoadVersioningTests);
 Run("student grid concrete pages are sealed", () =>
 {
     AssertTrue(typeof(UC_StudentLessons).IsSealed, "student lessons page should be sealed");
@@ -2686,6 +3510,31 @@ static string RepoRoot()
     }
 
     throw new InvalidOperationException("Cannot locate repository root.");
+}
+
+static void AssertTeacherDeleteRequiresConfirmation(string methodSource, string deleteCall, string context)
+{
+    int confirmIndex = methodSource.IndexOf("ShowModernDialog", StringComparison.Ordinal);
+    int yesIndex = methodSource.IndexOf("DialogResult.Yes", StringComparison.Ordinal);
+    int deleteIndex = methodSource.IndexOf(deleteCall, StringComparison.Ordinal);
+
+    AssertTrue(confirmIndex >= 0, $"{context} must show a confirmation dialog");
+    AssertTrue(methodSource.Contains("MessageBoxButtons.YesNo", StringComparison.Ordinal),
+        $"{context} confirmation must use Yes/No buttons");
+    AssertTrue(yesIndex >= 0, $"{context} must check for DialogResult.Yes before deleting");
+    AssertTrue(deleteIndex >= 0, $"{context} must still call the controller delete method");
+    AssertTrue(confirmIndex < deleteIndex, $"{context} confirmation must run before the delete call");
+    AssertTrue(yesIndex < deleteIndex, $"{context} must gate the delete call behind DialogResult.Yes");
+}
+
+static void AssertNoMojibakeMarkers(string source, string context)
+{
+    string[] markers = { "Ã", "Ä", "áÂ", "â€", "Â" };
+    foreach (string marker in markers)
+    {
+        AssertFalse(source.Contains(marker, StringComparison.Ordinal),
+            $"{context} must not contain mojibake marker '{marker}'");
+    }
 }
 
 static string ExtractMethodSource(string source, string signature)
@@ -3088,6 +3937,279 @@ static void RunNativeClassroomAttendanceSourceTests()
     AssertTrue(joinIndex >= 0, "student native classroom must join the room before attendance logging");
     AssertTrue(attendanceInIndex >= 0, "student native classroom must log attendance in after joining");
     AssertTrue(joinIndex < attendanceInIndex, "attendance in should be recorded only after the classroom join succeeds");
+}
+
+static void RunNativeClassroomLiveStatusRefreshTests()
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+
+            VerifyStudentNativeClassroomLiveStatusRefresh();
+            VerifyTeacherNativeClassroomLiveStatusRefresh();
+            VerifyTeacherNativeClassroomScreenShareOffWithoutActivePresenterPreservesStage();
+            VerifyTeacherNativeClassroomDisconnectResetsOnlyActivePresenter();
+            VerifyTeacherNativeClassroomSafeDisconnectCleanupFromBackgroundThread();
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw new InvalidOperationException(failure.Message, failure);
+}
+
+static void VerifyStudentNativeClassroomLiveStatusRefresh()
+{
+    var form = (StudentNativeClassroomForm)RuntimeHelpers.GetUninitializedObject(typeof(StudentNativeClassroomForm));
+    MethodInfo setLiveStatus = typeof(StudentNativeClassroomForm).GetMethod("SetLiveStatus", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("StudentNativeClassroomForm must expose SetLiveStatus for transient live state");
+    MethodInfo update = typeof(StudentNativeClassroomForm).GetMethod("UpdateClassroomPresentation", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("Cannot find student UpdateClassroomPresentation");
+
+    SetFieldValue(form, "_statusLabel", new Label());
+    SetFieldValue(form, "_mediaStateLabel", new Label());
+    SetFieldValue(form, "_btnCamera", new Button());
+    SetFieldValue(form, "_btnMic", new Button());
+    SetFieldValue(form, "_btnShareScreen", new Button());
+    SetFieldValue(form, "_isConnectedToClassroom", true);
+    SetFieldValue(form, "_isCameraOn", true);
+    SetFieldValue(form, "_isMicOn", false);
+
+    setLiveStatus.Invoke(form, new object[] { "Đang xem video giáo viên - 10:15:00" });
+    update.Invoke(form, new object[] { false });
+
+    Label status = GetFieldValue<Label>(form, "_statusLabel");
+    Label media = GetFieldValue<Label>(form, "_mediaStateLabel");
+    AssertEqual("Đang xem video giáo viên - 10:15:00", status.Text);
+    AssertTrue(media.Text.Length > 0, "student presenter refresh should still update media detail while live status is active");
+
+    SetFieldValue(form, "_isConnectedToClassroom", false);
+    update.Invoke(form, new object[] { true });
+    AssertEqual("Mất kết nối", status.Text);
+}
+
+static void VerifyTeacherNativeClassroomLiveStatusRefresh()
+{
+    var form = (TeacherNativeClassroomForm)RuntimeHelpers.GetUninitializedObject(typeof(TeacherNativeClassroomForm));
+    MethodInfo setLiveStatus = typeof(TeacherNativeClassroomForm).GetMethod("SetLiveStatus", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("TeacherNativeClassroomForm must expose SetLiveStatus for transient live state");
+    MethodInfo update = typeof(TeacherNativeClassroomForm).GetMethod("UpdateClassroomPresentation", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("Cannot find teacher UpdateClassroomPresentation");
+
+    SetFieldValue(form, "_server", new TcpClassroomServer());
+    SetFieldValue(form, "_statusLabel", new Label());
+    SetFieldValue(form, "_participantStateLabel", new Label());
+    SetFieldValue(form, "_btnCamera", new Button());
+    SetFieldValue(form, "_btnMic", new Button());
+    SetFieldValue(form, "_btnShareScreen", new Button());
+    SetFieldValue(form, "_isServerReady", true);
+    SetFieldValue(form, "_isCameraOn", true);
+    SetFieldValue(form, "_isSharingScreen", true);
+
+    setLiveStatus.Invoke(form, new object[] { "Đang xem Học viên A trình bày: Desktop - 10:16:00" });
+    update.Invoke(form, new object[] { false });
+
+    Label status = GetFieldValue<Label>(form, "_statusLabel");
+    Label participants = GetFieldValue<Label>(form, "_participantStateLabel");
+    AssertEqual("Đang xem Học viên A trình bày: Desktop - 10:16:00", status.Text);
+    AssertTrue(participants.Text.Length > 0, "teacher presenter refresh should still update participant detail while live status is active");
+
+    SetFieldValue(form, "_isServerReady", false);
+    update.Invoke(form, new object[] { true });
+    AssertEqual("Mất kết nối", status.Text);
+}
+
+static void VerifyTeacherNativeClassroomScreenShareOffWithoutActivePresenterPreservesStage()
+{
+    using var form = new TeacherNativeClassroomForm(654);
+    _ = form.Handle;
+    Application.DoEvents();
+
+    MethodInfo setLiveStatus = typeof(TeacherNativeClassroomForm).GetMethod("SetLiveStatus", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("TeacherNativeClassroomForm must expose SetLiveStatus for transient live state");
+    MethodInfo handleIncomingSignal = typeof(TeacherNativeClassroomForm).GetMethod("HandleIncomingSignal", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("TeacherNativeClassroomForm must handle incoming classroom signals");
+
+    var preview = GetFieldValue<PictureBox>(form, "_teacherPreview");
+    var placeholder = preview.Tag as Label
+        ?? throw new InvalidOperationException("teacher preview placeholder must be attached to the preview tag");
+    SetFieldValue(form, "_activeStudentScreenShareSenderId", 0);
+
+    using var teacherStageFrame = new Bitmap(2, 2);
+    preview.Image = teacherStageFrame;
+    placeholder.Visible = false;
+    setLiveStatus.Invoke(form, new object[] { "Đang dạy trực tuyến" });
+
+    handleIncomingSignal.Invoke(form, new object[]
+    {
+        new ClassroomSignalModel
+        {
+            Type = ClassroomMessageType.ScreenShareOff,
+            SenderRole = "STUDENT",
+            SenderId = 17,
+            SenderName = "Học viên B"
+        }
+    });
+
+    AssertTrue(ReferenceEquals(preview.Image, teacherStageFrame),
+        "student ScreenShareOff without an active student presenter must preserve the current teacher stage image");
+    AssertEqual("Đang dạy trực tuyến", GetFieldValue<Label>(form, "_statusLabel").Text);
+    AssertFalse(placeholder.Visible,
+        "student ScreenShareOff without an active presenter must not restore the stage placeholder");
+    AssertEqual(0, GetFieldValue<int>(form, "_activeStudentScreenShareSenderId"));
+}
+
+static void VerifyTeacherNativeClassroomDisconnectResetsOnlyActivePresenter()
+{
+    var form = (TeacherNativeClassroomForm)RuntimeHelpers.GetUninitializedObject(typeof(TeacherNativeClassroomForm));
+    MethodInfo setLiveStatus = typeof(TeacherNativeClassroomForm).GetMethod("SetLiveStatus", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("TeacherNativeClassroomForm must expose SetLiveStatus for transient live state");
+    MethodInfo update = typeof(TeacherNativeClassroomForm).GetMethod("UpdateClassroomPresentation", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("Cannot find teacher UpdateClassroomPresentation");
+    MethodInfo resetDisconnectedPresenter = typeof(TeacherNativeClassroomForm).GetMethod("ResetStageIfDisconnectedStudentWasActivePresenter", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("TeacherNativeClassroomForm must clear the active presenter state when that student disconnects");
+
+    var preview = new PictureBox();
+    var placeholder = new Label { Visible = false };
+    preview.Tag = placeholder;
+
+    SetFieldValue(form, "_server", new TcpClassroomServer());
+    SetFieldValue(form, "_teacherPreview", preview);
+    SetFieldValue(form, "_statusLabel", new Label());
+    SetFieldValue(form, "_participantStateLabel", new Label());
+    SetFieldValue(form, "_btnCamera", new Button());
+    SetFieldValue(form, "_btnMic", new Button());
+    SetFieldValue(form, "_btnShareScreen", new Button());
+    SetFieldValue(form, "_isServerReady", true);
+    SetFieldValue(form, "_isMicOn", true);
+
+    using var preservedFrame = new Bitmap(2, 2);
+    preview.Image = preservedFrame;
+    SetFieldValue(form, "_activeStudentScreenShareSenderId", 42);
+    setLiveStatus.Invoke(form, new object[] { "Đang xem Học viên A trình bày: Desktop - 10:16:00" });
+
+    bool resetInactive = (bool)resetDisconnectedPresenter.Invoke(form, new object[] { 7, "Học viên B" })!;
+    update.Invoke(form, new object[] { resetInactive });
+    AssertFalse(resetInactive, "disconnecting a different student must not clear the active presenter");
+    AssertEqual("Đang xem Học viên A trình bày: Desktop - 10:16:00", GetFieldValue<Label>(form, "_statusLabel").Text);
+    AssertTrue(ReferenceEquals(preview.Image, preservedFrame), "inactive student disconnect must not replace the current stage frame");
+    AssertEqual(42, GetFieldValue<int>(form, "_activeStudentScreenShareSenderId"));
+
+    using var staleFrame = new Bitmap(3, 3);
+    preview.Image = staleFrame;
+    placeholder.Visible = false;
+    SetFieldValue(form, "_activeStudentScreenShareSenderId", 42);
+    setLiveStatus.Invoke(form, new object[] { "Đang xem Học viên A trình bày: Desktop - 10:16:30" });
+
+    bool resetActive = (bool)resetDisconnectedPresenter.Invoke(form, new object[] { 42, "Học viên A" })!;
+    update.Invoke(form, new object[] { resetActive });
+    Label status = GetFieldValue<Label>(form, "_statusLabel");
+    AssertTrue(resetActive, "disconnecting the active presenter must clear the live stage state");
+    AssertEqual("Đang dạy trực tuyến", status.Text);
+    AssertEqual(0, GetFieldValue<int>(form, "_activeStudentScreenShareSenderId"));
+    AssertEqual(null, preview.Image);
+    AssertTrue(placeholder.Visible, "disconnecting the active presenter must restore the stage placeholder");
+    AssertTrue(placeholder.Text.Contains("Học viên A", StringComparison.Ordinal), "placeholder should identify the disconnected presenter");
+    AssertImageDisposed(staleFrame, "disconnect cleanup must dispose the stale presenter frame");
+}
+
+static void VerifyTeacherNativeClassroomSafeDisconnectCleanupFromBackgroundThread()
+{
+    using var form = new TeacherNativeClassroomForm(321);
+    _ = form.Handle;
+    Application.DoEvents();
+
+    MethodInfo setLiveStatus = typeof(TeacherNativeClassroomForm).GetMethod("SetLiveStatus", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("TeacherNativeClassroomForm must expose SetLiveStatus for transient live state");
+    MethodInfo safeResetDisconnectedPresenter = typeof(TeacherNativeClassroomForm).GetMethod("SafeResetStageIfDisconnectedStudentWasActivePresenter", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("TeacherNativeClassroomForm must expose a safe disconnect cleanup wrapper");
+
+    var preview = GetFieldValue<PictureBox>(form, "_teacherPreview");
+    var placeholder = preview.Tag as Label
+        ?? throw new InvalidOperationException("teacher preview placeholder must be attached to the preview tag");
+    var status = GetFieldValue<Label>(form, "_statusLabel");
+
+    SetFieldValue(form, "_isServerReady", true);
+    SetFieldValue(form, "_isMicOn", true);
+    string expectedBaselineStatus = ClassroomUxPresenter.Present(
+        isTeacher: true,
+        isConnected: true,
+        isCameraOn: false,
+        isMicOn: true,
+        isSharingScreen: false,
+        participantCount: 0).StatusText;
+
+    using var staleFrame = new Bitmap(4, 4);
+    preview.Image = staleFrame;
+    placeholder.Visible = false;
+    SetFieldValue(form, "_activeStudentScreenShareSenderId", 42);
+    setLiveStatus.Invoke(form, new object[] { "Äang xem Há»c viÃªn A trÃ¬nh bÃ y: Desktop - 10:16:30" });
+
+    Exception? backgroundFailure = null;
+    var disconnectThread = new Thread(() =>
+    {
+        try
+        {
+            safeResetDisconnectedPresenter.Invoke(form, new object[] { 42, "Há»c viÃªn A" });
+        }
+        catch (Exception ex)
+        {
+            backgroundFailure = ex;
+        }
+    });
+
+    disconnectThread.Start();
+    disconnectThread.Join();
+    if (backgroundFailure != null)
+        throw new InvalidOperationException(backgroundFailure.Message, backgroundFailure);
+
+    Application.DoEvents();
+
+    AssertEqual(expectedBaselineStatus, status.Text);
+    AssertEqual(0, GetFieldValue<int>(form, "_activeStudentScreenShareSenderId"));
+    AssertEqual(null, preview.Image);
+    AssertTrue(placeholder.Text.Contains("Há»c viÃªn A", StringComparison.Ordinal), "background disconnect cleanup placeholder should identify the disconnected presenter");
+    AssertImageDisposed(staleFrame, "background disconnect cleanup must dispose the stale presenter frame");
+
+    using var preservedFrame = new Bitmap(4, 4);
+    preview.Image = preservedFrame;
+    placeholder.Visible = false;
+    SetFieldValue(form, "_activeStudentScreenShareSenderId", 7);
+    setLiveStatus.Invoke(form, new object[] { "Äang xem Há»c viÃªn B trÃ¬nh bÃ y: Desktop - 10:18:00" });
+
+    backgroundFailure = null;
+    disconnectThread = new Thread(() =>
+    {
+        try
+        {
+            safeResetDisconnectedPresenter.Invoke(form, new object[] { 99, "Há»c viÃªn Z" });
+        }
+        catch (Exception ex)
+        {
+            backgroundFailure = ex;
+        }
+    });
+
+    disconnectThread.Start();
+    disconnectThread.Join();
+    if (backgroundFailure != null)
+        throw new InvalidOperationException(backgroundFailure.Message, backgroundFailure);
+
+    Application.DoEvents();
+
+    AssertEqual("Äang xem Há»c viÃªn B trÃ¬nh bÃ y: Desktop - 10:18:00", status.Text);
+    AssertTrue(ReferenceEquals(preview.Image, preservedFrame), "inactive student disconnect must preserve the current stage frame");
+    AssertEqual(7, GetFieldValue<int>(form, "_activeStudentScreenShareSenderId"));
 }
 
 static void RunTeacherAttendanceSummarySourceTests()
@@ -3499,6 +4621,376 @@ static void RunStudentGridPageInitialFailureTests()
 
     if (failure != null)
         throw new InvalidOperationException(failure.Message, failure);
+}
+
+static void RunTeacherGridPageStaleLoadVersioningTests()
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+            using var page = new TestTeacherGridPage();
+            page.BeginControlledLoads();
+
+            TaskCompletionSource<DataTable> staleSuccess = page.EnqueuePendingLoad();
+            TaskCompletionSource<DataTable> currentSuccess = page.EnqueuePendingLoad();
+
+            Task firstLoad = page.LoadForTestAsync();
+            Task secondLoad = page.LoadForTestAsync();
+
+            currentSuccess.SetResult(TestTeacherGridPage.CreateTable("new"));
+            WaitForTaskWithMessagePump(secondLoad);
+
+            staleSuccess.SetResult(TestTeacherGridPage.CreateTable("old"));
+            WaitForTaskWithMessagePump(Task.WhenAll(firstLoad, secondLoad));
+
+            DataTable afterStaleSuccess = page.ExposedBindingSource.DataSource as DataTable
+                ?? throw new InvalidOperationException("teacher grid page should bind a DataTable after successful refresh");
+            AssertEqual(1, afterStaleSuccess.Rows.Count);
+            AssertEqual("new", afterStaleSuccess.Rows[0]["Name"]?.ToString());
+            AssertEqual("new", page.ExposedGrid.Rows[0].Cells["Name"].Value?.ToString());
+
+            TaskCompletionSource<DataTable> staleFailure = page.EnqueuePendingLoad();
+            TaskCompletionSource<DataTable> currentAfterFailure = page.EnqueuePendingLoad();
+
+            Task thirdLoad = page.LoadForTestAsync();
+            Task fourthLoad = page.LoadForTestAsync();
+
+            currentAfterFailure.SetResult(TestTeacherGridPage.CreateTable("latest"));
+            WaitForTaskWithMessagePump(fourthLoad);
+
+            RunWithAutoClosingThemedDialog(() =>
+            {
+                staleFailure.SetException(new InvalidOperationException("stale failure"));
+                WaitForTaskWithMessagePump(Task.WhenAll(thirdLoad, fourthLoad));
+                return Task.CompletedTask;
+            });
+
+            DataTable afterStaleFailure = page.ExposedBindingSource.DataSource as DataTable
+                ?? throw new InvalidOperationException("teacher grid page should preserve latest bound table after stale failure");
+            AssertEqual(1, afterStaleFailure.Rows.Count);
+            AssertEqual("latest", afterStaleFailure.Rows[0]["Name"]?.ToString());
+            AssertEqual("latest", page.ExposedGrid.Rows[0].Cells["Name"].Value?.ToString());
+            AssertTrue(page.ExposedGrid.Visible, "stale failure should not hide rows from the newer successful load");
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw new InvalidOperationException(failure.Message, failure);
+}
+
+static void RunTeacherScheduleFailureCleanupTests()
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+
+            var page = (UC_TeacherSchedule)RuntimeHelpers.GetUninitializedObject(typeof(UC_TeacherSchedule));
+            SetFieldValue(page, "_sessions", new List<TeacherScheduleItemModel>
+            {
+                new() { Id = 10, CourseId = 1, CourseName = "Lap trinh mang", Title = "TCP", StartTime = DateTime.Now }
+            });
+            SetFieldValue(page, "_filteredSessions", new List<TeacherScheduleItemModel>
+            {
+                new() { Id = 10, CourseId = 1, CourseName = "Lap trinh mang", Title = "TCP", StartTime = DateTime.Now }
+            });
+            SetFieldValue(page, "_filterCache", new Dictionary<int, (List<TeacherScheduleItemModel>, Dictionary<DateTime, List<TeacherScheduleItemModel>>, DateTime, DateTime, string)>());
+            SetFieldValue(page, "_selectedCalendarSessionId", 10);
+
+            var dataCard = new RoundedPanel { Width = 480, Height = 320 };
+            var grid = new DataGridView();
+            grid.Columns.Add("Id", "Id");
+            grid.Rows.Add(10);
+            grid.CurrentCell = grid.Rows[0].Cells[0];
+            var calendarView = new TableLayoutPanel();
+            calendarView.Controls.Add(new Label { Text = "stale" });
+            var emptyState = new Label { Visible = false };
+            var openButton = new Button { Text = "Mở lớp", Enabled = true };
+            var editButton = new Button { Enabled = true };
+            var deleteButton = new Button { Enabled = true };
+            var summaryTitle = new Label { Text = "stale title" };
+            var summaryDetail = new Label { Text = "stale detail" };
+            var summaryAction = new Label { Text = "stale action" };
+
+            SetFieldValue(page, "_dataCard", dataCard);
+            SetFieldValue(page, "_grid", grid);
+            SetFieldValue(page, "_calendarView", calendarView);
+            SetFieldValue(page, "_emptyStateLabel", emptyState);
+            SetFieldValue(page, "_btnOpenClass", openButton);
+            SetFieldValue(page, "_btnEdit", editButton);
+            SetFieldValue(page, "_btnDelete", deleteButton);
+            SetFieldValue(page, "_selectedSessionTitle", summaryTitle);
+            SetFieldValue(page, "_selectedSessionDetail", summaryDetail);
+            SetFieldValue(page, "_selectedSessionAction", summaryAction);
+
+            MethodInfo clear = typeof(UC_TeacherSchedule).GetMethod("ClearScheduleStateAfterLoadFailure", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("Cannot find ClearScheduleStateAfterLoadFailure");
+            clear.Invoke(page, new object[] { "Lỗi tải lịch dạy: boom" });
+
+            AssertEqual(0, GetFieldValue<List<TeacherScheduleItemModel>>(page, "_sessions").Count);
+            AssertEqual(0, GetFieldValue<List<TeacherScheduleItemModel>>(page, "_filteredSessions").Count);
+            AssertEqual(0, ((System.Collections.IDictionary)typeof(UC_TeacherSchedule).GetField("_filterCache", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(page)!).Count);
+            AssertTrue(typeof(UC_TeacherSchedule).GetField("_selectedCalendarSessionId", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(page) == null,
+                "failure cleanup must clear selected calendar session id");
+            AssertTrue(grid.CurrentCell == null, "failure cleanup must clear current grid cell");
+            AssertEqual(0, calendarView.Controls.Count);
+            AssertFalse(grid.Visible, "failure cleanup must hide stale grid");
+            AssertFalse(calendarView.Visible, "failure cleanup must hide stale calendar");
+            AssertTrue(emptyState.Visible, "failure cleanup must show empty/error state");
+            AssertEqual("Lỗi tải lịch dạy: boom", emptyState.Text);
+            AssertEqual("Dạy online", openButton.Text);
+            AssertFalse(openButton.Enabled, "failure cleanup must disable open class");
+            AssertFalse(editButton.Enabled, "failure cleanup must disable edit");
+            AssertFalse(deleteButton.Enabled, "failure cleanup must disable delete");
+            AssertEqual("Chưa chọn lịch dạy", summaryTitle.Text);
+            AssertTrue(summaryDetail.Text.Contains("Chọn một buổi dạy"), "failure cleanup must reset summary detail");
+            AssertEqual("Hành động: Dạy online", summaryAction.Text);
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw new InvalidOperationException(failure.Message, failure);
+}
+
+static void RunStudentScheduleFailureCleanupTests()
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+
+            var page = (UC_Schedule)RuntimeHelpers.GetUninitializedObject(typeof(UC_Schedule));
+            SetFieldValue(page, "_sessions", new List<StudentScheduleItemModel>
+            {
+                new() { SessionId = 21, CourseName = "Lap trinh mang", Title = "TCP", TeacherName = "GV A", StartTime = DateTime.Now, MeetingLink = "tcp" }
+            });
+            SetFieldValue(page, "_filterCache", new Dictionary<int, (List<StudentScheduleItemModel>, Dictionary<DateTime, List<StudentScheduleItemModel>>, DateTime, DateTime, string)>());
+            SetFieldValue(page, "_selectedCalendarSessionId", 21);
+            SetFieldValue(page, "_isCalendarView", false);
+
+            var scheduleBody = new RoundedPanel { Width = 480, Height = 320 };
+            var grid = new DataGridView();
+            grid.Columns.Add("SessionId", "SessionId");
+            grid.Rows.Add(21);
+            grid.CurrentCell = grid.Rows[0].Cells[0];
+            var calendarView = new TableLayoutPanel();
+            calendarView.Controls.Add(new Label { Text = "stale" });
+            var emptyState = new Label { Visible = false };
+            var joinButton = new Button { Text = "Vào lớp", Enabled = true };
+            var quickNoteButton = new Button { Enabled = true };
+            var summaryTitle = new Label { Text = "stale title" };
+            var summaryDetail = new Label { Text = "stale detail" };
+            var summaryAction = new Label { Text = "stale action" };
+
+            SetFieldValue(page, "_scheduleBody", scheduleBody);
+            SetFieldValue(page, "dgvSchedule", grid);
+            SetFieldValue(page, "_calendarView", calendarView);
+            SetFieldValue(page, "_emptyStateLabel", emptyState);
+            SetFieldValue(page, "btnJoinOnline", joinButton);
+            SetFieldValue(page, "_btnQuickNote", quickNoteButton);
+            SetFieldValue(page, "_selectedSessionTitle", summaryTitle);
+            SetFieldValue(page, "_selectedSessionDetail", summaryDetail);
+            SetFieldValue(page, "_selectedSessionAction", summaryAction);
+
+            MethodInfo clear = typeof(UC_Schedule).GetMethod("ClearScheduleStateAfterLoadFailure", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("Cannot find ClearScheduleStateAfterLoadFailure");
+            clear.Invoke(page, new object[] { "Lỗi tải lịch học: boom" });
+
+            AssertEqual(0, GetFieldValue<List<StudentScheduleItemModel>>(page, "_sessions").Count);
+            AssertEqual(0, ((System.Collections.IDictionary)typeof(UC_Schedule).GetField("_filterCache", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(page)!).Count);
+            AssertTrue(typeof(UC_Schedule).GetField("_selectedCalendarSessionId", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(page) == null,
+                "failure cleanup must clear selected calendar session id");
+            AssertTrue(grid.CurrentCell == null, "failure cleanup must clear current grid cell");
+            AssertEqual(0, calendarView.Controls.Count);
+            AssertFalse(grid.Visible, "failure cleanup must hide stale grid");
+            AssertFalse(calendarView.Visible, "failure cleanup must hide stale calendar");
+            AssertTrue(emptyState.Visible, "failure cleanup must show empty/error state");
+            AssertEqual("Lỗi tải lịch học: boom", emptyState.Text);
+            AssertEqual("Chưa chọn buổi học", summaryTitle.Text);
+            AssertTrue(summaryDetail.Text.Contains("Chọn một buổi học"), "failure cleanup must reset summary detail");
+            AssertEqual("Hành động: Tham gia online", summaryAction.Text);
+            AssertEqual("Tham gia online", joinButton.Text);
+            AssertFalse(joinButton.Enabled, "failure cleanup must disable join");
+            AssertFalse(quickNoteButton.Enabled, "failure cleanup must disable quick note");
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw new InvalidOperationException(failure.Message, failure);
+}
+
+static void RunTeacherSimpleItemDialogValidationTests()
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+
+            var dialog = (TeacherSimpleItemDialog)RuntimeHelpers.GetUninitializedObject(typeof(TeacherSimpleItemDialog));
+            MethodInfo validate = typeof(TeacherSimpleItemDialog).GetMethod("ValidateBeforeSave", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("Cannot find ValidateBeforeSave");
+            MethodInfo hookInputs = typeof(TeacherSimpleItemDialog).GetMethod("HookValidationInputs", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("Cannot find HookValidationInputs");
+
+            TeacherCourseModel course = new() { Id = 12, Name = "Lập trình mạng" };
+            ComboBox courseCombo = new();
+            courseCombo.DisplayMember = nameof(TeacherCourseModel.Name);
+            courseCombo.Items.Add(course);
+            courseCombo.SelectedIndex = 0;
+            TextBox title = new() { Text = string.Empty };
+            TextBox details = new();
+            DateTimePicker date = new() { Value = new DateTime(2026, 6, 15, 0, 0, 0) };
+            DateTimePicker start = new() { Format = DateTimePickerFormat.Custom, CustomFormat = "HH:mm", ShowUpDown = true, Value = new DateTime(2026, 6, 15, 9, 0, 0) };
+            DateTimePicker end = new() { Format = DateTimePickerFormat.Custom, CustomFormat = "HH:mm", ShowUpDown = true, Value = new DateTime(2026, 6, 15, 8, 0, 0) };
+            ComboBox status = new();
+            Label validationSummary = new() { Visible = false };
+
+            SetFieldValue(dialog, "CourseCombo", courseCombo);
+            SetFieldValue(dialog, "TitleTextBox", title);
+            SetFieldValue(dialog, "DetailsTextBox", details);
+            SetFieldValue(dialog, "DatePicker", date);
+            SetFieldValue(dialog, "StartTimePicker", start);
+            SetFieldValue(dialog, "EndTimePicker", end);
+            SetFieldValue(dialog, "StatusCombo", status);
+            SetFieldValue(dialog, "_validationSummary", validationSummary);
+            SetFieldValue(dialog, "_enableTimeRange", true);
+
+            hookInputs.Invoke(dialog, Array.Empty<object>());
+
+            bool initialValid = (bool)validate.Invoke(dialog, Array.Empty<object>())!;
+            AssertFalse(initialValid, "empty title must fail validation");
+            AssertTrue(validationSummary.Visible, "invalid save must show inline validation summary");
+            AssertEqual("Vui lòng nhập tiêu đề.", validationSummary.Text);
+
+            title.Text = "Buổi 1";
+            AssertTrue(validationSummary.Visible, "fixing title while time is still invalid should keep summary visible");
+            AssertEqual("Thời gian kết thúc phải sau thời gian bắt đầu.", validationSummary.Text);
+
+            end.Value = start.Value.AddHours(2);
+            AssertFalse(validationSummary.Visible, "fixing time range should clear visible validation without another save");
+            AssertEqual(string.Empty, validationSummary.Text);
+
+            bool validAfterFix = (bool)validate.Invoke(dialog, Array.Empty<object>())!;
+            AssertTrue(validAfterFix, "dialog should validate successfully after title and time are fixed");
+            AssertFalse(validationSummary.Visible, "successful validation must hide validation summary");
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw new InvalidOperationException(failure.Message, failure);
+}
+
+static void RunStudentScheduleCalendarLabelReuseTests()
+{
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+
+            var page = (UC_Schedule)RuntimeHelpers.GetUninitializedObject(typeof(UC_Schedule));
+            MethodInfo createCell = typeof(UC_Schedule).GetMethod("CreateCalendarDayCell", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("Cannot find CreateCalendarDayCell");
+            MethodInfo configureCell = typeof(UC_Schedule).GetMethod("ConfigureCalendarDayCell", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("Cannot find ConfigureCalendarDayCell");
+
+            RoundedPanel cell = (RoundedPanel)(createCell.Invoke(null, Array.Empty<object>()) ?? throw new InvalidOperationException("CreateCalendarDayCell returned null"));
+            DateTime today = new DateTime(2026, 6, 15);
+            StudentScheduleItemModel session = new()
+            {
+                SessionId = 44,
+                CourseId = 5,
+                CourseName = "Lập trình mạng",
+                Title = "TCP",
+                StartTime = today.AddHours(9)
+            };
+
+            configureCell.Invoke(page, new object[] { cell, today, new List<StudentScheduleItemModel> { session }, today });
+            Label assignedLabel = AssertControl<Label>(cell.Controls["lblSession0"]!, "calendar cell must expose lblSession0");
+            AssertEqual($"{session.StartTime:HH:mm} - TCP", assignedLabel.Text);
+            AssertEqual(Cursors.Hand, assignedLabel.Cursor);
+            AssertEqual(session.SessionId, assignedLabel.Tag);
+
+            configureCell.Invoke(page, new object[] { cell, today, new List<StudentScheduleItemModel>(), today });
+
+            for (int i = 0; i < 3; i++)
+            {
+                Label sessionLabel = AssertControl<Label>(cell.Controls[$"lblSession{i}"]!, $"calendar cell must expose lblSession{i}");
+                AssertFalse(sessionLabel.Visible, $"unused pooled label {i} should be hidden");
+                AssertEqual(string.Empty, sessionLabel.Text);
+                AssertTrue(sessionLabel.Tag == null, $"unused pooled label {i} must clear Tag");
+                AssertEqual(Cursors.Default, sessionLabel.Cursor);
+            }
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+
+    if (failure != null)
+        throw new InvalidOperationException(failure.Message, failure);
+}
+
+static void WaitForTaskWithMessagePump(Task task, int timeoutMilliseconds = 5000)
+{
+    DateTime deadline = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
+    while (!task.IsCompleted)
+    {
+        if (DateTime.UtcNow >= deadline)
+            throw new TimeoutException("Timed out while waiting for WinForms task completion.");
+
+        Application.DoEvents();
+        Thread.Sleep(10);
+    }
+
+    task.GetAwaiter().GetResult();
 }
 
 static void RunMessageDialogButtonTests()
@@ -4057,6 +5549,7 @@ sealed class FakeClassroomSignalService : IClassroomSignalService
 
     public int StartCount => Volatile.Read(ref _startCount);
     public List<int> BroadcastSessionIds { get; } = new();
+    public List<int> ClosedBroadcastSessionIds { get; } = new();
     public bool ThrowOnStartListening { get; set; }
     public Action? OnStartListening { get; set; }
 
@@ -4073,6 +5566,17 @@ sealed class FakeClassroomSignalService : IClassroomSignalService
         lock (_broadcastLock)
         {
             BroadcastSessionIds.Add(sessionId);
+            _broadcastCountChanged.Set();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task BroadcastClassClosed(int sessionId)
+    {
+        lock (_broadcastLock)
+        {
+            ClosedBroadcastSessionIds.Add(sessionId);
             _broadcastCountChanged.Set();
         }
 
@@ -4194,6 +5698,66 @@ sealed class TestStudentGridPage : StudentGridPageBase
     }
 
     private static DataTable CreateTable(IEnumerable<string> rows)
+    {
+        DataTable table = new();
+        table.Columns.Add("ID", typeof(int));
+        table.Columns.Add("Name", typeof(string));
+        int id = 1;
+        foreach (string row in rows)
+            table.Rows.Add(id++, row);
+        return table;
+    }
+}
+
+sealed class TestTeacherGridPage : TeacherGridPageBase
+{
+    private readonly object _pendingLoadLock = new();
+    private readonly Queue<TaskCompletionSource<DataTable>> _pendingLoads = new();
+    private bool _useControlledLoads;
+
+    public TestTeacherGridPage()
+        : base(
+            1,
+            (TeacherController)RuntimeHelpers.GetUninitializedObject(typeof(TeacherController)),
+            "Teacher test page",
+            "Builds common teacher grid chrome.",
+            "Rows")
+    {
+    }
+
+    public DataGridView ExposedGrid => Grid;
+    public BindingSource ExposedBindingSource => BindingSource;
+
+    public Task LoadForTestAsync() => LoadDataAsync();
+
+    public void BeginControlledLoads()
+    {
+        _useControlledLoads = true;
+    }
+
+    public TaskCompletionSource<DataTable> EnqueuePendingLoad()
+    {
+        TaskCompletionSource<DataTable> pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_pendingLoadLock)
+            _pendingLoads.Enqueue(pending);
+        return pending;
+    }
+
+    protected override Task<DataTable> CreateTableAsync()
+    {
+        if (_useControlledLoads)
+        {
+            lock (_pendingLoadLock)
+            {
+                if (_pendingLoads.Count > 0)
+                    return _pendingLoads.Dequeue().Task;
+            }
+        }
+
+        return Task.FromResult(CreateTable());
+    }
+
+    public static DataTable CreateTable(params string[] rows)
     {
         DataTable table = new();
         table.Columns.Add("ID", typeof(int));

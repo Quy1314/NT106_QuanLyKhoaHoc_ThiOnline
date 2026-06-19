@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -20,31 +21,35 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private readonly int _teacherId;
         private readonly TeacherController _controller;
         private readonly ClassroomOpenSignalCoordinator _classroomSignal;
-        
+        private readonly System.Windows.Forms.Timer _filterDebounceTimer;
+        private readonly Dictionary<int, (List<TeacherScheduleItemModel> Sessions, Dictionary<DateTime, List<TeacherScheduleItemModel>> SessionsByDate, DateTime CalendarStart, DateTime CalendarEnd, string EmptyMessage)> _filterCache = new();
+
         private TableLayoutPanel _rootLayout = null!;
         private RoundedPanel _dataCard = null!;
         private DataGridView _grid = null!;
         private TableLayoutPanel _calendarView = null!;
         private Label _emptyStateLabel = null!;
-
         private Button _btnToggleView = null!;
         private Button _btnOpenClass = null!;
         private Button _btnAdd = null!;
         private Button _btnEdit = null!;
         private Button _btnDelete = null!;
         private Button _btnRefresh = null!;
+        private ComboBox _cboTimeFilter = null!;
+        private RoundedPanel _selectedSessionSummary = null!;
+        private Label _selectedSessionTitle = null!;
+        private Label _selectedSessionDetail = null!;
+        private Label _selectedSessionAction = null!;
 
         private bool _isCalendarView = true;
         private bool _isOpeningClass;
+        private int _filterRenderVersion;
+        private int? _selectedCalendarSessionId;
         private List<TeacherScheduleItemModel> _sessions = new();
         private List<TeacherScheduleItemModel> _filteredSessions = new();
-        private ComboBox _cboTimeFilter = null!;
-        private readonly System.Windows.Forms.Timer _filterDebounceTimer;
-        private readonly Dictionary<int, (List<TeacherScheduleItemModel> Sessions, Dictionary<DateTime, List<TeacherScheduleItemModel>> SessionsByDate, DateTime CalendarStart, DateTime CalendarEnd, string EmptyMessage)> _filterCache = new();
-        private int _filterRenderVersion;
 
         public UC_TeacherSchedule(int teacherId)
-            : this(teacherId, new TeacherController(new CourseGuardDbContext("")))
+            : this(teacherId, new TeacherController(new CourseGuardDbContext(string.Empty)))
         {
         }
 
@@ -59,17 +64,17 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 _filterDebounceTimer.Stop();
                 ApplyTimeFilterAsync().FireAndForgetSafe(this);
             };
-            BuildUI();
 
+            BuildUI();
             LoadDataAsync().FireAndForgetSafe(this);
             Disposed += (_, _) => _filterDebounceTimer.Dispose();
         }
 
         private void BuildUI()
         {
-            this.BackColor = AppColors.BgBase;
-            this.Dock = DockStyle.Fill;
-            
+            BackColor = AppColors.BgBase;
+            Dock = DockStyle.Fill;
+
             _grid = new DataGridView
             {
                 Dock = DockStyle.Fill,
@@ -80,7 +85,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             TeacherTabChrome.StyleGrid(_grid);
             _grid.RowTemplate.Height = 52;
             _grid.ColumnHeadersHeight = 48;
-            
+
             _calendarView = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -90,7 +95,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 BackColor = AppColors.BgBase,
                 AutoScroll = true
             };
-            for (int i = 0; i < 7; i++) _calendarView.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / 7));
+            for (int i = 0; i < 7; i++)
+                _calendarView.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / 7));
 
             _btnAdd = TeacherTabChrome.PrimaryButton("Thêm");
             _btnEdit = TeacherTabChrome.SecondaryButton("Sửa");
@@ -108,7 +114,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _cboTimeFilter.Font = AppFonts.Body;
             _cboTimeFilter.BackColor = AppColors.BgCard;
             _cboTimeFilter.ForeColor = AppColors.TextPrimary;
-            
+
             _btnAdd.Click += async (_, _) => await AddAsync();
             _btnEdit.Click += async (_, _) => await EditAsync();
             _btnDelete.Click += async (_, _) => await DeleteAsync();
@@ -116,13 +122,21 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _btnToggleView.Click += ToggleView;
             _btnOpenClass.Click += async (_, _) => await OpenClassAsync();
             _cboTimeFilter.SelectedIndexChanged += (_, _) => ScheduleFilterRefresh();
-            _grid.SelectionChanged += (_, _) => UpdateActionButtons();
+            _grid.SelectionChanged += (_, _) => HandleGridSelectionChanged();
 
             _rootLayout = TeacherTabChrome.CreateRoot(this);
-            var header = TeacherTabChrome.CreateHeader("Lịch dạy", "Quản lý lịch học và mở lớp trực tuyến",
-                new Control[] { _cboTimeFilter, _btnOpenClass, _btnToggleView, _btnAdd, _btnEdit, _btnDelete, _btnRefresh });
-            _rootLayout.Controls.Add(header, 0, 0);
+            _rootLayout.Controls.Add(TeacherTabChrome.CreateHeader(
+                "Lịch dạy",
+                "Quản lý lịch học và mở lớp trực tuyến",
+                new Control[] { _cboTimeFilter, _btnOpenClass, _btnToggleView, _btnAdd, _btnEdit, _btnDelete, _btnRefresh }), 0, 0);
 
+            _dataCard = new RoundedPanel
+            {
+                CornerRadius = 10,
+                BackColor = AppColors.BgElevated,
+                Dock = DockStyle.Fill,
+                Padding = new Padding(8)
+            };
             _emptyStateLabel = new Label
             {
                 Text = "Chưa có lịch dạy.",
@@ -131,21 +145,77 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 AutoSize = true,
                 Visible = false
             };
-            
-            _dataCard = new RoundedPanel { CornerRadius = 10, BackColor = AppColors.BgElevated, Dock = DockStyle.Fill, Padding = new Padding(8) };
             _dataCard.Controls.Add(_emptyStateLabel);
             _dataCard.Controls.Add(_grid);
             _dataCard.Controls.Add(_calendarView);
-            
+
             var scheduleCard = TeacherTabChrome.CreateDataCard("Lịch dạy của bạn", _dataCard);
             scheduleCard.Padding = new Padding(12);
+            scheduleCard.Margin = new Padding(0, 0, 0, 12);
             EnableDoubleBuffering(this);
             EnableDoubleBuffering(_dataCard);
             EnableDoubleBuffering(_calendarView);
             EnableDoubleBuffering(_grid);
             _rootLayout.Controls.Add(scheduleCard, 0, 1);
+
+            _rootLayout.RowCount = 3;
+            _rootLayout.RowStyles.Clear();
+            _rootLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            _rootLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            _selectedSessionSummary = TeacherTabChrome.CreateCard();
+            _selectedSessionSummary.Padding = new Padding(18, 14, 18, 14);
+            _selectedSessionSummary.AutoSize = true;
+            _selectedSessionSummary.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+
+            var summaryLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 3,
+                BackColor = Color.Transparent,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
+            };
+            summaryLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            summaryLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            summaryLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            _selectedSessionTitle = new Label
+            {
+                AutoSize = true,
+                Font = AppFonts.Semibold(11f),
+                ForeColor = AppColors.TextPrimary,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty
+            };
+            _selectedSessionDetail = new Label
+            {
+                AutoSize = true,
+                Font = AppFonts.Body,
+                ForeColor = AppColors.TextSecondary,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, 6, 0, 0)
+            };
+            _selectedSessionAction = new Label
+            {
+                AutoSize = true,
+                Font = MetaTheme.Fonts.BodySmBold(),
+                ForeColor = AppColors.AccentBlue,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, 8, 0, 0)
+            };
+
+            summaryLayout.Controls.Add(_selectedSessionTitle, 0, 0);
+            summaryLayout.Controls.Add(_selectedSessionDetail, 0, 1);
+            summaryLayout.Controls.Add(_selectedSessionAction, 0, 2);
+            _selectedSessionSummary.Controls.Add(summaryLayout);
+            _rootLayout.Controls.Add(_selectedSessionSummary, 0, 2);
+
+            ResetSelectedSessionSummary();
         }
-        
+
         private async Task LoadDataAsync()
         {
             this.ShowSkeleton(SkeletonType.CalendarView);
@@ -161,6 +231,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             }
             catch (Exception ex)
             {
+                ClearScheduleStateAfterLoadFailure($"Lỗi tải lịch dạy: {ex.Message}");
                 MetaTheme.ShowModernDialog("Lỗi tải lịch dạy: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -168,7 +239,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 this.HideSkeleton();
             }
         }
-        
+
         private void ScheduleFilterRefresh()
         {
             _filterDebounceTimer.Stop();
@@ -186,9 +257,9 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 return;
             }
 
-            var source = _sessions.ToList();
-            var prepared = await Task.Run(() => PrepareFilterData(source, filterIndex));
-            if (IsDisposed || renderVersion != _filterRenderVersion) return;
+            var prepared = await Task.Run(() => PrepareFilterData(_sessions.ToList(), filterIndex));
+            if (IsDisposed || renderVersion != _filterRenderVersion)
+                return;
 
             _filterCache[filterIndex] = prepared;
             _filteredSessions = prepared.Sessions;
@@ -212,7 +283,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     emptyMessage = "Hôm nay chưa có lịch dạy.";
                     break;
                 case 1:
-                    DateTime startOfWeek = now.Date.AddDays(-(int)now.DayOfWeek + 1);
+                    DateTime startOfWeek = StartOfWeek(now);
                     DateTime endOfWeek = startOfWeek.AddDays(7);
                     filtered = filtered.Where(s => s.StartTime.HasValue && s.StartTime.Value >= startOfWeek && s.StartTime.Value < endOfWeek);
                     calendarStart = startOfWeek;
@@ -228,7 +299,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     emptyMessage = "Chưa có lịch dạy trong tháng này.";
                     break;
                 default:
-                    calendarStart = now.Date.AddDays(-(int)now.DayOfWeek);
+                    calendarStart = StartOfWeek(now);
                     calendarEnd = now.Date.AddMonths(6);
                     filtered = filtered.Where(s => !s.StartTime.HasValue || (s.StartTime.Value.Date >= calendarStart && s.StartTime.Value.Date <= calendarEnd));
                     break;
@@ -249,9 +320,9 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         private void RefreshView(List<TeacherScheduleItemModel> sessions, Dictionary<DateTime, List<TeacherScheduleItemModel>> sessionsByDate, string emptyMessage, DateTime calendarStart, DateTime calendarEnd)
         {
-            bool hasRows = sessions.Count > 0;
+            EnsureSelectedSessionStillVisible(sessions.Select(s => s.Id));
             _emptyStateLabel.Text = emptyMessage;
-            UpdateActionButtons();
+
             _dataCard.SuspendLayout();
             try
             {
@@ -259,14 +330,14 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 {
                     _grid.Visible = false;
                     _calendarView.Visible = true;
-                    _emptyStateLabel.Visible = !hasRows;
+                    _emptyStateLabel.Visible = !sessions.Any();
                     RenderCalendar(sessions, sessionsByDate, calendarStart, calendarEnd);
                 }
                 else
                 {
                     _calendarView.Visible = false;
-                    _grid.Visible = hasRows;
-                    _emptyStateLabel.Visible = !hasRows;
+                    _grid.Visible = sessions.Any();
+                    _emptyStateLabel.Visible = !sessions.Any();
                     BindGrid(sessions);
                 }
             }
@@ -274,7 +345,9 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             {
                 _dataCard.ResumeLayout(true);
             }
+
             CenterEmptyLabel();
+            UpdateSelectedSessionSummary(GetSelectedSession());
             UpdateActionButtons();
         }
 
@@ -283,26 +356,39 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _grid.SuspendLayout();
             try
             {
-                var dt = new DataTable();
+                DataTable dt = new();
                 dt.Columns.Add("Id", typeof(int));
                 dt.Columns.Add("CourseId", typeof(int));
                 dt.Columns.Add("Khóa học", typeof(string));
                 dt.Columns.Add("Tiêu đề", typeof(string));
                 dt.Columns.Add("Bắt đầu", typeof(string));
                 dt.Columns.Add("Kết thúc", typeof(string));
+                dt.Columns.Add("Trạng thái", typeof(string));
+                dt.Columns.Add("Hành động", typeof(string));
                 dt.Columns.Add("Link", typeof(string));
 
-                foreach (var s in sessions)
+                foreach (TeacherScheduleItemModel session in sessions)
                 {
-                    dt.Rows.Add(s.Id, s.CourseId, s.CourseName, s.Title,
-                        s.StartTime?.ToString("dd/MM/yyyy HH:mm") ?? "",
-                        s.EndTime?.ToString("dd/MM/yyyy HH:mm") ?? "",
-                        s.MeetingLink);
+                    ScheduleUxPresentation view = ScheduleUxPresenter.PresentTeacher(session, DateTime.Now);
+                    dt.Rows.Add(
+                        session.Id,
+                        session.CourseId,
+                        session.CourseName,
+                        session.Title,
+                        session.StartTime?.ToString("dd/MM/yyyy HH:mm") ?? string.Empty,
+                        session.EndTime?.ToString("dd/MM/yyyy HH:mm") ?? string.Empty,
+                        view.StatusText,
+                        view.PrimaryActionText,
+                        session.MeetingLink);
                 }
 
                 _grid.DataSource = dt;
-                if (_grid.Columns["Id"] != null) _grid.Columns["Id"]!.Visible = false;
-                if (_grid.Columns["CourseId"] != null) _grid.Columns["CourseId"]!.Visible = false;
+                if (_grid.Columns["Id"] != null)
+                    _grid.Columns["Id"]!.Visible = false;
+                if (_grid.Columns["CourseId"] != null)
+                    _grid.Columns["CourseId"]!.Visible = false;
+                if (_grid.Columns["Link"] != null)
+                    _grid.Columns["Link"]!.Visible = false;
                 _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
                 ApplyScheduleGridSizing();
                 _grid.ClearSelection();
@@ -316,27 +402,48 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         private void UpdateActionButtons()
         {
-            bool hasRows = _filteredSessions.Count > 0;
-            _btnEdit.Enabled = hasRows && !_isCalendarView;
-            _btnDelete.Enabled = hasRows && !_isCalendarView;
-            _btnOpenClass.Enabled = hasRows && !_isCalendarView;
+            bool hasGridSelection = !_isCalendarView
+                && _grid.CurrentRow != null
+                && !_grid.CurrentRow.IsNewRow;
+            _btnEdit.Enabled = hasGridSelection;
+            _btnDelete.Enabled = hasGridSelection;
+
+            TeacherScheduleItemModel? session = GetSelectedSession();
+            if (session == null)
+            {
+                _btnOpenClass.Text = "Dạy online";
+                _btnOpenClass.Enabled = false;
+                return;
+            }
+
+            ScheduleUxPresentation view = ScheduleUxPresenter.PresentTeacher(session, DateTime.Now);
+            _btnOpenClass.Text = view.PrimaryActionText;
+            _btnOpenClass.Enabled = view.CanOpenClass && !_isOpeningClass;
         }
 
         private TeacherScheduleItemModel? GetSelectedSession()
         {
+            if (_selectedCalendarSessionId.HasValue)
+            {
+                return _filteredSessions.FirstOrDefault(s => s.Id == _selectedCalendarSessionId.Value)
+                    ?? _sessions.FirstOrDefault(s => s.Id == _selectedCalendarSessionId.Value);
+            }
+
             if (_grid.CurrentRow == null || _grid.CurrentRow.IsNewRow)
                 return null;
 
-            var idValue = _grid.CurrentRow.Cells["Id"]?.Value;
+            object? idValue = _grid.CurrentRow.Cells["Id"]?.Value;
             if (idValue == null || !int.TryParse(idValue.ToString(), out int sessionId))
                 return null;
 
-            return _filteredSessions.FirstOrDefault(s => s.Id == sessionId) ?? _sessions.FirstOrDefault(s => s.Id == sessionId);
+            return _filteredSessions.FirstOrDefault(s => s.Id == sessionId)
+                ?? _sessions.FirstOrDefault(s => s.Id == sessionId);
         }
 
         private void ApplyScheduleGridSizing()
         {
-            if (_grid.Columns.Count == 0) return;
+            if (_grid.Columns.Count == 0)
+                return;
 
             _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
@@ -347,7 +454,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             if (_grid.Columns["Tiêu đề"] != null) _grid.Columns["Tiêu đề"]!.FillWeight = 180;
             if (_grid.Columns["Bắt đầu"] != null) _grid.Columns["Bắt đầu"]!.FillWeight = 110;
             if (_grid.Columns["Kết thúc"] != null) _grid.Columns["Kết thúc"]!.FillWeight = 110;
-            if (_grid.Columns["Link"] != null) _grid.Columns["Link"]!.FillWeight = 220;
+            if (_grid.Columns["Trạng thái"] != null) _grid.Columns["Trạng thái"]!.FillWeight = 95;
+            if (_grid.Columns["Hành động"] != null) _grid.Columns["Hành động"]!.FillWeight = 115;
         }
 
         private void CenterEmptyLabel()
@@ -356,18 +464,17 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             {
                 _emptyStateLabel.Location = new Point(
                     (_dataCard.Width - _emptyStateLabel.Width) / 2,
-                    (_dataCard.Height - _emptyStateLabel.Height) / 2
-                );
+                    (_dataCard.Height - _emptyStateLabel.Height) / 2);
             }
         }
-        
+
         private void ToggleView(object? sender, EventArgs e)
         {
             _isCalendarView = !_isCalendarView;
             _btnToggleView.Text = _isCalendarView ? "Dạng Bảng" : "Dạng Lịch";
             ApplyTimeFilterAsync().FireAndForgetSafe(this);
         }
-        
+
         private static string GetVietnameseDayOfWeek(DayOfWeek dayOfWeek)
         {
             return dayOfWeek switch
@@ -394,10 +501,11 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 DateTime today = DateTime.Now.Date;
                 DateTime start = rangeStart.Date;
                 DateTime end = rangeEnd.Date;
-                if (end < start) end = start;
+                if (end < start)
+                    end = start;
+
                 int totalDays = (end - start).Days + 1;
                 int totalWeeks = Math.Max(1, (int)Math.Ceiling(totalDays / 7d));
-
                 _calendarView.RowCount = totalWeeks;
                 bool useScrollableRows = totalWeeks > 6;
                 _calendarView.AutoScroll = useScrollableRows;
@@ -425,7 +533,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             }
         }
 
-        private static Control CreateCalendarDayCell(DateTime currentDate, List<TeacherScheduleItemModel> daySessions, DateTime today)
+        private Control CreateCalendarDayCell(DateTime currentDate, List<TeacherScheduleItemModel> daySessions, DateTime today)
         {
             bool hasSession = daySessions.Count > 0;
             Color scheduledDayColor = Color.FromArgb(34, 197, 94);
@@ -436,7 +544,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             Color dateTextColor = hasSession ? Color.White : AppColors.TextPrimary;
             Color sessionTextColor = hasSession ? scheduledSessionColor : AppColors.TextSecondary;
 
-            var pnl = new RoundedPanel
+            var panel = new RoundedPanel
             {
                 CornerRadius = 10,
                 BackColor = dayBackColor,
@@ -446,7 +554,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 Margin = new Padding(2),
                 Padding = new Padding(5)
             };
-            EnableDoubleBuffering(pnl);
+            EnableDoubleBuffering(panel);
 
             var lblDate = new Label
             {
@@ -457,22 +565,26 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 AutoSize = true,
                 Dock = DockStyle.Top
             };
-            pnl.Controls.Add(lblDate);
+            panel.Controls.Add(lblDate);
 
-            foreach (var s in daySessions.OrderBy(s => s.StartTime).Take(3))
+            foreach (TeacherScheduleItemModel session in daySessions.OrderBy(s => s.StartTime).Take(3))
             {
+                string title = string.IsNullOrWhiteSpace(session.Title) ? session.CourseName : session.Title;
                 var lblSession = new Label
                 {
-                    Text = $"{s.StartTime:HH:mm} - {s.Title}",
+                    Text = $"{session.StartTime:HH:mm} - {title}",
                     Font = MetaTheme.Fonts.Caption(),
                     ForeColor = sessionTextColor,
                     BackColor = dayBackColor,
                     AutoSize = false,
                     Height = 34,
                     Dock = DockStyle.Top,
-                    MaximumSize = new Size(0, 34)
+                    MaximumSize = new Size(0, 34),
+                    Cursor = Cursors.Hand,
+                    Tag = session.Id
                 };
-                pnl.Controls.Add(lblSession);
+                lblSession.Click += CalendarSessionLabel_Click;
+                panel.Controls.Add(lblSession);
                 lblSession.BringToFront();
             }
 
@@ -488,35 +600,28 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     Height = 22,
                     Dock = DockStyle.Top
                 };
-                pnl.Controls.Add(lblMore);
+                panel.Controls.Add(lblMore);
                 lblMore.BringToFront();
             }
-        
-            return pnl;
+
+            return panel;
         }
-        
+
         private async Task OpenClassAsync()
         {
-            var selectedSession = GetSelectedSession();
-            int sessionId = selectedSession?.Id ?? 0;
-            if (_isCalendarView)
-            {
-                MetaTheme.ShowModernDialog("Vui lòng chuyển sang Dạng Bảng để chọn lịch dạy online.", "Thông báo");
-                return;
-            }
-            if (sessionId <= 0)
+            TeacherScheduleItemModel? selectedSession = GetSelectedSession();
+            if (selectedSession == null || selectedSession.Id <= 0)
             {
                 MetaTheme.ShowModernDialog("Vui lòng chọn một lịch dạy để dạy online.", "Thông báo");
                 return;
             }
-            if (!selectedSession!.StartTime.HasValue)
+
+            ScheduleUxPresentation view = ScheduleUxPresenter.PresentTeacher(selectedSession, DateTime.Now);
+            if (!view.CanOpenClass)
             {
-                MetaTheme.ShowModernDialog("Lịch dạy này chưa có thời gian bắt đầu.", "Thông báo");
-                return;
-            }
-            if (DateTime.Now < selectedSession.StartTime.Value)
-            {
-                MetaTheme.ShowModernDialog($"Chưa đến giờ dạy online. Lớp này bắt đầu lúc {selectedSession.StartTime:dd/MM/yyyy HH:mm}.", "Thông báo");
+                MetaTheme.ShowModernDialog($"{view.StatusText}: {view.DetailText}", "Thông báo");
+                UpdateSelectedSessionSummary(selectedSession);
+                UpdateActionButtons();
                 return;
             }
 
@@ -524,16 +629,49 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 return;
 
             _isOpeningClass = true;
-            bool wasOpenClassEnabled = _btnOpenClass.Enabled;
-            _btnOpenClass.Enabled = false;
+            UpdateActionButtons();
             try
             {
                 _classroomSignal.EnsureListeningStarted();
-                await _controller.UpdateSessionStatusAsync(_teacherId, sessionId, true);
-                await _classroomSignal.BroadcastClassOpenedAsync(sessionId);
-                await LoadDataAsync();
+                bool classroomOpened = false;
+                using var onlineClassForm = new TeacherNativeClassroomForm(
+                    selectedSession.Id,
+                    async () =>
+                    {
+                        bool openedStatusUpdated = await _controller.UpdateSessionStatusAsync(_teacherId, selectedSession.Id, true);
+                        if (!openedStatusUpdated)
+                        {
+                            throw new InvalidOperationException("Không thể cập nhật trạng thái buổi học sang đang mở.");
+                        }
 
-                using var onlineClassForm = new TeacherNativeClassroomForm(sessionId);
+                        try
+                        {
+                            await _classroomSignal.BroadcastClassOpenedAsync(selectedSession.Id);
+                            classroomOpened = true;
+                            await LoadDataAsync();
+                        }
+                        catch
+                        {
+                            await _controller.UpdateSessionStatusAsync(_teacherId, selectedSession.Id, false);
+                            throw;
+                        }
+                    },
+                    async () =>
+                    {
+                        if (!classroomOpened)
+                        {
+                            return;
+                        }
+
+                        bool updated = await _controller.UpdateSessionStatusAsync(_teacherId, selectedSession.Id, false);
+                        if (!updated)
+                        {
+                            throw new InvalidOperationException("Không thể cập nhật trạng thái buổi học sang đã đóng.");
+                        }
+
+                        await _classroomSignal.BroadcastClassClosedAsync(selectedSession.Id);
+                        await LoadDataAsync();
+                    });
                 onlineClassForm.ShowDialog(FindForm());
                 await LoadDataAsync();
             }
@@ -544,11 +682,10 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             finally
             {
                 _isOpeningClass = false;
-                _btnOpenClass.Enabled = wasOpenClassEnabled;
+                UpdateActionButtons();
             }
         }
-        
-        // --- CRUD Methods ---
+
         private async Task AddAsync()
         {
             DateTime defaultStart = DateTime.Now.Date.AddHours(Math.Max(DateTime.Now.Hour, 7));
@@ -561,22 +698,25 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 selectedEndTime: defaultStart.AddHours(2));
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                _controller.CreateScheduleItem(_teacherId, new TeacherScheduleItemModel { 
-                    CourseId = dialog.CourseId, 
-                    Title = dialog.ItemTitle, 
-                    StartTime = dialog.SelectedStartTime, 
-                    EndTime = dialog.SelectedEndTime, 
-                    MeetingLink = dialog.Details 
+                _controller.CreateScheduleItem(_teacherId, new TeacherScheduleItemModel
+                {
+                    CourseId = dialog.CourseId,
+                    Title = dialog.ItemTitle,
+                    StartTime = dialog.SelectedStartTime,
+                    EndTime = dialog.SelectedEndTime,
+                    MeetingLink = dialog.Details
                 });
                 await LoadDataAsync();
             }
         }
-        
+
         private async Task EditAsync()
         {
-            if (_grid.CurrentRow == null || _grid.CurrentRow.IsNewRow) return;
+            if (_grid.CurrentRow == null || _grid.CurrentRow.IsNewRow)
+                return;
+
             int id = Convert.ToInt32(_grid.CurrentRow.Cells["Id"].Value);
-            var session = _sessions.FirstOrDefault(s => s.Id == id);
+            TeacherScheduleItemModel? session = _sessions.FirstOrDefault(s => s.Id == id);
             if (session == null)
             {
                 MetaTheme.ShowModernDialog("Không tìm thấy lịch dạy cần sửa.", "Thông báo");
@@ -585,7 +725,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
             DateTime selectedStart = session.StartTime ?? DateTime.Now;
             DateTime selectedEnd = session.EndTime ?? selectedStart.AddHours(2);
-            
+
             using var dialog = new TeacherSimpleItemDialog(
                 "Sửa lịch dạy",
                 _controller.GetCourses(_teacherId),
@@ -598,28 +738,121 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 selectedEndTime: selectedEnd);
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                _controller.UpdateScheduleItem(_teacherId, new TeacherScheduleItemModel { 
-                    Id = id, 
-                    CourseId = dialog.CourseId, 
-                    Title = dialog.ItemTitle, 
-                    StartTime = dialog.SelectedStartTime, 
-                    EndTime = dialog.SelectedEndTime, 
-                    MeetingLink = dialog.Details 
+                _controller.UpdateScheduleItem(_teacherId, new TeacherScheduleItemModel
+                {
+                    Id = id,
+                    CourseId = dialog.CourseId,
+                    Title = dialog.ItemTitle,
+                    StartTime = dialog.SelectedStartTime,
+                    EndTime = dialog.SelectedEndTime,
+                    MeetingLink = dialog.Details
                 });
                 await LoadDataAsync();
             }
         }
-        
+
         private async Task DeleteAsync()
         {
-            if (_grid.CurrentRow == null || _grid.CurrentRow.IsNewRow) return;
+            if (_grid.CurrentRow == null || _grid.CurrentRow.IsNewRow)
+                return;
+
             int id = Convert.ToInt32(_grid.CurrentRow.Cells["Id"].Value);
-            var res = MetaTheme.ShowModernDialog("Bạn có chắc chắn muốn xóa lịch này không?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-            if (res == DialogResult.Yes)
+            DialogResult result = MetaTheme.ShowModernDialog("Bạn có chắc chắn muốn xóa lịch này không?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (result == DialogResult.Yes)
             {
                 _controller.DeleteScheduleItem(_teacherId, id);
                 await LoadDataAsync();
             }
+        }
+
+        private static DateTime? ParseGridDate(string value)
+        {
+            return DateTime.TryParseExact(value, "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsed)
+                ? parsed
+                : null;
+        }
+
+        private void HandleGridSelectionChanged()
+        {
+            if (_grid.Focused && _grid.CurrentRow != null && !_grid.CurrentRow.IsNewRow)
+                _selectedCalendarSessionId = null;
+
+            UpdateSelectedSessionSummary(GetSelectedSession());
+            UpdateActionButtons();
+        }
+
+        private void UpdateSelectedSessionSummary(TeacherScheduleItemModel? session)
+        {
+            if (session == null)
+            {
+                ResetSelectedSessionSummary();
+                return;
+            }
+
+            ScheduleUxPresentation view = ScheduleUxPresenter.PresentTeacher(session, DateTime.Now);
+            string title = string.IsNullOrWhiteSpace(session.Title) ? session.CourseName : session.Title;
+            _selectedSessionTitle.Text = $"{title} - {view.StatusText}";
+            _selectedSessionDetail.Text = view.DetailText;
+            _selectedSessionAction.Text = $"Hành động: {view.PrimaryActionText}";
+        }
+
+        private void ResetSelectedSessionSummary()
+        {
+            _selectedSessionTitle.Text = "Chưa chọn lịch dạy";
+            _selectedSessionDetail.Text = "Chọn một buổi dạy trong bảng hoặc lịch để xem trạng thái và mở lớp đúng lúc.";
+            _selectedSessionAction.Text = "Hành động: Dạy online";
+        }
+
+        private void CalendarSessionLabel_Click(object? sender, EventArgs e)
+        {
+            if (sender is Label label && label.Tag is int sessionId)
+                SelectSessionFromCalendar(sessionId);
+        }
+
+        private void SelectSessionFromCalendar(int sessionId)
+        {
+            _selectedCalendarSessionId = sessionId;
+            _grid.ClearSelection();
+            _grid.CurrentCell = null;
+            UpdateSelectedSessionSummary(GetSelectedSession());
+            UpdateActionButtons();
+        }
+
+        private void EnsureSelectedSessionStillVisible(IEnumerable<int> visibleSessionIds)
+        {
+            HashSet<int> visible = visibleSessionIds.ToHashSet();
+            if (_selectedCalendarSessionId.HasValue && !visible.Contains(_selectedCalendarSessionId.Value))
+                _selectedCalendarSessionId = null;
+        }
+
+        private void ClearScheduleStateAfterLoadFailure(string emptyMessage)
+        {
+            _sessions.Clear();
+            _filteredSessions.Clear();
+            _filterCache.Clear();
+            _selectedCalendarSessionId = null;
+
+            _grid.DataSource = null;
+            _grid.ClearSelection();
+            _grid.CurrentCell = null;
+            _calendarView.Controls.Clear();
+            _grid.Visible = false;
+            _calendarView.Visible = false;
+            _emptyStateLabel.Text = emptyMessage;
+            _emptyStateLabel.Visible = true;
+
+            ResetSelectedSessionSummary();
+            _btnOpenClass.Text = "Dạy online";
+            _btnOpenClass.Enabled = false;
+            _btnEdit.Enabled = false;
+            _btnDelete.Enabled = false;
+            CenterEmptyLabel();
+        }
+
+        private static DateTime StartOfWeek(DateTime value)
+        {
+            int offset = ((int)value.DayOfWeek + 6) % 7;
+            return value.Date.AddDays(-offset);
         }
 
         private static void EnableDoubleBuffering(Control control)

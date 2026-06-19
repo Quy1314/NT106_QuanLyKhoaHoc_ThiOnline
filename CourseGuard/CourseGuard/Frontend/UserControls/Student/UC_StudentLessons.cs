@@ -32,6 +32,10 @@ namespace CourseGuard.Frontend.UserControls.Student
         private readonly Button _searchButton = new() { Text = "Tìm kiếm" };
         private readonly Button _refreshButton = new() { Text = "Tải lại" };
         private readonly Button _detailButton = new() { Text = "Xem chi tiết" };
+        private RoundedPanel _selectedItemSummary = null!;
+        private Label _selectedItemTitle = null!;
+        private Label _selectedItemDetail = null!;
+        private Label _selectedItemAction = null!;
 
         private bool _isLoading;
 
@@ -76,10 +80,28 @@ namespace CourseGuard.Frontend.UserControls.Student
             _materialGrid.DataSource = _materialSource;
             _lessonGrid.CellDoubleClick += (_, _) => OpenLessonFromGrid();
             _materialGrid.CellDoubleClick += (_, _) => OpenMaterialFromGrid();
-            _lessonGrid.SelectionChanged += (_, _) => SyncDetailButton();
-            _materialGrid.SelectionChanged += (_, _) => SyncDetailButton();
-            _lessonGrid.Enter += (_, _) => _materialGrid.ClearSelection();
-            _materialGrid.Enter += (_, _) => _lessonGrid.ClearSelection();
+            _lessonGrid.SelectionChanged += (_, _) =>
+            {
+                SyncDetailButton();
+                UpdateSelectedItemSummary();
+            };
+            _materialGrid.SelectionChanged += (_, _) =>
+            {
+                SyncDetailButton();
+                UpdateSelectedItemSummary();
+            };
+            _lessonGrid.Enter += (_, _) =>
+            {
+                ClearGridSelection(_materialGrid);
+                SyncDetailButton();
+                UpdateSelectedItemSummary();
+            };
+            _materialGrid.Enter += (_, _) =>
+            {
+                ClearGridSelection(_lessonGrid);
+                SyncDetailButton();
+                UpdateSelectedItemSummary();
+            };
 
             _lessonBody = StudentTabChrome.CreateTableBody(_lessonGrid, out _lessonEmptyLabel);
             _materialBody = StudentTabChrome.CreateTableBody(_materialGrid, out _materialEmptyLabel);
@@ -112,14 +134,16 @@ namespace CourseGuard.Frontend.UserControls.Student
                 Dock = DockStyle.Fill,
                 BackColor = AppColors.BgBase,
                 ColumnCount = 1,
-                RowCount = 3
+                RowCount = 4
             };
             content.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
             content.RowStyles.Add(new RowStyle(SizeType.Absolute, 16f));
             content.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 112f));
 
             content.Controls.Add(StudentTabChrome.CreateDataCard("Danh sách bài học", _lessonBody), 0, 0);
             content.Controls.Add(StudentTabChrome.CreateDataCard("Danh sách tài liệu", _materialBody), 0, 2);
+            content.Controls.Add(BuildSelectedItemSummary(), 0, 3);
             root.Controls.Add(content, 0, 1);
 
             StudentTabChrome.EnableNaturalFocusClear(this, _lessonGrid, _materialGrid);
@@ -149,6 +173,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
             catch (Exception ex)
             {
+                ClearSelectedContextAfterLoadFailure();
                 MetaTheme.ShowModernDialog("Lỗi tải bài học và tài liệu: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -207,6 +232,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             BindGrid(_materialGrid, _materialSource, _materialBody, _materialEmptyLabel,
                 CreateMaterialsTable(filtered.Where(i => i.Id < 0).ToList()),
                 string.IsNullOrWhiteSpace(_searchBox.Text) ? "Chưa có tài liệu nào từ giáo viên." : "Không tìm thấy tài liệu phù hợp.");
+            ClearSelectedItemSummary();
             SyncDetailButton();
         }
 
@@ -222,8 +248,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             }
             bool hasRows = table.Rows.Count > 0;
             StudentTabChrome.SetTableState(body, grid, emptyLabel, hasRows, emptyMessage);
-            grid.ClearSelection();
-            grid.CurrentCell = null;
+            ClearGridSelection(grid);
         }
 
         private static DataTable CreateLessonsTable(List<TeacherLessonModel> rows)
@@ -266,7 +291,17 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private void SyncDetailButton()
         {
-            _detailButton.Enabled = GetSelectedId(_lessonGrid) != 0 || GetSelectedId(_materialGrid) != 0;
+            TeacherLessonModel? item = GetSelectedItem();
+            if (item == null)
+            {
+                _detailButton.Text = "Xem chi tiết";
+                _detailButton.Enabled = false;
+                return;
+            }
+
+            LearningUxPresentation view = StudentLearningItemUxPresenter.Present(item);
+            _detailButton.Text = view.PrimaryActionText;
+            _detailButton.Enabled = view.CanUsePrimaryAction;
         }
 
         private void OpenSelectedItem()
@@ -308,6 +343,110 @@ namespace CourseGuard.Frontend.UserControls.Student
             int studentId = UserSessionContext.CurrentUserId ?? 0;
             using var dialog = new CourseGuard.Frontend.Forms.Student.StudentLessonDetailDialog(_dbContext, item, studentId);
             dialog.ShowDialog(FindForm());
+        }
+
+        private void ClearSelectedContextAfterLoadFailure()
+        {
+            ClearGridSelection(_lessonGrid);
+            ClearGridSelection(_materialGrid);
+            ClearSelectedItemSummary();
+            SyncDetailButton();
+        }
+
+        private RoundedPanel BuildSelectedItemSummary()
+        {
+            _selectedItemSummary = new RoundedPanel
+            {
+                Dock = DockStyle.Fill,
+                FillColor = AppColors.IsDarkMode ? AppColors.BgCardHover : ColorTranslator.FromHtml("#F8FAFC"),
+                BorderColor = AppColors.Border,
+                CornerRadius = 12,
+                Margin = new Padding(0, 12, 0, 0),
+                Padding = new Padding(18, 12, 18, 12)
+            };
+
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 1,
+                RowCount = 3,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26f));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22f));
+
+            _selectedItemTitle = StyleSummaryLabel(AppFonts.Semibold(11f), AppColors.TextPrimary, ContentAlignment.MiddleLeft, autoEllipsis: true);
+            _selectedItemDetail = StyleSummaryLabel(AppFonts.Body, AppColors.TextSecondary, ContentAlignment.TopLeft, autoEllipsis: true);
+            _selectedItemAction = StyleSummaryLabel(AppFonts.Semibold(9f), AppColors.AccentBlue, ContentAlignment.MiddleLeft, autoEllipsis: true);
+
+            layout.Controls.Add(_selectedItemTitle, 0, 0);
+            layout.Controls.Add(_selectedItemDetail, 0, 1);
+            layout.Controls.Add(_selectedItemAction, 0, 2);
+            _selectedItemSummary.Controls.Add(layout);
+
+            ClearSelectedItemSummary();
+            return _selectedItemSummary;
+        }
+
+        private static Label StyleSummaryLabel(Font font, Color foreColor, ContentAlignment textAlign, bool autoEllipsis)
+        {
+            return new Label
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = false,
+                AutoEllipsis = autoEllipsis,
+                BackColor = Color.Transparent,
+                Font = font,
+                ForeColor = foreColor,
+                TextAlign = textAlign,
+                UseCompatibleTextRendering = false
+            };
+        }
+
+        private void UpdateSelectedItemSummary()
+        {
+            TeacherLessonModel? item = GetSelectedItem();
+            if (item == null)
+            {
+                ClearSelectedItemSummary();
+                return;
+            }
+
+            LearningUxPresentation view = StudentLearningItemUxPresenter.Present(item);
+            _selectedItemTitle.Text = item.Id < 0
+                ? (string.IsNullOrWhiteSpace(item.FileName) ? item.Title : item.FileName)
+                : item.Title;
+            _selectedItemDetail.Text = view.DetailText;
+            _selectedItemAction.Text = $"Hành động tiếp theo: {view.PrimaryActionText}";
+        }
+
+        private void ClearSelectedItemSummary()
+        {
+            _selectedItemTitle.Text = "Chọn một bài học hoặc tài liệu";
+            _selectedItemDetail.Text = "Thông tin khóa học, thời gian đăng và hành động phù hợp sẽ hiển thị tại đây.";
+            _selectedItemAction.Text = "Hành động tiếp theo: Xem chi tiết";
+        }
+
+        private TeacherLessonModel? GetSelectedItem()
+        {
+            int lessonId = GetSelectedId(_lessonGrid);
+            if (lessonId != 0)
+                return _items.FirstOrDefault(i => i.Id == lessonId);
+
+            int materialId = GetSelectedId(_materialGrid);
+            if (materialId != 0)
+                return _items.FirstOrDefault(i => i.Id == materialId);
+
+            return null;
+        }
+
+        private static void ClearGridSelection(DataGridView grid)
+        {
+            grid.ClearSelection();
+            grid.CurrentCell = null;
         }
 
         private static int GetSelectedId(DataGridView grid)

@@ -8,6 +8,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Controllers;
 using CourseGuard.Backend.Models;
 using CourseGuard.Frontend.Forms.Teacher;
+using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
@@ -265,17 +266,18 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 return;
             }
 
+            LearningUxPresentation view = TeacherCourseUxPresenter.Present(course);
             _detailName.Text = course.Name;
             _detailDates.Text = $"📅 {FormatDate(course.StartDate)} → {FormatDate(course.EndDate)}";
-            _detailStatus.Text = $"● Trạng thái: {course.Status}";
+            _detailStatus.Text = $"● Trạng thái: {view.StatusText} • {view.PrimaryActionText}";
             _detailStatus.ForeColor = StatusColor(course.Status);
             _detailStudents.Text = $"👥 Học viên: {course.StudentCount}";
             _detailRejectionReason.Text = IsRejected(course.Status) && !string.IsNullOrWhiteSpace(course.RejectionReason)
                 ? $"⚠ {course.RejectionReason}"
                 : string.Empty;
             _detailDescription.Text = string.IsNullOrWhiteSpace(course.Description)
-                ? "📖 (Không có mô tả)"
-                : $"📖 {course.Description}";
+                ? $"📖 {view.DetailText}"
+                : $"📖 {course.Description}\n{view.DetailText}";
         }
 
         private void ClearDetailPanel()
@@ -346,14 +348,16 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         private void ShowReadOnlyDetails(TeacherCourseModel course, string? prefix = null)
         {
+            LearningUxPresentation view = TeacherCourseUxPresenter.Present(course);
             string info = (string.IsNullOrWhiteSpace(prefix) ? string.Empty : prefix + "\n\n") +
                           $"📚 {course.Name}\n\n" +
                           $"📅 Bắt đầu: {FormatDate(course.StartDate)}\n" +
                           $"📅 Kết thúc: {FormatDate(course.EndDate)}\n" +
-                          $"📋 Trạng thái: {course.Status}\n" +
+                          $"📋 Trạng thái: {view.StatusText}\n" +
+                          $"➡ Tiếp theo: {view.PrimaryActionText}\n" +
                           $"👥 Học viên: {course.StudentCount}\n" +
                           (string.IsNullOrWhiteSpace(course.RejectionReason) ? string.Empty : $"⚠ Lý do từ chối: {course.RejectionReason}\n") +
-                          $"\n📖 Mô tả:\n{(string.IsNullOrWhiteSpace(course.Description) ? "(Không có)" : course.Description)}";
+                          $"\n📖 Mô tả:\n{(string.IsNullOrWhiteSpace(course.Description) ? "(Không có)" : course.Description)}\n\n{view.DetailText}";
 
             MetaTheme.ShowModernDialog(info, "Chi tiết khóa học", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }

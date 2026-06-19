@@ -20,6 +20,10 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         protected readonly Button DeleteButton = TeacherTabChrome.DangerButton("Xóa");
 
         private readonly string _emptyMessage;
+        private TableLayoutPanel _contentLayout = null!;
+        private RowStyle _belowGridRow = null!;
+        private Control? _belowGridContent;
+        private int _loadVersion;
         private RoundedPanel _gridBody = null!;
         private Label _emptyStateLabel = null!;
 
@@ -95,10 +99,14 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         protected async Task LoadDataAsync()
         {
+            int loadVersion = ++_loadVersion;
             this.ShowSkeleton(SkeletonType.TableWithToolbar);
             try
             {
                 DataTable table = await CreateTableAsync();
+                if (loadVersion != _loadVersion)
+                    return;
+
                 BindingSource.DataSource = table;
                 Grid.DataSource = BindingSource;
                 foreach (DataGridViewColumn column in Grid.Columns)
@@ -116,6 +124,9 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             }
             catch (Exception ex)
             {
+                if (loadVersion != _loadVersion)
+                    return;
+
                 BindingSource.DataSource = null;
                 TeacherTabChrome.SetTableState(_gridBody, Grid, _emptyStateLabel, showTable: false, "Không thể tải dữ liệu.");
                 EditButton.Enabled = false;
@@ -124,8 +135,24 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             }
             finally
             {
-                this.HideSkeleton();
+                if (loadVersion == _loadVersion)
+                    this.HideSkeleton();
             }
+        }
+
+        protected void SetBelowGridContent(Control content, int height)
+        {
+            if (_belowGridContent != null)
+            {
+                _contentLayout.Controls.Remove(_belowGridContent);
+                _belowGridContent.Dispose();
+            }
+
+            _belowGridContent = content;
+            _belowGridRow.Height = Math.Max(0, height);
+            content.Dock = DockStyle.Fill;
+            content.Margin = new Padding(0, 12, 0, 0);
+            _contentLayout.Controls.Add(content, 0, 1);
         }
 
         private void InitializeComponent(string title, string subtitle, string cardTitle, bool showCrud)
@@ -137,7 +164,18 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             root.Controls.Add(TeacherTabChrome.CreateHeader(title, subtitle, actions), 0, 0);
             TeacherTabChrome.StyleGrid(Grid);
             _gridBody = TeacherTabChrome.CreateTableBody(Grid, out _emptyStateLabel);
-            root.Controls.Add(TeacherTabChrome.CreateDataCard(cardTitle, _gridBody), 0, 1);
+            _contentLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = AppColors.BgBase,
+                ColumnCount = 1,
+                RowCount = 2
+            };
+            _contentLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            _belowGridRow = new RowStyle(SizeType.Absolute, 0f);
+            _contentLayout.RowStyles.Add(_belowGridRow);
+            _contentLayout.Controls.Add(TeacherTabChrome.CreateDataCard(cardTitle, _gridBody), 0, 0);
+            root.Controls.Add(_contentLayout, 0, 1);
         }
 
         private static FlowLayoutPanel? FindActionPanel(Control root)

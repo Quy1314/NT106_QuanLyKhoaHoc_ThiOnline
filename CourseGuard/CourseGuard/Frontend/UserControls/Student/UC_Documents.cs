@@ -24,6 +24,9 @@ namespace CourseGuard.Frontend.UserControls.Student
         private readonly CourseGuardDbContext _dbContext = new("");
         private readonly List<StudentDocumentRow> _documents = new();
         private readonly Button _openButton = new() { Text = "Tải xuống" };
+        private Label _documentPreviewTitle = null!;
+        private Label _documentPreviewDetail = null!;
+        private Label _documentPreviewAction = null!;
 
         public UC_Documents()
             : base(
@@ -43,8 +46,10 @@ namespace CourseGuard.Frontend.UserControls.Student
             _openButton.Enabled = false;
             StudentTabChrome.StylePrimaryButton(_openButton);
             AddHeaderAction(_openButton);
+            SetBelowGridContent(BuildDocumentPreviewPanel(), 108);
 
             _openButton.Click += (_, _) => OpenSelectedDocument();
+            Grid.SelectionChanged += (_, _) => UpdateDocumentPreview();
 
             LoadDataAsync().FireAndForgetSafe(this);
         }
@@ -53,6 +58,8 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         protected override async Task<DataTable> CreateTableAsync()
         {
+            PrepareDocumentRefresh();
+
             int studentId = UserSessionContext.CurrentUserId ?? 0;
             if (studentId == 0)
             {
@@ -74,6 +81,11 @@ namespace CourseGuard.Frontend.UserControls.Student
             return CreateDocumentsTable(GetFilteredDocuments().ToList());
         }
 
+        private void PrepareDocumentRefresh()
+        {
+            ClearDocumentPreview();
+        }
+
         protected override string GetEmptyMessage()
         {
             return string.IsNullOrWhiteSpace(SearchBox?.Text)
@@ -87,12 +99,14 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         protected override void OnTableBound(DataTable table, bool hasRows)
         {
-            _openButton.Enabled = hasRows;
+            _openButton.Enabled = false;
             HideColumn("Đường dẫn");
             HideColumn("HasContent");
 
             if (HintLabel != null)
                 HintLabel.Text = hasRows ? DefaultHintText : EmptyHintText;
+
+            ClearDocumentPreview();
         }
 
         public void ApplyGlobalSearch(string keyword)
@@ -234,25 +248,133 @@ namespace CourseGuard.Frontend.UserControls.Student
             return table;
         }
 
-        private void OpenSelectedDocument()
+        private RoundedPanel BuildDocumentPreviewPanel()
+        {
+            RoundedPanel panel = new()
+            {
+                Dock = DockStyle.Fill,
+                FillColor = AppColors.IsDarkMode ? AppColors.BgCardHover : ColorTranslator.FromHtml("#F8FAFC"),
+                BorderColor = AppColors.Border,
+                CornerRadius = 12,
+                Padding = new Padding(18, 12, 18, 12)
+            };
+
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 1,
+                RowCount = 3,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26f));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22f));
+
+            _documentPreviewTitle = CreatePreviewLabel(AppFonts.Semibold(11f), AppColors.TextPrimary, ContentAlignment.MiddleLeft, autoEllipsis: true);
+            _documentPreviewDetail = CreatePreviewLabel(AppFonts.Body, AppColors.TextSecondary, ContentAlignment.TopLeft, autoEllipsis: true);
+            _documentPreviewAction = CreatePreviewLabel(AppFonts.Semibold(9f), AppColors.AccentBlue, ContentAlignment.MiddleLeft, autoEllipsis: true);
+
+            layout.Controls.Add(_documentPreviewTitle, 0, 0);
+            layout.Controls.Add(_documentPreviewDetail, 0, 1);
+            layout.Controls.Add(_documentPreviewAction, 0, 2);
+            panel.Controls.Add(layout);
+
+            ClearDocumentPreview();
+            return panel;
+        }
+
+        private void UpdateDocumentPreview()
+        {
+            StudentDocumentRow? document = SelectedDocument();
+            if (document == null)
+            {
+                ClearDocumentPreview();
+                return;
+            }
+
+            LearningUxPresentation view = StudentLearningItemUxPresenter.PresentMaterial(
+                document.CourseName,
+                document.FileName,
+                document.UploadedAt,
+                document.FileSize,
+                document.HasStoredContent);
+
+            _documentPreviewTitle.Text = document.FileName;
+            _documentPreviewDetail.Text = view.DetailText;
+            if (IsDocumentActionable(document))
+            {
+                _documentPreviewAction.Text = $"Hành động tiếp theo: {view.PrimaryActionText}";
+                _openButton.Text = view.PrimaryActionText;
+                _openButton.Enabled = true;
+                return;
+            }
+
+            _documentPreviewAction.Text = "Tài liệu này chưa có file để mở hoặc tải xuống.";
+            _openButton.Text = view.PrimaryActionText;
+            _openButton.Enabled = false;
+        }
+
+        private void ClearDocumentPreview()
+        {
+            _documentPreviewTitle.Text = "Chọn một tài liệu";
+            _documentPreviewDetail.Text = "Thông tin khóa học, thời gian tải lên và cách mở tài liệu sẽ hiển thị tại đây.";
+            _documentPreviewAction.Text = "Hành động tiếp theo: Tải xuống";
+            _openButton.Text = "Tải xuống";
+            _openButton.Enabled = false;
+        }
+
+        private static Label CreatePreviewLabel(Font font, Color foreColor, ContentAlignment textAlign, bool autoEllipsis)
+        {
+            return new Label
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = false,
+                AutoEllipsis = autoEllipsis,
+                BackColor = Color.Transparent,
+                Font = font,
+                ForeColor = foreColor,
+                TextAlign = textAlign,
+                UseCompatibleTextRendering = false
+            };
+        }
+
+        private StudentDocumentRow? SelectedDocument()
         {
             int materialId = CurrentInt("ID");
-            if (materialId <= 0 || Grid.CurrentRow == null)
+            return materialId <= 0
+                ? null
+                : _documents.FirstOrDefault(item => item.Id == materialId);
+        }
+
+        private static bool IsDocumentActionable(StudentDocumentRow document)
+        {
+            return document.HasStoredContent || !string.IsNullOrWhiteSpace(document.FilePath);
+        }
+
+        private void OpenSelectedDocument()
+        {
+            StudentDocumentRow? document = SelectedDocument();
+            if (document == null)
             {
                 MetaTheme.ShowModernDialog("Vui lòng chọn một tài liệu.", "Thông báo");
                 return;
             }
 
-            string fileName = CurrentString("Tên tài liệu");
+            if (!IsDocumentActionable(document))
+            {
+                MetaTheme.ShowModernDialog("Tài liệu này chưa có file để mở hoặc tải xuống.", "Thông báo");
+                return;
+            }
+
+            string fileName = document.FileName;
             if (string.IsNullOrWhiteSpace(fileName))
                 fileName = "tailieu";
 
-            bool hasContent = Convert.ToBoolean(Grid.CurrentRow.Cells["HasContent"].Value);
-            string path = CurrentString("Đường dẫn");
-
-            if (hasContent)
+            if (document.HasStoredContent)
             {
-                byte[]? content = LoadDocumentContent(materialId);
+                byte[]? content = LoadDocumentContent(document.Id);
                 if (content == null || content.Length == 0)
                 {
                     MetaTheme.ShowModernDialog("Không tìm thấy nội dung file để tải.", "Thông báo");
@@ -280,7 +402,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(path))
+            if (string.IsNullOrWhiteSpace(document.FilePath))
             {
                 MetaTheme.ShowModernDialog("Tài liệu này chưa có đường dẫn file.", "Thông báo");
                 return;
@@ -288,7 +410,7 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             try
             {
-                Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+                Process.Start(new ProcessStartInfo(document.FilePath) { UseShellExecute = true });
             }
             catch (Exception ex)
             {

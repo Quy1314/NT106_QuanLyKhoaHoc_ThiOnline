@@ -83,9 +83,30 @@ namespace CourseGuard.Backend.Services.Realtime
         public async Task BroadcastClassOpened(int sessionId)
         {
             var payload = new byte[5];
-            payload[0] = 1; // 1 = OPEN
+            payload[0] = 1;
             BitConverter.GetBytes(sessionId).CopyTo(payload, 1);
-            
+
+            foreach (var client in _clients)
+            {
+                if (client.Connected)
+                {
+                    try
+                    {
+                        var stream = client.GetStream();
+                        await stream.WriteAsync(payload);
+                        await stream.FlushAsync();
+                    }
+                    catch { }
+                }
+            }
+        }
+
+        public async Task BroadcastClassClosed(int sessionId)
+        {
+            var payload = new byte[5];
+            payload[0] = 0;
+            BitConverter.GetBytes(sessionId).CopyTo(payload, 1);
+
             foreach (var client in _clients)
             {
                 if (client.Connected)
