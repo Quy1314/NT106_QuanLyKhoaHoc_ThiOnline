@@ -103,7 +103,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 76));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 108));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
             Controls.Add(root);
 
             var stage = new RoundedPanel
@@ -171,6 +171,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 Margin = new Padding(0, 0, 0, 14)
             };
             root.Controls.Add(side, 1, 0);
+            root.SetRowSpan(side, 2);
 
             var sideLayout = new TableLayoutPanel
             {
@@ -341,6 +342,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _btnCamera = CreateActionButton("Bật Camera", AppColors.AccentBlue);
             _btnMic = CreateActionButton("Tắt Mic", AppColors.Warning);
             _btnShareScreen = CreateActionButton("Share màn hình", Color.FromArgb(139, 92, 246));
+            _btnShareScreen.Width = 184;
             _btnEndClass = CreateActionButton("Kết thúc lớp", AppColors.Danger);
 
             _btnCamera.Click += async (_, _) => await ToggleCameraAsync();
@@ -360,8 +362,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 ForeColor = AppColors.TextPrimary,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Font = MetaTheme.Fonts.SubtitleLg(),
-                Padding = new Padding(14),
-                BackColor = AppColors.BgCard
+                Padding = Padding.Empty,
+                BackColor = AppColors.BgCard,
+                Visible = false
             };
             root.SetColumnSpan(_statusLabel, 2);
             root.Controls.Add(_statusLabel, 0, 2);
