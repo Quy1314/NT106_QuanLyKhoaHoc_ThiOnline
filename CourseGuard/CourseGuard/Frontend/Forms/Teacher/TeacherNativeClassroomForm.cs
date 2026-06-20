@@ -3,6 +3,8 @@ using CourseGuard.Backend.Services.Classroom;
 using CourseGuard.Frontend.Extensions;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Frontend.UserControls.Shared.Chat;
+using System.Drawing.Drawing2D;
 
 namespace CourseGuard.Frontend.Forms.Teacher
 {
@@ -26,6 +28,14 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private Button _btnSendChat = null!;
         private readonly Dictionary<int, PictureBox> _studentVideoBoxes = new();
         private readonly Dictionary<int, Label> _studentVideoLabels = new();
+        private readonly Dictionary<int, Label> _studentHandBadges = new();
+        private readonly Dictionary<int, StudentTileState> _studentTileStates = new();
+        private readonly Dictionary<int, StudentTileControls> _studentTileControls = new();
+        private readonly HashSet<int> _raisedHandStudentIds = new();
+        private readonly AvatarImageLoader _studentAvatarLoader = new();
+        private readonly CancellationTokenSource _studentTileCts = new();
+        private const int MaxVisibleStudentTiles = 10;
+        private Label _hiddenStudentsLabel = null!;
 
         private ClassroomCameraManager _cameraManager = null!;
         private ClassroomScreenShareManager _screenShareManager = null!;
@@ -176,16 +186,14 @@ namespace CourseGuard.Frontend.Forms.Teacher
             var sideLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                RowCount = 6,
+                RowCount = 4,
                 ColumnCount = 1,
                 BackColor = Color.Transparent
             };
             sideLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
             sideLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 160));
             sideLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-            sideLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
-            sideLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-            sideLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
+            sideLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             side.Controls.Add(sideLayout);
 
             var studentVideoTitle = new Label
@@ -198,6 +206,28 @@ namespace CourseGuard.Frontend.Forms.Teacher
             };
             sideLayout.Controls.Add(studentVideoTitle, 0, 0);
 
+            var studentVideoShell = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = AppColors.BgInput,
+                Margin = new Padding(0, 0, 0, 8),
+                Padding = new Padding(0)
+            };
+            sideLayout.Controls.Add(studentVideoShell, 0, 1);
+
+            _hiddenStudentsLabel = new Label
+            {
+                Dock = DockStyle.Bottom,
+                Height = 20,
+                TextAlign = ContentAlignment.MiddleRight,
+                ForeColor = AppColors.TextSecondary,
+                BackColor = AppColors.BgInput,
+                Font = MetaTheme.Fonts.CaptionBold(),
+                Visible = false,
+                Padding = new Padding(0, 0, 8, 0)
+            };
+            studentVideoShell.Controls.Add(_hiddenStudentsLabel);
+
             _studentVideoGrid = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -206,29 +236,15 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 WrapContents = true,
                 BackColor = AppColors.BgInput,
                 Padding = new Padding(8),
-                Margin = new Padding(0, 0, 0, 8)
+                Margin = new Padding(0)
             };
-            sideLayout.Controls.Add(_studentVideoGrid, 0, 1);
-
-            var participantTitle = new Label
-            {
-                Dock = DockStyle.Fill,
-                Text = "Hoạt động lớp học",
-                ForeColor = AppColors.TextPrimary,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Font = MetaTheme.Fonts.BodyMdBold()
-            };
-            sideLayout.Controls.Add(participantTitle, 0, 2);
+            EnableDoubleBuffering(_studentVideoGrid);
+            studentVideoShell.Controls.Add(_studentVideoGrid);
 
             _eventsList = new ListBox
             {
-                Dock = DockStyle.Fill,
-                BackColor = AppColors.BgInput,
-                ForeColor = AppColors.TextPrimary,
-                BorderStyle = BorderStyle.None,
-                Font = MetaTheme.Fonts.BodySm()
+                Visible = false
             };
-            sideLayout.Controls.Add(_eventsList, 0, 3);
 
             sideLayout.Controls.Add(new Label
             {
@@ -237,7 +253,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 ForeColor = AppColors.TextPrimary,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Font = MetaTheme.Fonts.BodyMdBold()
-            }, 0, 4);
+            }, 0, 2);
 
             var chatPanel = new TableLayoutPanel
             {
@@ -251,7 +267,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             chatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
             chatPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             chatPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
-            sideLayout.Controls.Add(chatPanel, 0, 5);
+            sideLayout.Controls.Add(chatPanel, 0, 3);
 
             _chatList = new ListBox
             {
@@ -563,6 +579,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
         {
             if (signal.Type == ClassroomMessageType.VideoFrame && signal.SenderRole == "STUDENT")
             {
+                StudentTileState state = UpsertStudentTileState(signal);
+                state.IsCameraOn = true;
+                RefreshVisibleStudentTiles();
                 RenderStudentVideoFrame(signal);
                 return;
             }
@@ -579,9 +598,48 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 return;
             }
 
-            if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.CamOff)
+            if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.RaiseHand)
+            {
+                SafeSetStudentHandRaised(signal.SenderId, signal.SenderName, true);
+                return;
+            }
+
+            if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.LowerHand)
+            {
+                SafeSetStudentHandRaised(signal.SenderId, signal.SenderName, false);
+                return;
+            }
+
+            if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.JoinRoom)
+            {
+                UpsertStudentTileState(signal);
+                RefreshVisibleStudentTiles();
+                SafeAddEvent($"{signal.SenderName} đã vào lớp.");
+                return;
+            }
+
+            if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.LeaveRoom)
             {
                 SafeRemoveStudentVideo(signal.SenderId);
+                SafeAddEvent($"{signal.SenderName} đã rời lớp.");
+                return;
+            }
+
+            if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.CamOn)
+            {
+                StudentTileState state = UpsertStudentTileState(signal);
+                state.IsCameraOn = true;
+                RefreshVisibleStudentTiles();
+                return;
+            }
+
+            if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.CamOff)
+            {
+                StudentTileState state = UpsertStudentTileState(signal);
+                state.IsCameraOn = false;
+                state.HasAvatarModeImage = false;
+                RefreshVisibleStudentTiles();
+                return;
             }
             else if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.ScreenShareOn)
             {
@@ -786,20 +844,43 @@ namespace CourseGuard.Frontend.Forms.Teacher
                     return;
                 }
 
-                Image frame = ClassroomFrameHelper.DecodeFrame(base64);
+                if (!_studentTileControls.ContainsKey(signal.SenderId))
+                {
+                    return;
+                }
 
-                ClassroomFrameHelper.TryBeginReplaceImage(
-                    this,
-                    frame,
-                    () =>
+                int senderId = signal.SenderId;
+                _ = Task.Run(() =>
+                {
+                    try
                     {
-                        if (IsDisposed || _studentVideoGrid.IsDisposed || !_studentVideoGrid.IsHandleCreated)
-                        {
-                            throw new ObjectDisposedException(nameof(TeacherNativeClassroomForm));
-                        }
+                        Image frame = ClassroomFrameHelper.DecodeFrame(base64);
 
-                        return GetOrCreateStudentVideoBox(signal.SenderId, signal.SenderName);
-                    });
+                        ClassroomFrameHelper.TryBeginReplaceImage(
+                            this,
+                            frame,
+                            () =>
+                            {
+                                if (IsDisposed || _studentVideoGrid.IsDisposed || !_studentVideoGrid.IsHandleCreated)
+                                {
+                                    throw new ObjectDisposedException(nameof(TeacherNativeClassroomForm));
+                                }
+
+                                if (!_studentTileControls.TryGetValue(senderId, out StudentTileControls? controls))
+                                {
+                                    throw new ObjectDisposedException(nameof(StudentTileControls));
+                                }
+
+                                controls.Picture.SizeMode = PictureBoxSizeMode.Zoom;
+                                controls.CameraOffLabel.Visible = false;
+                                return controls.Picture;
+                            });
+                    }
+                    catch
+                    {
+                        // Drop corrupt student frames silently to keep teacher UI stable.
+                    }
+                });
             }
             catch
             {
@@ -809,32 +890,38 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void RenderIncomingScreenShare(ClassroomSignalModel signal)
         {
-            try
-            {
-                if (!signal.Payload.TryGetValue("imageBase64", out string? base64) || string.IsNullOrWhiteSpace(base64)) return;
-                Image frame = ClassroomFrameHelper.DecodeFrame(base64);
+            if (!signal.Payload.TryGetValue("imageBase64", out string? base64) || string.IsNullOrWhiteSpace(base64)) return;
+            int senderId = signal.SenderId;
+            string senderName = signal.SenderName;
+            string sourceTitle = signal.Payload.TryGetValue("sourceTitle", out string? title) ? title : "màn hình";
 
-                ClassroomFrameHelper.TryBeginReplaceImage(
-                    this,
-                    _teacherPreview,
-                    frame,
-                    () =>
-                    {
-                        if (IsDisposed || _teacherPreview.IsDisposed || _statusLabel.IsDisposed)
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    Image frame = ClassroomFrameHelper.DecodeFrame(base64);
+
+                    ClassroomFrameHelper.TryBeginReplaceImage(
+                        this,
+                        _teacherPreview,
+                        frame,
+                        () =>
                         {
-                            return;
-                        }
+                            if (IsDisposed || _teacherPreview.IsDisposed || _statusLabel.IsDisposed)
+                            {
+                                return;
+                            }
 
-                        _activeStudentScreenShareSenderId = signal.SenderId;
-                        HideCameraPlaceholder();
-                        string sourceTitle = signal.Payload.TryGetValue("sourceTitle", out string? title) ? title : "màn hình";
-                        SetLiveStatus($"\u0110ang xem {signal.SenderName} tr\u00ecnh b\u00e0y: {sourceTitle} - {DateTime.Now:HH:mm:ss}");
-                    });
-            }
-            catch
-            {
-                // Drop corrupt screen-share frames silently.
-            }
+                            _activeStudentScreenShareSenderId = senderId;
+                            HideCameraPlaceholder();
+                            SetLiveStatus($"\u0110ang xem {senderName} tr\u00ecnh b\u00e0y: {sourceTitle} - {DateTime.Now:HH:mm:ss}");
+                        });
+                }
+                catch
+                {
+                    // Drop corrupt screen-share frames silently.
+                }
+            });
         }
 
         private void SafeSetStagePlaceholder(string text)
@@ -902,50 +989,440 @@ namespace CourseGuard.Frontend.Forms.Teacher
             });
         }
 
-        private PictureBox GetOrCreateStudentVideoBox(int studentId, string studentName)
+        private StudentTileControls CreateStudentTileControls(StudentTileState state)
         {
-            if (_studentVideoBoxes.TryGetValue(studentId, out PictureBox? existing))
-            {
-                if (_studentVideoLabels.TryGetValue(studentId, out Label? existingLabel))
-                {
-                    existingLabel.Text = string.IsNullOrWhiteSpace(studentName) ? $"Student #{studentId}" : studentName;
-                }
-                return existing;
-            }
-
             var tile = new Panel
             {
-                Width = 128,
-                Height = 104,
+                Width = 148,
+                Height = 118,
                 Margin = new Padding(0, 0, 8, 8),
-                BackColor = Color.FromArgb(13, 17, 27)
+                BackColor = state.IsHandRaised ? Color.FromArgb(245, 158, 11) : Color.FromArgb(13, 17, 27),
+                Padding = state.IsHandRaised ? new Padding(3) : Padding.Empty
             };
 
             var box = new PictureBox
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.Black,
+                BackColor = Color.FromArgb(248, 250, 252),
                 SizeMode = PictureBoxSizeMode.Zoom
             };
             tile.Controls.Add(box);
 
+            var cameraOffLabel = new Label
+            {
+                AutoSize = false,
+                Width = 76,
+                Height = 22,
+                Left = 8,
+                Top = 8,
+                Text = "CAM OFF",
+                TextAlign = ContentAlignment.MiddleCenter,
+                ForeColor = Color.FromArgb(226, 232, 240),
+                BackColor = Color.FromArgb(145, 15, 23, 42),
+                Font = MetaTheme.Fonts.CaptionBold(),
+                Visible = !state.IsCameraOn
+            };
+            tile.Controls.Add(cameraOffLabel);
+            cameraOffLabel.BringToFront();
+
             var label = new Label
             {
                 Dock = DockStyle.Bottom,
-                Height = 24,
-                Text = string.IsNullOrWhiteSpace(studentName) ? $"Student #{studentId}" : studentName,
+                Height = 26,
+                Text = GetStudentDisplayName(state),
                 ForeColor = Color.White,
-                BackColor = Color.FromArgb(180, 0, 0, 0),
+                BackColor = Color.FromArgb(190, 0, 0, 0),
                 TextAlign = ContentAlignment.MiddleCenter,
                 Font = MetaTheme.Fonts.CaptionBold()
             };
             tile.Controls.Add(label);
             label.BringToFront();
 
-            _studentVideoBoxes[studentId] = box;
-            _studentVideoLabels[studentId] = label;
+            var handBadge = new Label
+            {
+                Width = 34,
+                Height = 34,
+                Left = tile.Width - 40,
+                Top = 6,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                Text = "✋",
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = new Font(AppFonts.Body.FontFamily, 17F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(15, 23, 42),
+                BackColor = Color.FromArgb(245, 158, 11),
+                Visible = state.IsHandRaised
+            };
+            tile.Controls.Add(handBadge);
+            handBadge.BringToFront();
+
+            var controls = new StudentTileControls
+            {
+                Tile = tile,
+                Picture = box,
+                NameLabel = label,
+                HandBadge = handBadge,
+                CameraOffLabel = cameraOffLabel
+            };
+
+            _studentVideoBoxes[state.StudentId] = box;
+            _studentVideoLabels[state.StudentId] = label;
+            _studentHandBadges[state.StudentId] = handBadge;
             _studentVideoGrid.Controls.Add(tile);
-            return box;
+            RenderStudentAvatarMode(state, controls);
+            return controls;
+        }
+
+        private void SafeSetStudentHandRaised(int studentId, string studentName, bool isRaised)
+        {
+            if (studentId <= 0) return;
+
+            this.InvokeIfRequired(() =>
+            {
+                if (isRaised)
+                {
+                    _raisedHandStudentIds.Add(studentId);
+                    SafeAddEvent($"{studentName} đã giơ tay xin phát biểu.");
+                }
+                else
+                {
+                    _raisedHandStudentIds.Remove(studentId);
+                    SafeAddEvent($"{studentName} đã hạ tay.");
+                }
+
+                StudentTileState state = _studentTileStates.TryGetValue(studentId, out StudentTileState? existingState)
+                    ? existingState
+                    : new StudentTileState { StudentId = studentId, JoinedAt = DateTime.UtcNow };
+                state.DisplayName = string.IsNullOrWhiteSpace(studentName) ? state.DisplayName : studentName;
+                state.IsHandRaised = isRaised;
+                _studentTileStates[studentId] = state;
+
+                if (_studentVideoLabels.TryGetValue(studentId, out Label? label))
+                {
+                    label.Text = string.IsNullOrWhiteSpace(studentName) ? $"Student #{studentId}" : studentName;
+                }
+
+                ApplyStudentHandVisualState(studentId);
+                RefreshVisibleStudentTiles();
+            });
+        }
+
+        private IReadOnlyList<StudentTileState> GetVisibleStudentStates()
+        {
+            return _studentTileStates.Values
+                .OrderByDescending(s => s.IsHandRaised)
+                .ThenByDescending(s => s.IsCameraOn)
+                .ThenBy(s => s.JoinedAt)
+                .Take(MaxVisibleStudentTiles)
+                .ToList();
+        }
+
+        private void RefreshVisibleStudentTiles()
+        {
+            this.InvokeIfRequired(() =>
+            {
+                if (IsDisposed || _studentVideoGrid == null || _studentVideoGrid.IsDisposed)
+                {
+                    return;
+                }
+
+                IReadOnlyList<StudentTileState> visibleStates = GetVisibleStudentStates();
+                HashSet<int> visibleIds = visibleStates.Select(s => s.StudentId).ToHashSet();
+
+                _studentVideoGrid.SuspendLayout();
+                try
+                {
+                    foreach (int studentId in _studentTileControls.Keys.Where(id => !visibleIds.Contains(id)).ToList())
+                    {
+                        DisposeStudentTileControls(studentId);
+                    }
+
+                    for (int index = 0; index < visibleStates.Count; index++)
+                    {
+                        StudentTileState state = visibleStates[index];
+                        if (!_studentTileControls.ContainsKey(state.StudentId))
+                        {
+                            _studentTileControls[state.StudentId] = CreateStudentTileControls(state);
+                        }
+
+                        if (_studentTileControls.TryGetValue(state.StudentId, out StudentTileControls? controls))
+                        {
+                            controls.NameLabel.Text = GetStudentDisplayName(state);
+                            controls.HandBadge.Visible = state.IsHandRaised;
+                            controls.CameraOffLabel.Visible = !state.IsCameraOn;
+                            ApplyStudentHandVisualState(state.StudentId);
+                            if (!state.IsCameraOn && !state.HasAvatarModeImage)
+                            {
+                                RenderStudentAvatarMode(state, controls);
+                            }
+                            _studentVideoGrid.Controls.SetChildIndex(controls.Tile, Math.Min(index, _studentVideoGrid.Controls.Count - 1));
+                        }
+                    }
+
+                    int hiddenCount = Math.Max(0, _studentTileStates.Count - MaxVisibleStudentTiles);
+                    _hiddenStudentsLabel.Text = hiddenCount > 0 ? $"+{hiddenCount} học sinh khác đang trong lớp" : string.Empty;
+                    _hiddenStudentsLabel.Visible = hiddenCount > 0;
+                }
+                finally
+                {
+                    _studentVideoGrid.ResumeLayout(true);
+                }
+            });
+        }
+
+        private StudentTileState UpsertStudentTileState(ClassroomSignalModel signal)
+        {
+            if (!_studentTileStates.TryGetValue(signal.SenderId, out StudentTileState? state))
+            {
+                state = new StudentTileState
+                {
+                    StudentId = signal.SenderId,
+                    JoinedAt = DateTime.UtcNow
+                };
+                _studentTileStates[signal.SenderId] = state;
+            }
+
+            if (!string.IsNullOrWhiteSpace(signal.SenderName))
+            {
+                state.DisplayName = signal.SenderName;
+            }
+
+            if (signal.Payload.TryGetValue("avatarPath", out string? avatarPath))
+            {
+                string normalizedAvatarPath = avatarPath ?? string.Empty;
+                if (!string.Equals(state.AvatarPath, normalizedAvatarPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    DisposeCachedStudentAvatar(state);
+                    state.AvatarPath = normalizedAvatarPath;
+                    state.AvatarLoadAttempted = false;
+                    state.AvatarLoadSucceeded = false;
+                    state.AvatarLoadVersion++;
+                    state.HasAvatarModeImage = false;
+                }
+            }
+
+            return state;
+        }
+
+        private static string GetStudentDisplayName(StudentTileState state)
+        {
+            return string.IsNullOrWhiteSpace(state.DisplayName) ? $"Student #{state.StudentId}" : state.DisplayName;
+        }
+
+        private void RenderStudentAvatarMode(StudentTileState state, StudentTileControls controls)
+        {
+            state.HasAvatarModeImage = true;
+            controls.CameraOffLabel.Visible = !state.IsCameraOn;
+
+            if (state.CachedAvatarImage != null)
+            {
+                ReplaceStudentTileImage(controls.Picture, CreateCircularAvatarImage(state.CachedAvatarImage, controls.Picture.Width, controls.Picture.Height));
+                return;
+            }
+
+            Image fallback = CreateInitialsAvatarImage(GetStudentDisplayName(state), controls.Picture.Width, controls.Picture.Height);
+            ReplaceStudentTileImage(controls.Picture, fallback);
+
+            if (!string.IsNullOrWhiteSpace(state.AvatarPath) && !state.AvatarLoadAttempted)
+            {
+                state.AvatarLoadAttempted = true;
+                _ = LoadAndCacheStudentAvatarAsync(state.StudentId, state.AvatarPath, ++state.AvatarLoadVersion);
+            }
+        }
+
+        private async Task LoadAndCacheStudentAvatarAsync(int studentId, string avatarPath, int version)
+        {
+            Image? loadedAvatar = await _studentAvatarLoader.LoadAsync(avatarPath, _studentTileCts.Token).ConfigureAwait(false);
+            if (loadedAvatar == null)
+            {
+                return;
+            }
+
+            try
+            {
+                this.InvokeIfRequired(() =>
+                {
+                    if (IsDisposed
+                        || !_studentTileStates.TryGetValue(studentId, out StudentTileState? currentState)
+                        || currentState.AvatarLoadVersion != version)
+                    {
+                        loadedAvatar.Dispose();
+                        return;
+                    }
+
+                    DisposeCachedStudentAvatar(currentState);
+                    currentState.CachedAvatarImage = CloneImage(loadedAvatar);
+                    currentState.AvatarLoadSucceeded = true;
+                    loadedAvatar.Dispose();
+
+                    if (!currentState.IsCameraOn
+                        && _studentTileControls.TryGetValue(studentId, out StudentTileControls? controls))
+                    {
+                        ReplaceStudentTileImage(controls.Picture, CreateCircularAvatarImage(currentState.CachedAvatarImage, controls.Picture.Width, controls.Picture.Height));
+                        controls.CameraOffLabel.Visible = true;
+                    }
+                });
+            }
+            catch
+            {
+                loadedAvatar.Dispose();
+            }
+        }
+
+        private static void ReplaceStudentTileImage(PictureBox pictureBox, Image image)
+        {
+            Image? old = pictureBox.Image;
+            pictureBox.Image = image;
+            old?.Dispose();
+        }
+
+        private static Image CloneImage(Image source)
+        {
+            return new Bitmap(source);
+        }
+
+        private static void DisposeCachedStudentAvatar(StudentTileState state)
+        {
+            Image? cached = state.CachedAvatarImage;
+            state.CachedAvatarImage = null;
+            cached?.Dispose();
+        }
+
+        private static Image CreateInitialsAvatarImage(string displayName, int width, int height)
+        {
+            int safeWidth = Math.Max(120, width);
+            int safeHeight = Math.Max(90, height);
+            var bitmap = new Bitmap(safeWidth, safeHeight);
+            using Graphics graphics = Graphics.FromImage(bitmap);
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.Clear(Color.FromArgb(248, 250, 252));
+
+            using var vignette = new LinearGradientBrush(
+                new Rectangle(0, 0, safeWidth, safeHeight),
+                Color.FromArgb(248, 250, 252),
+                Color.FromArgb(241, 245, 249),
+                45F);
+            graphics.FillRectangle(vignette, 0, 0, safeWidth, safeHeight);
+
+            int circleSize = Math.Min(safeWidth, safeHeight) - 34;
+            var circleRect = new Rectangle((safeWidth - circleSize) / 2, (safeHeight - circleSize) / 2 - 4, circleSize, circleSize);
+            using var circleBrush = new SolidBrush(GetStableAvatarColor(displayName));
+            graphics.FillEllipse(circleBrush, circleRect);
+
+            string initials = GetInitials(displayName);
+            using var textBrush = new SolidBrush(Color.White);
+            using Font baseFont = MetaTheme.Fonts.BodyMd();
+            using var font = new Font(baseFont.FontFamily, Math.Max(20F, circleSize * 0.34F), FontStyle.Bold, GraphicsUnit.Pixel);
+            using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+            graphics.DrawString(initials, font, textBrush, circleRect, format);
+            return bitmap;
+        }
+
+        private static Image CreateCircularAvatarImage(Image source, int width, int height)
+        {
+            int safeWidth = Math.Max(120, width);
+            int safeHeight = Math.Max(90, height);
+            var bitmap = new Bitmap(safeWidth, safeHeight);
+            using Graphics graphics = Graphics.FromImage(bitmap);
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.Clear(Color.FromArgb(248, 250, 252));
+
+            int circleSize = Math.Min(safeWidth, safeHeight) - 30;
+            var circleRect = new Rectangle((safeWidth - circleSize) / 2, (safeHeight - circleSize) / 2 - 2, circleSize, circleSize);
+            using var path = new GraphicsPath();
+            path.AddEllipse(circleRect);
+            graphics.SetClip(path);
+            graphics.DrawImage(source, GetCoverRectangle(source.Size, circleRect));
+            graphics.ResetClip();
+
+            using var borderPen = new Pen(Color.FromArgb(226, 232, 240), 3F);
+            graphics.DrawEllipse(borderPen, circleRect);
+            return bitmap;
+        }
+
+        private static Rectangle GetCoverRectangle(Size sourceSize, Rectangle target)
+        {
+            if (sourceSize.Width <= 0 || sourceSize.Height <= 0)
+            {
+                return target;
+            }
+
+            float scale = Math.Max((float)target.Width / sourceSize.Width, (float)target.Height / sourceSize.Height);
+            int width = (int)Math.Ceiling(sourceSize.Width * scale);
+            int height = (int)Math.Ceiling(sourceSize.Height * scale);
+            return new Rectangle(target.Left + (target.Width - width) / 2, target.Top + (target.Height - height) / 2, width, height);
+        }
+
+        private static Color GetStableAvatarColor(string value)
+        {
+            Color[] palette =
+            {
+                Color.FromArgb(109, 40, 217),
+                Color.FromArgb(124, 58, 237),
+                Color.FromArgb(14, 165, 233),
+                Color.FromArgb(16, 185, 129),
+                Color.FromArgb(236, 72, 153),
+                Color.FromArgb(245, 158, 11)
+            };
+
+            int hash = string.IsNullOrWhiteSpace(value) ? 0 : value.Aggregate(17, (current, character) => current * 31 + character);
+            return palette[Math.Abs(hash) % palette.Length];
+        }
+
+        private static string GetInitials(string displayName)
+        {
+            if (string.IsNullOrWhiteSpace(displayName))
+            {
+                return "?";
+            }
+
+            string[] parts = displayName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 1)
+            {
+                return parts[0][0].ToString().ToUpperInvariant();
+            }
+
+            return string.Concat(parts.Take(2).Select(part => part[0])).ToUpperInvariant();
+        }
+
+        private void DisposeStudentTileControls(int studentId)
+        {
+            if (_studentTileControls.Remove(studentId, out StudentTileControls? controls))
+            {
+                _studentVideoGrid.Controls.Remove(controls.Tile);
+                controls.Dispose();
+            }
+
+            _studentVideoBoxes.Remove(studentId);
+            _studentVideoLabels.Remove(studentId);
+            _studentHandBadges.Remove(studentId);
+        }
+
+        private static void EnableDoubleBuffering(Control control)
+        {
+            typeof(Control)
+                .GetProperty("DoubleBuffered", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                ?.SetValue(control, true, null);
+        }
+
+        private void ApplyStudentHandVisualState(int studentId)
+        {
+            bool isRaised = _raisedHandStudentIds.Contains(studentId);
+
+            if (_studentHandBadges.TryGetValue(studentId, out Label? handBadge))
+            {
+                handBadge.Visible = isRaised;
+                if (isRaised)
+                {
+                    handBadge.BringToFront();
+                }
+            }
+
+            if (_studentTileControls.TryGetValue(studentId, out StudentTileControls? controls))
+            {
+                controls.Tile.Padding = isRaised ? new Padding(3) : Padding.Empty;
+                controls.Tile.BackColor = isRaised ? Color.FromArgb(245, 158, 11) : Color.FromArgb(13, 17, 27);
+            }
         }
 
         private void SafeRemoveStudentVideo(int studentId)
@@ -953,22 +1430,16 @@ namespace CourseGuard.Frontend.Forms.Teacher
             if (studentId <= 0) return;
             this.InvokeIfRequired(() =>
             {
-                if (!_studentVideoBoxes.TryGetValue(studentId, out PictureBox? box))
+                if (_studentTileStates.Remove(studentId, out StudentTileState? removedState))
                 {
-                    return;
+                    DisposeCachedStudentAvatar(removedState);
                 }
+                DisposeStudentTileControls(studentId);
+                _raisedHandStudentIds.Remove(studentId);
 
-                Control? tile = box.Parent;
-                Image? old = box.Image;
-                box.Image = null;
-                old?.Dispose();
-                _studentVideoBoxes.Remove(studentId);
-                _studentVideoLabels.Remove(studentId);
-                if (tile != null)
-                {
-                    _studentVideoGrid.Controls.Remove(tile);
-                    tile.Dispose();
-                }
+                int hiddenCount = Math.Max(0, _studentTileStates.Count - MaxVisibleStudentTiles);
+                _hiddenStudentsLabel.Text = hiddenCount > 0 ? $"+{hiddenCount} học sinh khác đang trong lớp" : string.Empty;
+                _hiddenStudentsLabel.Visible = hiddenCount > 0;
             });
         }
 
@@ -1038,15 +1509,22 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             StopScreenShare();
             StopCamera();
-            foreach (PictureBox box in _studentVideoBoxes.Values)
+            foreach (int studentId in _studentTileControls.Keys.ToList())
             {
-                Image? old = box.Image;
-                box.Image = null;
-                old?.Dispose();
+                DisposeStudentTileControls(studentId);
             }
 
+            foreach (StudentTileState state in _studentTileStates.Values)
+            {
+                DisposeCachedStudentAvatar(state);
+            }
+            _studentTileStates.Clear();
             _studentVideoBoxes.Clear();
             _studentVideoLabels.Clear();
+            _studentHandBadges.Clear();
+            _raisedHandStudentIds.Clear();
+            _studentTileCts.Cancel();
+            _studentAvatarLoader.Dispose();
             _screenShareManager.Dispose();
             _cameraManager.Dispose();
             _isServerReady = false;
@@ -1092,6 +1570,38 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             await BeginCloseAfterConfirmationAsync();
         }
+        private sealed class StudentTileState
+        {
+            public int StudentId { get; init; }
+            public string DisplayName { get; set; } = string.Empty;
+            public string AvatarPath { get; set; } = string.Empty;
+            public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
+            public bool IsCameraOn { get; set; }
+            public bool IsHandRaised { get; set; }
+            public bool HasAvatarModeImage { get; set; }
+            public bool AvatarLoadAttempted { get; set; }
+            public bool AvatarLoadSucceeded { get; set; }
+            public Image? CachedAvatarImage { get; set; }
+            public int AvatarLoadVersion { get; set; }
+        }
+
+        private sealed class StudentTileControls : IDisposable
+        {
+            public Panel Tile { get; init; } = null!;
+            public PictureBox Picture { get; init; } = null!;
+            public Label NameLabel { get; init; } = null!;
+            public Label HandBadge { get; init; } = null!;
+            public Label CameraOffLabel { get; init; } = null!;
+
+            public void Dispose()
+            {
+                Image? image = Picture.Image;
+                Picture.Image = null;
+                image?.Dispose();
+                Tile.Dispose();
+            }
+        }
+
         private sealed class ScreenSharePickerDialog : Form
         {
             public Rectangle SelectedBounds { get; private set; }

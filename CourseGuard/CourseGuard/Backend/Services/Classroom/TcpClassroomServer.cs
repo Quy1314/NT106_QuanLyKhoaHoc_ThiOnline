@@ -154,6 +154,11 @@ namespace CourseGuard.Backend.Services.Classroom
                 state.Role = signal.SenderRole;
             }
 
+            if (signal.Payload.TryGetValue("avatarPath", out string? avatarPath))
+            {
+                state.AvatarPath = avatarPath ?? string.Empty;
+            }
+
             state.IsHandRaised = signal.Type switch
             {
                 ClassroomMessageType.RaiseHand => true,
@@ -230,6 +235,22 @@ namespace CourseGuard.Backend.Services.Classroom
                 catch
                 {
                     // Ignore cleanup failures.
+                }
+
+                if (state.UserId > 0 && string.Equals(state.Role, "STUDENT", StringComparison.OrdinalIgnoreCase))
+                {
+                    _ = BroadcastAsync(new ClassroomSignalModel
+                    {
+                        Type = ClassroomMessageType.LeaveRoom,
+                        SessionId = state.SessionId,
+                        SenderId = state.UserId,
+                        SenderName = state.DisplayName,
+                        SenderRole = state.Role,
+                        Payload =
+                        {
+                            ["avatarPath"] = state.AvatarPath
+                        }
+                    });
                 }
 
                 ClientDisconnected?.Invoke(this, new ClassroomClientConnectedEventArgs(state));

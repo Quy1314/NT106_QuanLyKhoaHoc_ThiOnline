@@ -11,6 +11,7 @@ namespace CourseGuard.Backend.Models
         public bool IsHandRaised { get; set; }
         public bool IsMuted { get; set; }
         public bool IsCameraOn { get; set; }
+        public string AvatarPath { get; set; } = string.Empty;
         public DateTime JoinedAt { get; set; }
         public DateTime? LeftAt { get; set; }
         public DateTime LastSeenAt { get; set; }

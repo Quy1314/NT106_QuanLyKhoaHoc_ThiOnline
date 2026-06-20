@@ -100,7 +100,7 @@ namespace CourseGuard.Backend.Services.Classroom
             }
         }
 
-        public async Task JoinRoomAsync(int sessionId, int userId, string displayName, string role, CancellationToken cancellationToken = default)
+        public async Task JoinRoomAsync(int sessionId, int userId, string displayName, string role, string avatarPath = "", CancellationToken cancellationToken = default)
         {
             await SendAsync(new ClassroomSignalModel
             {
@@ -108,7 +108,11 @@ namespace CourseGuard.Backend.Services.Classroom
                 SessionId = sessionId,
                 SenderId = userId,
                 SenderName = displayName,
-                SenderRole = role
+                SenderRole = role,
+                Payload =
+                {
+                    ["avatarPath"] = avatarPath ?? string.Empty
+                }
             }, cancellationToken);
         }
 

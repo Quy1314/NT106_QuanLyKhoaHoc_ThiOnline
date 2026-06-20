@@ -22,12 +22,17 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
 
         public async Task<Image?> LoadAsync(string avatarUrl, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(avatarUrl) || !IsHttpUrl(avatarUrl))
+            if (string.IsNullOrWhiteSpace(avatarUrl))
             {
                 return null;
             }
 
             string normalizedUrl = avatarUrl.Trim();
+            if (!IsHttpUrl(normalizedUrl) && !File.Exists(normalizedUrl))
+            {
+                return null;
+            }
+
             Task<Image?> loadTask;
 
             lock (_syncRoot)
@@ -44,7 +49,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
 
                 if (!_pendingLoads.TryGetValue(normalizedUrl, out loadTask!))
                 {
-                    loadTask = DownloadAndCacheAsync(normalizedUrl);
+                    loadTask = LoadAndCacheAsync(normalizedUrl);
                     _pendingLoads[normalizedUrl] = loadTask;
                 }
             }
@@ -99,18 +104,21 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             }
         }
 
-        private async Task<Image?> DownloadAndCacheAsync(string avatarUrl)
+        private async Task<Image?> LoadAndCacheAsync(string avatarPathOrUrl)
         {
             try
             {
-                byte[] bytes = await HttpClient.GetByteArrayAsync(avatarUrl).ConfigureAwait(false);
+                byte[] bytes = IsHttpUrl(avatarPathOrUrl)
+                    ? await HttpClient.GetByteArrayAsync(avatarPathOrUrl).ConfigureAwait(false)
+                    : await File.ReadAllBytesAsync(avatarPathOrUrl).ConfigureAwait(false);
+
                 using var stream = new MemoryStream(bytes);
                 using Image source = Image.FromStream(stream);
                 var cachedImage = new Bitmap(source);
 
                 lock (_syncRoot)
                 {
-                    _pendingLoads.Remove(avatarUrl);
+                    _pendingLoads.Remove(avatarPathOrUrl);
 
                     if (_disposed)
                     {
@@ -118,13 +126,13 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
                         return null;
                     }
 
-                    if (_cache.TryGetValue(avatarUrl, out Image? existingImage))
+                    if (_cache.TryGetValue(avatarPathOrUrl, out Image? existingImage))
                     {
                         cachedImage.Dispose();
                         return existingImage;
                     }
 
-                    _cache[avatarUrl] = cachedImage;
+                    _cache[avatarPathOrUrl] = cachedImage;
                     return cachedImage;
                 }
             }
@@ -132,7 +140,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             {
                 lock (_syncRoot)
                 {
-                    _pendingLoads.Remove(avatarUrl);
+                    _pendingLoads.Remove(avatarPathOrUrl);
                 }
 
                 return null;
