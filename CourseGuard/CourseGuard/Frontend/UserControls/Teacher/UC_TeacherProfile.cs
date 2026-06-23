@@ -19,6 +19,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
     public partial class UC_TeacherProfile : ProfilePageBase
     {
         public event EventHandler<TeacherProfileChangedEventArgs>? ProfileChanged;
+        public event EventHandler? PasswordChangedSuccessfully;
 
         private readonly int _teacherId;
         private readonly CourseGuardDbContext _dbContext = new("");
@@ -811,6 +812,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _newPassword.Clear();
             _confirmPassword.Clear();
             MetaTheme.ShowModernDialog("Đổi mật khẩu thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            PasswordChangedSuccessfully?.Invoke(this, EventArgs.Empty);
         }
 
         private static StatCard CreateMetricCard(string title, string icon, string statusText)

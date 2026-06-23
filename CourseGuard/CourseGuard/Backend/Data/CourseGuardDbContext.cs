@@ -41,7 +41,11 @@ namespace CourseGuard.Backend.Data
         {
             const string sql = @"
                 ALTER TABLE users
-                    ADD COLUMN IF NOT EXISTS temp_password_expires_at TIMESTAMP;
+                    ADD COLUMN IF NOT EXISTS temp_password_expires_at TIMESTAMP,
+                    ADD COLUMN IF NOT EXISTS failed_attempts INT DEFAULT 0,
+                    ADD COLUMN IF NOT EXISTS lockout_until TIMESTAMP,
+                    ADD COLUMN IF NOT EXISTS mfa_otp VARCHAR(10),
+                    ADD COLUMN IF NOT EXISTS mfa_otp_expires_at TIMESTAMP;
 
                 CREATE INDEX IF NOT EXISTS idx_users_temp_password_expires_at
                     ON users (temp_password_expires_at)
@@ -53,7 +57,7 @@ namespace CourseGuard.Backend.Data
 
         private static UserModel ReadUser(NpgsqlDataReader reader, int tempPasswordExpiresAtIndex, int? avatarPathIndex = null)
         {
-            return new UserModel
+            var user = new UserModel
             {
                 Id = reader.GetInt32(0),
                 Username = reader.GetString(1),
@@ -67,6 +71,16 @@ namespace CourseGuard.Backend.Data
                     ? reader.GetString(avatarPathIndex.Value)
                     : string.Empty
             };
+
+            if (reader.FieldCount > 9)
+            {
+                user.FailedAttempts = reader.IsDBNull(9) ? 0 : reader.GetInt32(9);
+                user.LockoutUntil = reader.IsDBNull(10) ? null : reader.GetDateTime(10);
+                user.MfaOtp = reader.IsDBNull(11) ? null : reader.GetString(11);
+                user.MfaOtpExpiresAt = reader.IsDBNull(12) ? null : reader.GetDateTime(12);
+            }
+
+            return user;
         }
 
         public void EnsureCourseWorkflowSchema()
@@ -94,7 +108,8 @@ namespace CourseGuard.Backend.Data
 
             string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status,
                                     u.temp_password_expires_at,
-                                    COALESCE(sp.avatar_path, tp.avatar_path, '') AS avatar_path
+                                    COALESCE(sp.avatar_path, tp.avatar_path, '') AS avatar_path,
+                                    u.failed_attempts, u.lockout_until, u.mfa_otp, u.mfa_otp_expires_at
                              FROM USERS u
                              JOIN ROLES r ON u.role_id = r.id
                              LEFT JOIN student_profiles sp ON sp.user_id = u.id
@@ -120,7 +135,8 @@ namespace CourseGuard.Backend.Data
 
             const string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status,
                                     u.temp_password_expires_at,
-                                    COALESCE(sp.avatar_path, tp.avatar_path, '') AS avatar_path
+                                    COALESCE(sp.avatar_path, tp.avatar_path, '') AS avatar_path,
+                                    u.failed_attempts, u.lockout_until, u.mfa_otp, u.mfa_otp_expires_at
                              FROM USERS u
                              JOIN ROLES r ON u.role_id = r.id
                              LEFT JOIN student_profiles sp ON sp.user_id = u.id
@@ -198,6 +214,126 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@id", userId);
 
             command.ExecuteNonQuery();
+        }
+
+        public void IncrementFailedAttempts(int userId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureUserSecuritySchema(connection);
+
+            // Get current failed attempts
+            int currentAttempts = 0;
+            const string selectSql = "SELECT failed_attempts FROM Users WHERE id = @id";
+            using (var selectCmd = new NpgsqlCommand(selectSql, connection))
+            {
+                selectCmd.Parameters.AddWithValue("@id", userId);
+                var result = selectCmd.ExecuteScalar();
+                if (result != null && result != DBNull.Value)
+                {
+                    currentAttempts = Convert.ToInt32(result);
+                }
+            }
+
+            currentAttempts++;
+            DateTime? lockoutUntil = null;
+            if (currentAttempts >= 5)
+            {
+                lockoutUntil = DateTime.Now.AddMinutes(15);
+            }
+
+            const string updateSql = @"
+                UPDATE Users
+                SET failed_attempts = @failed_attempts,
+                    lockout_until = @lockout_until
+                WHERE id = @id";
+
+            using var command = new NpgsqlCommand(updateSql, connection);
+            command.Parameters.AddWithValue("@failed_attempts", currentAttempts);
+            command.Parameters.AddWithValue("@lockout_until", (object?)lockoutUntil ?? DBNull.Value);
+            command.Parameters.AddWithValue("@id", userId);
+            command.ExecuteNonQuery();
+        }
+
+        public void ResetFailedAttempts(int userId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureUserSecuritySchema(connection);
+
+            const string sql = @"
+                UPDATE Users
+                SET failed_attempts = 0,
+                    lockout_until = NULL
+                WHERE id = @id";
+
+            using var command = new NpgsqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@id", userId);
+            command.ExecuteNonQuery();
+        }
+
+        public void SaveMfaOtp(int userId, string otp, DateTime expiresAt)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureUserSecuritySchema(connection);
+
+            const string sql = @"
+                UPDATE Users
+                SET mfa_otp = @mfa_otp,
+                    mfa_otp_expires_at = @mfa_otp_expires_at
+                WHERE id = @id";
+
+            using var command = new NpgsqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@mfa_otp", otp);
+            command.Parameters.AddWithValue("@mfa_otp_expires_at", expiresAt);
+            command.Parameters.AddWithValue("@id", userId);
+            command.ExecuteNonQuery();
+        }
+
+        public bool VerifyMfaOtp(int userId, string otp)
+        {
+            if (string.IsNullOrWhiteSpace(otp)) return false;
+
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureUserSecuritySchema(connection);
+
+            const string sql = @"
+                SELECT mfa_otp, mfa_otp_expires_at
+                FROM Users
+                WHERE id = @id";
+
+            using var command = new NpgsqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@id", userId);
+
+            using var reader = command.ExecuteReader();
+            if (reader.Read())
+            {
+                string? storedOtp = reader.IsDBNull(0) ? null : reader.GetString(0);
+                DateTime? expiresAt = reader.IsDBNull(1) ? null : reader.GetDateTime(1);
+
+                if (storedOtp != null && expiresAt.HasValue && 
+                    string.Equals(storedOtp.Trim(), otp.Trim(), StringComparison.Ordinal) &&
+                    expiresAt.Value > DateTime.Now)
+                {
+                    reader.Close();
+
+                    // Clear OTP after successful verification to prevent reuse
+                    const string clearSql = @"
+                        UPDATE Users
+                        SET mfa_otp = NULL,
+                            mfa_otp_expires_at = NULL
+                        WHERE id = @id";
+                    using var clearCommand = new NpgsqlCommand(clearSql, connection);
+                    clearCommand.Parameters.AddWithValue("@id", userId);
+                    clearCommand.ExecuteNonQuery();
+
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void EnsureStudentProfileSchema(NpgsqlConnection connection)
@@ -2010,7 +2146,9 @@ namespace CourseGuard.Backend.Data
             EnsureUserSecuritySchema(connection);
 
             string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status,
-                                    u.temp_password_expires_at
+                                    u.temp_password_expires_at,
+                                    '' AS avatar_path,
+                                    u.failed_attempts, u.lockout_until, u.mfa_otp, u.mfa_otp_expires_at
                             FROM USERS u 
                             JOIN ROLES r ON u.role_id = r.id 
                             WHERE LOWER(u.username) = LOWER(@username) AND u.email = @email";
@@ -2021,7 +2159,7 @@ namespace CourseGuard.Backend.Data
             using var reader = command.ExecuteReader();
             if (reader.Read())
             {
-                return ReadUser(reader, tempPasswordExpiresAtIndex: 7);
+                return ReadUser(reader, tempPasswordExpiresAtIndex: 7, avatarPathIndex: 8);
             }
 
             return null;
@@ -2034,7 +2172,9 @@ namespace CourseGuard.Backend.Data
             EnsureUserSecuritySchema(connection);
 
             const string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status,
-                                   u.temp_password_expires_at
+                                   u.temp_password_expires_at,
+                                   '' AS avatar_path,
+                                   u.failed_attempts, u.lockout_until, u.mfa_otp, u.mfa_otp_expires_at
                                    FROM USERS u
                                    JOIN ROLES r ON u.role_id = r.id
                                    WHERE u.id = @id";
@@ -2045,7 +2185,7 @@ namespace CourseGuard.Backend.Data
             using var reader = command.ExecuteReader();
             if (reader.Read())
             {
-                return ReadUser(reader, tempPasswordExpiresAtIndex: 7);
+                return ReadUser(reader, tempPasswordExpiresAtIndex: 7, avatarPathIndex: 8);
             }
 
             return null;

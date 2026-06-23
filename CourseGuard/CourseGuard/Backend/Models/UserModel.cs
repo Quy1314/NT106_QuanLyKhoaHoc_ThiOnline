@@ -20,5 +20,9 @@ namespace CourseGuard.Backend.Models
         public string Status { get; set; } = string.Empty;
         public string AvatarPath { get; set; } = string.Empty;
         public DateTime? TempPasswordExpiresAt { get; set; }
+        public int FailedAttempts { get; set; }
+        public DateTime? LockoutUntil { get; set; }
+        public string? MfaOtp { get; set; }
+        public DateTime? MfaOtpExpiresAt { get; set; }
     }
 }

@@ -738,7 +738,7 @@ namespace CourseGuard.Frontend.Forms.Login
 
             if (success)
             {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Yêu cầu cấp lại mật khẩu đã được báo cáo lên Admin", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Yêu cầu cấp lại mật khẩu đã được tiếp nhận. Vui lòng liên hệ Admin để duyệt hoặc kiểm tra hòm thư của bạn nếu thông tin chính xác.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 txtForgotUsername.Clear();
                 txtForgotEmail.Clear();
                 ShowPanel(LoginPanel);
@@ -770,6 +770,16 @@ namespace CourseGuard.Frontend.Forms.Login
                 LoginResultModel loginResult = await AuthService.LoginAsync(username, password);
                 LogLoginTiming("auth response", stopwatch);
 
+                if (loginResult.ErrorCode == LoginErrorCodes.AccountLocked)
+                {
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(
+                        "Tài khoản tạm thời bị khóa 15 phút do nhập sai mật khẩu quá nhiều lần.",
+                        "Tài khoản bị khóa",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
+
                 if (loginResult.ErrorCode == LoginErrorCodes.TempPasswordExpired)
                 {
                     CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(
@@ -785,6 +795,18 @@ namespace CourseGuard.Frontend.Forms.Login
                 {
                     CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Tên đăng nhập hoặc mật khẩu không đúng!", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
+                }
+
+                if (loginResult.IsMfaRequired)
+                {
+                    using (var otpDialog = new MfaOtpDialog(user.Id, AuthService))
+                    {
+                        if (otpDialog.ShowDialog() != DialogResult.OK)
+                        {
+                            return;
+                        }
+                    }
+                    loginResult = AuthService.CompleteMfaLogin(user);
                 }
 
                 Task<string> ipAddressTask = GetLocalIPAddressAsync();

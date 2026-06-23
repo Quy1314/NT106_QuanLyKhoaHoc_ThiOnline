@@ -17,6 +17,8 @@ namespace CourseGuard.Frontend.UserControls.Student
 {
     public partial class UC_Profile : ProfilePageBase
     {
+        public event EventHandler? PasswordChangedSuccessfully;
+
         private readonly CourseGuardDbContext _dbContext = new("");
         private readonly NotificationRepository _notificationRepository = new();
         private readonly AuthController _authController;
@@ -319,6 +321,7 @@ namespace CourseGuard.Frontend.UserControls.Student
             txtNewPassword.Clear();
             txtOldPassword.Clear();
             txtConfirmPassword.Clear();
+            PasswordChangedSuccessfully?.Invoke(this, EventArgs.Empty);
         }
 
         private void BuildNewLayout()

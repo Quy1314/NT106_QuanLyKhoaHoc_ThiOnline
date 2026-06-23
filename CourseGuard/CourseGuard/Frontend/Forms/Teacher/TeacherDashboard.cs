@@ -32,6 +32,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private Panel _rightPanel = null!;
         private Panel _content = null!;
         private string _currentPageName = OverviewPage;
+        private bool _isForceChangePasswordActive;
+        private Panel? _forceChangePasswordBanner;
 
         public TeacherDashboard() : this(new UserModel { Id = 0, Username = "teacher", FullName = "Teacher" }, focusSecurityOnStart: false)
         {
@@ -55,6 +57,19 @@ namespace CourseGuard.Frontend.Forms.Teacher
             InitializeNavigation();
             if (focusSecurityOnStart)
             {
+                _isForceChangePasswordActive = true;
+                if (_forceChangePasswordBanner != null)
+                {
+                    _forceChangePasswordBanner.Visible = true;
+                }
+                this.Load += (s, e) =>
+                {
+                    var searchBox = _topbar.Controls.OfType<TextBox>().FirstOrDefault();
+                    if (searchBox != null)
+                    {
+                        searchBox.Enabled = false;
+                    }
+                };
                 NavigateToPage(ProfilePage, focusSecurity: true);
             }
             else
@@ -110,8 +125,29 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _topbar.QuickSearchRequested += Topbar_QuickSearchRequested;
             _topbar.SearchResultSelected += Topbar_SearchResultSelected;
 
+            // Warning banner for temporary password change
+            _forceChangePasswordBanner = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 40,
+                BackColor = Color.FromArgb(40, 251, 64, 75),
+                Padding = new Padding(12, 0, 12, 0),
+                Visible = false
+            };
+            var lblWarning = new Label
+            {
+                Text = "⚠️ Mật khẩu của bạn là mật khẩu tạm thời. Bạn bắt buộc phải đổi mật khẩu tại trang Hồ sơ để mở khóa toàn bộ chức năng hệ thống.",
+                ForeColor = Color.FromArgb(255, 100, 100),
+                Font = AppFonts.Semibold(9.5f),
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                UseCompatibleTextRendering = false
+            };
+            _forceChangePasswordBanner.Controls.Add(lblWarning);
+
             _content = new Panel { Dock = DockStyle.Fill, BackColor = AppColors.BgBase };
             _rightPanel.Controls.Add(_content);
+            _rightPanel.Controls.Add(_forceChangePasswordBanner);
             _rightPanel.Controls.Add(_topbar);
             Controls.Add(_rightPanel);
             Controls.Add(_sidebar);
@@ -163,6 +199,19 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void Sidebar_NavItemClicked(object? sender, string pageName)
         {
+            if (_isForceChangePasswordActive)
+            {
+                if (pageName == "Logout")
+                {
+                    LogoutCurrentUser();
+                }
+                else if (pageName != ProfilePage)
+                {
+                    MetaTheme.ShowModernDialog("Bạn bắt buộc phải đổi mật khẩu tại trang Hồ sơ để mở khóa toàn bộ chức năng hệ thống.", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                return;
+            }
+
             if (pageName == "Logout")
             {
                 LogoutCurrentUser();
@@ -174,11 +223,20 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void Topbar_NavigationRequested(object? sender, TopbarNavigationRequestedEventArgs e)
         {
+            if (_isForceChangePasswordActive)
+            {
+                if (e.PageName != ProfilePage)
+                {
+                    MetaTheme.ShowModernDialog("Bạn bắt buộc phải đổi mật khẩu tại trang Hồ sơ để mở khóa toàn bộ chức năng hệ thống.", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
             NavigateToPage(e.PageName, e.FocusSecurity);
         }
 
         private async void Topbar_QuickSearchRequested(object? sender, TopbarQuickSearchRequestedEventArgs e)
         {
+            if (_isForceChangePasswordActive) return;
             string keyword = e.Keyword.Trim();
             if (string.IsNullOrWhiteSpace(keyword))
                 return;
@@ -208,6 +266,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private async void Topbar_SearchResultSelected(object? sender, TopbarSearchResultSelectedEventArgs e)
         {
+            if (_isForceChangePasswordActive) return;
             if (string.IsNullOrWhiteSpace(e.Result.PageName))
                 return;
 
@@ -296,10 +355,40 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 control.Dispose();
 
             _content.Controls.Clear();
+            if (uc is UC_TeacherProfile profile)
+            {
+                profile.PasswordChangedSuccessfully += (s, e) => UnlockDashboard();
+            }
             uc.Dock = DockStyle.Fill;
             uc.BackColor = AppColors.BgBase;
             _content.Controls.Add(uc);
             AppColors.ApplyTheme(uc);
+        }
+
+        private void UnlockDashboard()
+        {
+            _isForceChangePasswordActive = false;
+            if (_forceChangePasswordBanner != null)
+            {
+                _forceChangePasswordBanner.Visible = false;
+            }
+            var searchBox = _topbar.Controls.OfType<TextBox>().FirstOrDefault();
+            if (searchBox != null)
+            {
+                searchBox.Enabled = true;
+            }
+            _rightPanel.PerformLayout();
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (_isForceChangePasswordActive && DialogResult != DialogResult.OK && e.CloseReason == CloseReason.UserClosing)
+            {
+                MetaTheme.ShowModernDialog("Bạn phải đổi mật khẩu hoặc Đăng xuất để thoát hệ thống.", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                e.Cancel = true;
+                return;
+            }
+            base.OnFormClosing(e);
         }
 
         private void ReloadCurrentPage()

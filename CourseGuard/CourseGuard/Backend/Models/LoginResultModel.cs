@@ -5,8 +5,9 @@ namespace CourseGuard.Backend.Models
         public UserModel? User { get; init; }
         public string ErrorCode { get; init; } = string.Empty;
         public bool MustChangePassword { get; init; }
+        public bool IsMfaRequired { get; init; }
 
-        public bool Succeeded => User != null && string.IsNullOrWhiteSpace(ErrorCode);
+        public bool Succeeded => User != null && string.IsNullOrWhiteSpace(ErrorCode) && !IsMfaRequired;
 
         public static LoginResultModel Failed()
         {
@@ -24,6 +25,15 @@ namespace CourseGuard.Backend.Models
             {
                 User = user,
                 MustChangePassword = mustChangePassword
+            };
+        }
+
+        public static LoginResultModel MfaRequired(UserModel user)
+        {
+            return new LoginResultModel
+            {
+                User = user,
+                IsMfaRequired = true
             };
         }
 
@@ -46,5 +56,7 @@ namespace CourseGuard.Backend.Models
     public static class LoginErrorCodes
     {
         public const string TempPasswordExpired = "TEMP_PASSWORD_EXPIRED";
+        public const string AccountLocked = "ACCOUNT_LOCKED";
+        public const string InvalidMfa = "INVALID_MFA";
     }
 }

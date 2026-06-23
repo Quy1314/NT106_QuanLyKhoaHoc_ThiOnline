@@ -5,6 +5,7 @@ using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Security;
 using Npgsql;
+using CourseGuard.Backend.Services;
 
 namespace CourseGuard.Backend.Controllers
 {
@@ -61,6 +62,37 @@ namespace CourseGuard.Backend.Controllers
             user.PasswordHash = newHash;
         }
 
+        public static bool ValidatePasswordStrength(string password, out string errorMessage)
+        {
+            errorMessage = string.Empty;
+            if (string.IsNullOrWhiteSpace(password) || password.Length < 8)
+            {
+                errorMessage = "Mật khẩu phải có ít nhất 8 ký tự.";
+                return false;
+            }
+
+            bool hasUppercase = false;
+            bool hasLowercase = false;
+            bool hasDigit = false;
+            bool hasSpecial = false;
+
+            foreach (char c in password)
+            {
+                if (char.IsUpper(c)) hasUppercase = true;
+                else if (char.IsLower(c)) hasLowercase = true;
+                else if (char.IsDigit(c)) hasDigit = true;
+                else if (!char.IsLetterOrDigit(c)) hasSpecial = true;
+            }
+
+            if (!hasUppercase || !hasLowercase || !hasDigit || !hasSpecial)
+            {
+                errorMessage = "Mật khẩu phải chứa ít nhất 1 chữ hoa, 1 chữ thường, 1 chữ số và 1 ký tự đặc biệt.";
+                return false;
+            }
+
+            return true;
+        }
+
         public UserModel? Login(string username, string password)
         {
             if (!UserIdentityBloomIndex.UsernameExists(_dbContext, username))
@@ -74,11 +106,19 @@ namespace CourseGuard.Backend.Controllers
                 return null;
             }
 
-            if (!PasswordHasher.VerifyPassword(password, user.PasswordHash))
+            // Check if locked
+            if (user.LockoutUntil.HasValue && user.LockoutUntil.Value > DateTime.Now)
             {
                 return null;
             }
 
+            if (!PasswordHasher.VerifyPassword(password, user.PasswordHash))
+            {
+                _dbContext.IncrementFailedAttempts(user.Id);
+                return null;
+            }
+
+            _dbContext.ResetFailedAttempts(user.Id);
             RehashLegacyPasswordIfNeeded(user, password);
             LoginResultModel result = BuildSuccessfulLoginResult(user);
             return result.Succeeded ? result.User : null;
@@ -97,12 +137,67 @@ namespace CourseGuard.Backend.Controllers
                 return LoginResultModel.Failed();
             }
 
+            // Check if locked
+            if (user.LockoutUntil.HasValue && user.LockoutUntil.Value > DateTime.Now)
+            {
+                return LoginResultModel.Error(LoginErrorCodes.AccountLocked);
+            }
+
             if (!PasswordHasher.VerifyPassword(password, user.PasswordHash))
             {
+                _dbContext.IncrementFailedAttempts(user.Id);
+                // Check if newly locked out
+                var updatedUser = await _dbContext.GetUserByUsernameAsync(username, cancellationToken);
+                if (updatedUser != null && updatedUser.LockoutUntil.HasValue && updatedUser.LockoutUntil.Value > DateTime.Now)
+                {
+                    return LoginResultModel.Error(LoginErrorCodes.AccountLocked);
+                }
                 return LoginResultModel.Failed();
             }
 
+            _dbContext.ResetFailedAttempts(user.Id);
             RehashLegacyPasswordIfNeeded(user, password);
+
+            // MFA implementation
+            // 1. Generate OTP
+            string otp = GenerateMfaOtp();
+            DateTime expiresAt = DateTime.Now.AddMinutes(5);
+            _dbContext.SaveMfaOtp(user.Id, otp, expiresAt);
+
+            // 2. Send Email
+            var smtpEmailService = new SmtpEmailService();
+            string emailBody = 
+                $"Xin chao {user.FullName ?? user.Username},\n\n" +
+                $"Ma OTP xac thuc 2 lop de dang nhap vao CourseGuard cua ban la: {otp}\n" +
+                $"Ma co hieu luc trong 5 phut (den luc: {expiresAt:dd/MM/yyyy HH:mm}).\n\n" +
+                "Neu ban khong thuc hien yeu cau nay, vui long doi mat khau ngay lap tuc.\n\n" +
+                "CourseGuard Security Team";
+
+            smtpEmailService.SendEmail(
+                user.Email,
+                "CourseGuard - Xac thuc dang nhap OTP",
+                emailBody,
+                out _);
+
+            return LoginResultModel.MfaRequired(user);
+        }
+
+        private static string GenerateMfaOtp()
+        {
+            using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+            byte[] bytes = new byte[4];
+            rng.GetBytes(bytes);
+            uint num = BitConverter.ToUInt32(bytes, 0);
+            return (100000 + (num % 900000)).ToString(); // Returns a 6-digit number string
+        }
+
+        public bool VerifyMfaOtp(int userId, string otp)
+        {
+            return _dbContext.VerifyMfaOtp(userId, otp);
+        }
+
+        public LoginResultModel CompleteMfaLogin(UserModel user)
+        {
             return BuildSuccessfulLoginResult(user);
         }
 
@@ -156,9 +251,9 @@ namespace CourseGuard.Backend.Controllers
                 return false;
             }
 
-            if (password.Length < 6)
+            if (!ValidatePasswordStrength(password, out string pwError))
             {
-                LastErrorMessage = "Mật khẩu phải có ít nhất 6 ký tự.";
+                LastErrorMessage = pwError;
                 return false;
             }
 
@@ -208,7 +303,8 @@ namespace CourseGuard.Backend.Controllers
             if (!UserIdentityBloomIndex.UsernameExists(_dbContext, username) ||
                 !UserIdentityBloomIndex.EmailExists(_dbContext, email))
             {
-                return false;
+                // Always return true to prevent user enumeration
+                return true;
             }
 
             var user = _dbContext.GetUserByUsernameAndEmail(username, email);
@@ -217,9 +313,10 @@ namespace CourseGuard.Backend.Controllers
                 // Update status to RESET_REQUEST as requested
                 _dbContext.UpdateUserStatus(user.Id, "RESET_REQUEST");
                 _dbContext.LogUserActivity(user.Id, "FORGOT_PASSWORD", $"Yêu cầu quên mật khẩu: {user.Username}", string.Empty);
-                return true;
             }
-            return false;
+            
+            // Always return true to prevent user enumeration
+            return true;
         }
 
         public bool ChangePassword(int userId, string oldPassword, string newPassword, string ipAddress = "")
@@ -237,9 +334,9 @@ namespace CourseGuard.Backend.Controllers
                 return false;
             }
 
-            if (newPassword.Length < 6)
+            if (!ValidatePasswordStrength(newPassword, out string pwError))
             {
-                LastErrorMessage = "Mật khẩu mới phải có ít nhất 6 ký tự.";
+                LastErrorMessage = pwError;
                 return false;
             }
 
