@@ -97,7 +97,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
             tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 55F));
             tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 55F));
-            tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 55F));
+            tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 70F)); // Increased to give the 40px buttons + 15px margin plenty of room
 
             // Fix: Wrap TextBoxes in RoundedPanels for rounded corners
             var pnlUsername = WrapInput(txt_Username);
