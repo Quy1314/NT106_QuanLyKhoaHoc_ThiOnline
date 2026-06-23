@@ -39,6 +39,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
             this.btn_delete.Click += new System.EventHandler(this.btn_delete_Click);
             this.btn_search.Click += new System.EventHandler(this.btn_search_Click);
             this.btn_Approve.Click += btn_Approve_Click;
+            
+            // Fix: Default values for Comboboxes
+            this.cb_roleID.Items.Insert(0, "ALL");
+            this.cb_roleID.SelectedIndex = 0;
             this.cb_StatusFilter.SelectedIndex = 0; // "ALL"
         }
 
@@ -54,6 +58,23 @@ namespace CourseGuard.Frontend.UserControls.Admin
             
             AppColors.ApplyTheme(this);
             WrapWithCards();
+        }
+
+        private RoundedPanel WrapInput(Control c)
+        {
+            var pnl = new RoundedPanel
+            {
+                CornerRadius = 8,
+                Height = 36,
+                BackColor = CourseGuard.Frontend.Theme.AppColors.BgInput,
+                Padding = new Padding(12, 10, 12, 10),
+                Dock = DockStyle.Fill,
+                Margin = new Padding(5, 12, 5, 12)
+            };
+            c.Dock = DockStyle.Fill;
+            if (c is TextBox tb) tb.BorderStyle = BorderStyle.None;
+            pnl.Controls.Add(c);
+            return pnl;
         }
 
         private void RefactorFormLayout()
@@ -74,19 +95,20 @@ namespace CourseGuard.Frontend.UserControls.Admin
             tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
             tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
 
-            // Set docking for inputs
-            txt_Username.Dock = DockStyle.Fill; txt_Username.Margin = new Padding(5);
-            txt_Password.Dock = DockStyle.Fill; txt_Password.Margin = new Padding(5);
+            // Fix: Wrap TextBoxes in RoundedPanels for rounded corners
+            var pnlUsername = WrapInput(txt_Username);
+            var pnlPassword = WrapInput(txt_Password);
             txt_Password.UseSystemPasswordChar = true;
-            txt_FullName.Dock = DockStyle.Fill; txt_FullName.Margin = new Padding(5);
-            txt_Email.Dock = DockStyle.Fill; txt_Email.Margin = new Padding(5);
-            cb_roleID.Dock = DockStyle.Fill; cb_roleID.Margin = new Padding(5, 10, 5, 5);
-            cb_StatusFilter.Dock = DockStyle.Fill; cb_StatusFilter.Margin = new Padding(5, 10, 5, 5);
+            var pnlFullName = WrapInput(txt_FullName);
+            var pnlEmail = WrapInput(txt_Email);
+            
+            cb_roleID.Anchor = AnchorStyles.Left | AnchorStyles.Right; cb_roleID.Margin = new Padding(5, 12, 5, 12);
+            cb_StatusFilter.Anchor = AnchorStyles.Left | AnchorStyles.Right; cb_StatusFilter.Margin = new Padding(5, 12, 5, 12);
 
-            tlp.Controls.Add(txt_Username, 0, 0);
-            tlp.Controls.Add(txt_Password, 1, 0);
-            tlp.Controls.Add(txt_FullName, 2, 0);
-            tlp.Controls.Add(txt_Email, 0, 1);
+            tlp.Controls.Add(pnlUsername, 0, 0);
+            tlp.Controls.Add(pnlPassword, 1, 0);
+            tlp.Controls.Add(pnlFullName, 2, 0);
+            tlp.Controls.Add(pnlEmail, 0, 1);
             tlp.Controls.Add(cb_roleID, 1, 1);
             tlp.Controls.Add(cb_StatusFilter, 2, 1);
 
@@ -94,7 +116,8 @@ namespace CourseGuard.Frontend.UserControls.Admin
             {
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.RightToLeft,
-                Padding = new Padding(0)
+                Padding = new Padding(0),
+                Margin = new Padding(0, 15, 0, 0) // Fix: Add space above buttons
             };
             
             // Add buttons to flow layout
@@ -117,10 +140,17 @@ namespace CourseGuard.Frontend.UserControls.Admin
         private void WrapWithCards()
         {
             this.Controls.Remove(panel1);
+            
+            // Fix: Add top spacer so the card isn't hugging the Topbar
+            var topSpacer = new Panel { Dock = DockStyle.Top, Height = 20, BackColor = Color.Transparent, Tag = "custom" };
+            this.Controls.Add(topSpacer);
+            topSpacer.BringToFront();
+
             var cardFilter = CourseGuard.Frontend.UserControls.Teacher.TeacherTabChrome.CreateDataCard("Quản lý người dùng", panel1);
             cardFilter.Dock = DockStyle.Top;
             cardFilter.Height = 240;
             this.Controls.Add(cardFilter);
+            cardFilter.BringToFront();
             
             var spacer = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = Color.Transparent, Tag = "custom" };
             this.Controls.Add(spacer);
