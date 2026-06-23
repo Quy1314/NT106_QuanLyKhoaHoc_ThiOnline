@@ -60,20 +60,24 @@ namespace CourseGuard.Frontend.UserControls.Admin
             WrapWithCards();
         }
 
-        private RoundedPanel WrapInput(Control c)
+        private RoundedPanel WrapInput(TextBox tb)
         {
+            // Tự động tính toán padding dọc để chữ nằm ngay giữa, không bị cắt chân
+            int vpad = Math.Max(0, (40 - tb.PreferredHeight) / 2);
+            
             var pnl = new RoundedPanel
             {
                 CornerRadius = 8,
                 Height = 40,
                 BackColor = CourseGuard.Frontend.Theme.AppColors.BgInput,
-                Padding = new Padding(15, 10, 15, 8), // Adjusted padding to give more vertical room
+                // Chỉnh lề trái thành 12 để chữ bên trong (do TextBox có lề ẩn) thẳng hàng với chữ của ComboBox
+                Padding = new Padding(12, vpad, 15, vpad), 
                 Dock = DockStyle.Fill,
                 Margin = new Padding(5, 10, 5, 10)
             };
-            c.Dock = DockStyle.Fill;
-            if (c is TextBox tb) tb.BorderStyle = BorderStyle.None;
-            pnl.Controls.Add(c);
+            tb.Dock = DockStyle.Fill;
+            tb.BorderStyle = BorderStyle.None;
+            pnl.Controls.Add(tb);
             return pnl;
         }
 
