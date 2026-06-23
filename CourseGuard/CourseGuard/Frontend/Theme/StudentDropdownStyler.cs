@@ -524,12 +524,6 @@ namespace CourseGuard.Frontend.Theme
                     }
 
                     DrawSmoothRoundedBorder(g, chromeRect, ComboRadius, borderColor, borderWidth);
-                    using (Pen pen = new Pen(borderColor, borderWidth))
-                    {
-                        int bottomY = combo.Height - 2;
-                        g.DrawLine(pen, 10, bottomY, combo.Width - 11, bottomY);
-                    }
-
                 }
                 finally
                 {
