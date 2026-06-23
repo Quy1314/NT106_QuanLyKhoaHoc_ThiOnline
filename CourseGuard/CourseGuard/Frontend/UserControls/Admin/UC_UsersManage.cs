@@ -69,7 +69,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             {
                 CornerRadius = 8,
                 Height = 40,
-                BackColor = CourseGuard.Frontend.Theme.AppColors.BgInput,
+                FillColor = CourseGuard.Frontend.Theme.AppColors.BgInput,
                 // Chỉnh lề trái thành 12 để chữ bên trong (do TextBox có lề ẩn) thẳng hàng với chữ của ComboBox
                 Padding = new Padding(12, vpad, 15, vpad), 
                 Dock = DockStyle.Fill,
@@ -77,6 +77,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             };
             tb.Dock = DockStyle.Fill;
             tb.BorderStyle = BorderStyle.None;
+            tb.BackColor = CourseGuard.Frontend.Theme.AppColors.BgInput; // Đồng bộ màu nền TextBox
             pnl.Controls.Add(tb);
             return pnl;
         }
