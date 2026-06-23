@@ -65,11 +65,11 @@ namespace CourseGuard.Frontend.UserControls.Admin
             var pnl = new RoundedPanel
             {
                 CornerRadius = 8,
-                Height = 36,
+                Height = 40,
                 BackColor = CourseGuard.Frontend.Theme.AppColors.BgInput,
-                Padding = new Padding(12, 10, 12, 10),
+                Padding = new Padding(15, 10, 15, 8), // Adjusted padding to give more vertical room
                 Dock = DockStyle.Fill,
-                Margin = new Padding(5, 12, 5, 12)
+                Margin = new Padding(5, 10, 5, 10)
             };
             c.Dock = DockStyle.Fill;
             if (c is TextBox tb) tb.BorderStyle = BorderStyle.None;
@@ -91,9 +91,9 @@ namespace CourseGuard.Frontend.UserControls.Admin
             tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
             tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
             tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
-            tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
-            tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
-            tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
+            tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 55F));
+            tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 55F));
+            tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 55F));
 
             // Fix: Wrap TextBoxes in RoundedPanels for rounded corners
             var pnlUsername = WrapInput(txt_Username);
@@ -102,8 +102,8 @@ namespace CourseGuard.Frontend.UserControls.Admin
             var pnlFullName = WrapInput(txt_FullName);
             var pnlEmail = WrapInput(txt_Email);
             
-            cb_roleID.Anchor = AnchorStyles.Left | AnchorStyles.Right; cb_roleID.Margin = new Padding(5, 12, 5, 12);
-            cb_StatusFilter.Anchor = AnchorStyles.Left | AnchorStyles.Right; cb_StatusFilter.Margin = new Padding(5, 12, 5, 12);
+            cb_roleID.Anchor = AnchorStyles.Left | AnchorStyles.Right; cb_roleID.Margin = new Padding(5, 10, 5, 10);
+            cb_StatusFilter.Anchor = AnchorStyles.Left | AnchorStyles.Right; cb_StatusFilter.Margin = new Padding(5, 10, 5, 10);
 
             tlp.Controls.Add(pnlUsername, 0, 0);
             tlp.Controls.Add(pnlPassword, 1, 0);
@@ -148,7 +148,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
             var cardFilter = CourseGuard.Frontend.UserControls.Teacher.TeacherTabChrome.CreateDataCard("Quản lý người dùng", panel1);
             cardFilter.Dock = DockStyle.Top;
-            cardFilter.Height = 240;
+            cardFilter.Height = 280; // Increased height to prevent cutoff
             this.Controls.Add(cardFilter);
             cardFilter.BringToFront();
             
