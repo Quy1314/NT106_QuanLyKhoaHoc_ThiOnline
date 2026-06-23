@@ -24,7 +24,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
         {
             InitializeComponent();
             _userService = new CourseGuard.Backend.Controllers.UserController(new CourseGuardDbContext(""));
-            ApplyDarkStyle();
+            ApplyThemeStyle();
 
             // Rounded buttons (matching Courses tab style)
             RoundedButtonHelper.Apply(10,
@@ -42,27 +42,95 @@ namespace CourseGuard.Frontend.UserControls.Admin
             this.cb_StatusFilter.SelectedIndex = 0; // "ALL"
         }
 
-        private void ApplyDarkStyle()
+        private void ApplyThemeStyle()
         {
-            BackColor = MetaTheme.Colors.FormBg;
+            btn_insert.Tag = "primary";
+            btn_search.Tag = "primary";
+            btn_Approve.Tag = "secondary";
+            btn_delete.Tag = "danger";
+            panel1.Tag = "card";
 
-            // Primary indigo buttons
-            MetaTheme.StylePrimaryButton(btn_insert);
-            MetaTheme.StylePrimaryButton(btn_search);
+            RefactorFormLayout();
+            
+            AppColors.ApplyTheme(this);
+            WrapWithCards();
+        }
 
-            // Ghost approve button
-            MetaTheme.StyleGhostButton(btn_Approve);
+        private void RefactorFormLayout()
+        {
+            panel1.Controls.Clear();
+            
+            TableLayoutPanel tlp = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                RowCount = 3,
+                Padding = new Padding(15)
+            };
+            tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
+            tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
+            tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
+            tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
+            tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
+            tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
 
-            // Critical-red delete button
-            btn_delete.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            btn_delete.FlatAppearance.BorderSize = 0;
-            btn_delete.BackColor = MetaTheme.Colors.LogoutRed;
-            btn_delete.ForeColor = MetaTheme.Colors.TextPrimary;
-            btn_delete.Font = MetaTheme.Fonts.ButtonMd();
-            btn_delete.Cursor = System.Windows.Forms.Cursors.Hand;
-            btn_delete.FlatAppearance.MouseOverBackColor = MetaTheme.Colors.LogoutRedHover;
+            // Set docking for inputs
+            txt_Username.Dock = DockStyle.Fill; txt_Username.Margin = new Padding(5);
+            txt_Password.Dock = DockStyle.Fill; txt_Password.Margin = new Padding(5);
+            txt_Password.UseSystemPasswordChar = true;
+            txt_FullName.Dock = DockStyle.Fill; txt_FullName.Margin = new Padding(5);
+            txt_Email.Dock = DockStyle.Fill; txt_Email.Margin = new Padding(5);
+            cb_roleID.Dock = DockStyle.Fill; cb_roleID.Margin = new Padding(5, 10, 5, 5);
+            cb_StatusFilter.Dock = DockStyle.Fill; cb_StatusFilter.Margin = new Padding(5, 10, 5, 5);
 
-            MetaTheme.StyleGrid(dataGridView1);
+            tlp.Controls.Add(txt_Username, 0, 0);
+            tlp.Controls.Add(txt_Password, 1, 0);
+            tlp.Controls.Add(txt_FullName, 2, 0);
+            tlp.Controls.Add(txt_Email, 0, 1);
+            tlp.Controls.Add(cb_roleID, 1, 1);
+            tlp.Controls.Add(cb_StatusFilter, 2, 1);
+
+            FlowLayoutPanel flp = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.RightToLeft,
+                Padding = new Padding(0)
+            };
+            
+            // Add buttons to flow layout
+            btn_Approve.Margin = new Padding(10, 0, 0, 0);
+            btn_search.Margin = new Padding(10, 0, 0, 0);
+            btn_delete.Margin = new Padding(10, 0, 0, 0);
+            btn_insert.Margin = new Padding(10, 0, 0, 0);
+            
+            flp.Controls.Add(btn_Approve);
+            flp.Controls.Add(btn_search);
+            flp.Controls.Add(btn_delete);
+            flp.Controls.Add(btn_insert);
+
+            tlp.Controls.Add(flp, 0, 2);
+            tlp.SetColumnSpan(flp, 3);
+
+            panel1.Controls.Add(tlp);
+        }
+
+        private void WrapWithCards()
+        {
+            this.Controls.Remove(panel1);
+            var cardFilter = CourseGuard.Frontend.UserControls.Teacher.TeacherTabChrome.CreateDataCard("Quản lý người dùng", panel1);
+            cardFilter.Dock = DockStyle.Top;
+            cardFilter.Height = 240;
+            this.Controls.Add(cardFilter);
+            
+            var spacer = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = Color.Transparent, Tag = "custom" };
+            this.Controls.Add(spacer);
+            spacer.BringToFront();
+
+            this.Controls.Remove(dataGridView1);
+            var cardGrid = CourseGuard.Frontend.UserControls.Teacher.TeacherTabChrome.CreateDataCard("Danh sách người dùng", dataGridView1);
+            cardGrid.Dock = DockStyle.Fill;
+            this.Controls.Add(cardGrid);
+            cardGrid.BringToFront();
         }
 
         private async void LoadData()
