@@ -272,7 +272,7 @@ namespace CourseGuard.Frontend.Theme
             }
             else if (c is ComboBox cb)
             {
-                StudentDropdownStyler.StyleComboBox(cb, null, cb.Tag?.ToString() == "card-input");
+                StudentDropdownStyler.StyleComboBox(cb, true, cb.Tag?.ToString() == "card-input");
             }
             else if (c is FlowLayoutPanel flp)
             {
