@@ -103,27 +103,27 @@ namespace CourseGuard.Frontend.Theme
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            // Base background: #13131b
-            g.Clear(ColorTranslator.FromHtml("#13131b"));
+            // Base background: #F1F5F9 (Slate 100)
+            g.Clear(ColorTranslator.FromHtml("#F1F5F9"));
 
-            // Radial glows - Cyber Cyan and Hyper Purple matching HTML structure
+            // Radial glows - Soft pastel colors with high transparency
             float maxDim = Math.Max(Width, Height);
             
-            // Layer 1: Cyan glow behind the card (left-center)
-            DrawGlowBlob(g, new PointF(Width * 0.30f, Height * 0.40f), maxDim * 0.7f, Color.FromArgb(140, 0, 219, 233));
+            // Layer 1: Soft Sky Blue glow behind the card (left-center)
+            DrawGlowBlob(g, new PointF(Width * 0.30f, Height * 0.40f), maxDim * 0.7f, Color.FromArgb(35, 14, 165, 233));
             
-            // Layer 2: Purple glow on the left side
-            DrawGlowBlob(g, new PointF(Width * 0.15f, Height * 0.55f), maxDim * 0.8f, Color.FromArgb(120, 150, 6, 244));
+            // Layer 2: Soft Indigo glow on the left side
+            DrawGlowBlob(g, new PointF(Width * 0.15f, Height * 0.55f), maxDim * 0.8f, Color.FromArgb(30, 99, 102, 241));
             
-            // Layer 3: Purple/pink glow on the right side
-            DrawGlowBlob(g, new PointF(Width * 0.80f, Height * 0.50f), maxDim * 0.9f, Color.FromArgb(120, 150, 6, 244));
+            // Layer 3: Soft Pink/Lavender glow on the right side
+            DrawGlowBlob(g, new PointF(Width * 0.80f, Height * 0.50f), maxDim * 0.9f, Color.FromArgb(30, 236, 72, 153));
             
-            // Layer 4: Cyan/blue glow on the top-right side
-            DrawGlowBlob(g, new PointF(Width * 0.65f, Height * 0.30f), maxDim * 0.8f, Color.FromArgb(110, 0, 219, 233));
+            // Layer 4: Soft Purple glow on the top-right side
+            DrawGlowBlob(g, new PointF(Width * 0.65f, Height * 0.30f), maxDim * 0.8f, Color.FromArgb(30, 168, 85, 247));
 
-            // Floating particles: Cyber Cyan and Hyper Purple (30% opacity)
-            using var particleBrush = new SolidBrush(Color.FromArgb(76, 0, 219, 233));
-            using var particleBrush2 = new SolidBrush(Color.FromArgb(76, 150, 6, 244));
+            // Floating particles: Soft Indigo and Pink (25% opacity)
+            using var particleBrush = new SolidBrush(Color.FromArgb(50, 99, 102, 241));
+            using var particleBrush2 = new SolidBrush(Color.FromArgb(50, 236, 72, 153));
             for (int i = 0; i < _particles.Count; i++)
             {
                 var p = _particles[i];
@@ -132,17 +132,17 @@ namespace CourseGuard.Frontend.Theme
                 g.FillEllipse(b, p.X - a / 2f, p.Y - a / 2f, a, a);
             }
 
-            // Mouse-follow glow: Cyber Cyan (subtle but visible)
+            // Mouse-follow glow: Soft Indigo (subtle but visible)
             DrawMouseGlow(g);
 
-            // Soft vignette
+            // Soft white vignette to fade edges nicely
             using var vignette = new PathGradientBrush(new[]
             {
                 new Point(0,0), new Point(Width,0), new Point(Width,Height), new Point(0,Height)
             })
             {
-                CenterColor = Color.FromArgb(0, 0, 0, 0),
-                SurroundColors = new[] { Color.FromArgb(210, 0, 0, 0) }
+                CenterColor = Color.FromArgb(0, 255, 255, 255),
+                SurroundColors = new[] { Color.FromArgb(140, 255, 255, 255) }
             };
             g.FillRectangle(vignette, ClientRectangle);
         }
@@ -180,8 +180,8 @@ namespace CourseGuard.Frontend.Theme
                 using (var pgb = new PathGradientBrush(path))
                 {
                     pgb.CenterPoint = center;
-                    pgb.CenterColor = Color.FromArgb(35, 0, 219, 233);
-                    pgb.SurroundColors = new[] { Color.FromArgb(0, 0, 219, 233) };
+                    pgb.CenterColor = Color.FromArgb(25, 99, 102, 241);
+                    pgb.SurroundColors = new[] { Color.FromArgb(0, 99, 102, 241) };
                     g.FillPath(pgb, path);
                 }
             }
@@ -219,10 +219,10 @@ namespace CourseGuard.Frontend.Theme
         public float CornerRadius { get; set; } = 32f; // 2rem / 32px matching mockup
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Color GlassFill { get; set; } = Color.FromArgb(8, 255, 255, 255); // 3% white glassmorphism
+        public Color GlassFill { get; set; } = Color.FromArgb(215, 255, 255, 255); // beautiful frosted white glassmorphism
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Color BorderColor { get; set; } = Color.FromArgb(25, 255, 255, 255); // 10% white border
+        public Color BorderColor { get; set; } = Color.FromArgb(200, 226, 232, 240); // Slate 200 border
 
         public GlassCardHostPanel()
         {
@@ -289,21 +289,21 @@ namespace CourseGuard.Frontend.Theme
             var rect = new RectangleF(margin, margin, Width - margin * 2f, Height - margin * 2f);
             using var path = FuturisticLoginKit.CreateRoundedRect(rect, CornerRadius);
 
-            // Draw soft glow outside the card bounds
+            // Draw soft drop shadow (elevation 3D) outside the card bounds
             var stateGlow = g.Save();
             using (var reg = new Region(path))
             {
                 g.ExcludeClip(reg);
             }
-            DrawSoftGlow(g, rect, CornerRadius, Color.FromArgb((int)(30 + 40 * _hover), 150, 6, 244), 20); // spread = 20
-            DrawSoftGlow(g, rect, CornerRadius, Color.FromArgb((int)(20 + 35 * _hover), 0, 240, 255), 16);  // spread = 16
+            // Deep soft shadow matching Slate 900 base shadow
+            DrawSoftGlow(g, rect, CornerRadius, Color.FromArgb((int)(12 + 12 * _hover), 15, 23, 42), 24); // spread = 24
             g.Restore(stateGlow);
 
             // Glass fill
             using (var fill = new SolidBrush(GlassFill))
                 g.FillPath(fill, path);
 
-            // Light sweep on hover
+            // Light sweep on hover (refined white shimmer)
             if (_hover > 0.05f)
             {
                 float sweepW = rect.Width * 0.55f;
@@ -330,7 +330,7 @@ namespace CourseGuard.Frontend.Theme
                 g.Restore(state);
             }
 
-            // Decorative Scan Line (Cyber Cyan scan line sweeping down)
+            // Decorative Scan Line (Indigo 500 scan line sweeping down)
             float scanY = rect.Y + rect.Height * _scanProgress;
             float opacity = (float)Math.Sin(_scanProgress * Math.PI); // peak opacity in middle
             if (opacity > 0.01f)
@@ -340,17 +340,17 @@ namespace CourseGuard.Frontend.Theme
 
                 using (var scanBrush = new LinearGradientBrush(
                     new RectangleF(rect.X, scanY - 2, rect.Width, 4),
-                    Color.FromArgb(0, 0, 240, 255),
-                    Color.FromArgb((int)(160 * opacity), 0, 240, 255),
+                    Color.FromArgb(0, 99, 102, 241),
+                    Color.FromArgb((int)(160 * opacity), 99, 102, 241),
                     0f))
                 {
                     var cb = new ColorBlend
                     {
                         Colors = new[]
                         {
-                            Color.FromArgb(0, 0, 240, 255),
-                            Color.FromArgb((int)(160 * opacity), 0, 240, 255),
-                            Color.FromArgb(0, 0, 240, 255)
+                            Color.FromArgb(0, 99, 102, 241),
+                            Color.FromArgb((int)(160 * opacity), 99, 102, 241),
+                            Color.FromArgb(0, 99, 102, 241)
                         },
                         Positions = new[] { 0f, 0.5f, 1f }
                     };
@@ -393,7 +393,7 @@ namespace CourseGuard.Frontend.Theme
             FlatStyle = FlatStyle.Flat;
             FlatAppearance.BorderSize = 0;
             BackColor = Color.Transparent;
-            ForeColor = ColorTranslator.FromHtml("#002022");
+            ForeColor = Color.White; // Clean white text
             Cursor = Cursors.Hand;
             DoubleBuffered = true;
 
@@ -427,13 +427,14 @@ namespace CourseGuard.Frontend.Theme
             float r = Math.Min(Height, 56) / 2f;
             using var path = FuturisticLoginKit.CreateRoundedRect(rect, r);
 
-            // Glow
-            int glowA = _hover ? 120 : 70;
-            DrawGlow(g, rect, r, Color.FromArgb(glowA, 150, 6, 244), 14); // Hyper Purple
-            DrawGlow(g, rect, r, Color.FromArgb(glowA, 0, 240, 255), 12);  // Cyber Cyan
+            // Glow - Soft Indigo glow
+            int glowA = _hover ? 110 : 60;
+            DrawGlow(g, rect, r, Color.FromArgb(glowA, 99, 102, 241), 14);
 
-            // Gradient fill (cyan -> purple)
-            using (var bg = new LinearGradientBrush(rect, Color.FromArgb(255, 0, 240, 255), Color.FromArgb(255, 150, 6, 244), 0f))
+            // Gradient fill (Indigo 500 to Violet 600)
+            var c1 = _hover ? Color.FromArgb(255, 79, 70, 229) : Color.FromArgb(255, 99, 102, 241);
+            var c2 = _hover ? Color.FromArgb(255, 55, 48, 163) : Color.FromArgb(255, 124, 58, 237);
+            using (var bg = new LinearGradientBrush(rect, c1, c2, 25f))
             {
                 g.FillPath(bg, path);
             }
@@ -521,7 +522,7 @@ namespace CourseGuard.Frontend.Theme
                 using (var pe = new PaintEventArgs(g, new Rectangle(Left, Top, Width, Height)))
                 {
                     InvokePaintBackground(Parent, pe);
-                    InvokePaint(Parent, pe);
+                    // InvokePaint(Parent, pe); // Removed to fix border drawing artifacts
                 }
                 g.Restore(state);
             }
