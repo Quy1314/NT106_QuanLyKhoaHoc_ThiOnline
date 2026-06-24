@@ -142,7 +142,10 @@ namespace CourseGuard.Frontend.Forms.Student
             if (_session == null || _examId <= 0 || studentId <= 0)
                 return;
 
-            _screenStreamClient = new StudentScreenStreamClient(_examId, studentId, _session.AttemptId);
+            CourseGuard.Backend.Config.AppEnvironment.LoadDotEnvIfExists();
+            string relayUrl = CourseGuard.Backend.Config.AppEnvironment.GetOptional("RELAY_WS_URL") ?? "ws://localhost:8080/relay";
+
+            _screenStreamClient = new StudentScreenStreamClient(_examId, studentId, _session.AttemptId, relayUrl);
             StudentScreenStreamClient client = _screenStreamClient;
             client.ConnectionLostThresholdReached += HandleMonitoringConnectionLost;
             System.Threading.Tasks.Task.Run(() => client.StartAsync(_monitoringCts.Token)).FireAndForgetSafe(this);

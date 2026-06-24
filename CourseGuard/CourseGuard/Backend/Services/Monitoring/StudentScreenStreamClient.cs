@@ -2,7 +2,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Net.Sockets;
+using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -14,9 +14,9 @@ namespace CourseGuard.Backend.Services.Monitoring
         private readonly int _examId;
         private readonly int _studentId;
         private readonly int _attemptId;
-        private readonly string _host;
+        private readonly string _relayUri;
         private readonly ScreenMonitorConnectionLossTracker _connectionLossTracker;
-        private TcpClient? _client;
+        private ClientWebSocket? _ws;
 
         private volatile bool _pendingWarning;
 
@@ -26,13 +26,23 @@ namespace CourseGuard.Backend.Services.Monitoring
             int examId,
             int studentId,
             int attemptId = 0,
-            string host = "127.0.0.1",
+            string host = "ws://localhost:8080/relay",
             TimeSpan? connectionLossThreshold = null)
         {
             _examId = examId;
             _studentId = studentId;
             _attemptId = attemptId;
-            _host = host;
+            
+            if (!host.StartsWith("ws://", StringComparison.OrdinalIgnoreCase) && 
+                !host.StartsWith("wss://", StringComparison.OrdinalIgnoreCase))
+            {
+                _relayUri = $"ws://{host}:{ScreenStreamProtocol.DefaultPort}/relay";
+            }
+            else
+            {
+                _relayUri = host;
+            }
+
             _connectionLossTracker = new ScreenMonitorConnectionLossTracker(
                 connectionLossThreshold ?? ScreenMonitorConnectionLossTracker.DefaultThreshold,
                 () => DateTimeOffset.UtcNow);
@@ -49,12 +59,14 @@ namespace CourseGuard.Backend.Services.Monitoring
             {
                 try
                 {
-                    _client?.Dispose();
-                    _client = new TcpClient();
-                    await _client.ConnectAsync(_host, ScreenStreamProtocol.DefaultPort, cancellationToken);
+                    _ws?.Dispose();
+                    _ws = new ClientWebSocket();
+                    
+                    string connectionUrl = $"{_relayUri}?role=student&examId={_examId}&studentId={_studentId}&attemptId={_attemptId}";
+                    await _ws.ConnectAsync(new Uri(connectionUrl), cancellationToken);
                     _connectionLossTracker.ObserveConnected();
-                    await using NetworkStream stream = _client.GetStream();
-                    while (!cancellationToken.IsCancellationRequested)
+
+                    while (_ws.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
                     {
                         byte frameType = 0;
                         if (_pendingWarning)
@@ -65,9 +77,13 @@ namespace CourseGuard.Backend.Services.Monitoring
 
                         byte[] jpeg = CaptureJpeg();
                         byte[] header = ScreenStreamProtocol.BuildHeader(frameType, _examId, _studentId, _attemptId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), jpeg.Length);
-                        await stream.WriteAsync(header, cancellationToken);
-                        await stream.WriteAsync(jpeg, cancellationToken);
-                        await stream.FlushAsync(cancellationToken);
+                        
+                        // Combine header and payload into a single WebSocket packet
+                        byte[] packet = new byte[header.Length + jpeg.Length];
+                        Buffer.BlockCopy(header, 0, packet, 0, header.Length);
+                        Buffer.BlockCopy(jpeg, 0, packet, header.Length, jpeg.Length);
+
+                        await _ws.SendAsync(new ArraySegment<byte>(packet), WebSocketMessageType.Binary, true, cancellationToken);
                         await Task.Delay(1000, cancellationToken);
                     }
                 }
@@ -113,7 +129,7 @@ namespace CourseGuard.Backend.Services.Monitoring
 
         public void Dispose()
         {
-            _client?.Dispose();
+            _ws?.Dispose();
         }
     }
 }
