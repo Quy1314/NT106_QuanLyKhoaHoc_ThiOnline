@@ -486,7 +486,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         }
 
         // ── Đăng ký tham gia khóa học ────────────────────────────────────
-        private void BtnJoin_Click(object? sender, EventArgs e)
+        private async void BtnJoin_Click(object? sender, EventArgs e)
         {
             CourseModel? course = GetActiveCourse();
             if (course == null)
@@ -508,9 +508,21 @@ namespace CourseGuard.Frontend.UserControls.Student
             if (confirm != DialogResult.Yes) return;
 
             int studentId = _studentId;
-            string result = _controller.RequestEnrollment(courseId, studentId);
-
-            MetaTheme.ShowModernDialog(result, "Kết quả", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            btnJoin.Enabled = false;
+            this.ShowSkeleton(SkeletonType.TableWithToolbarAndDetailPanel);
+            try
+            {
+                string result = await Task.Run(() => _controller.RequestEnrollment(courseId, studentId));
+                MetaTheme.ShowModernDialog(result, "Kết quả", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MetaTheme.ShowModernDialog("Lỗi gửi yêu cầu: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                this.HideSkeleton();
+            }
 
             // Reload để loại bỏ khóa học đã đăng ký khỏi danh sách
             LoadAvailableCourses();

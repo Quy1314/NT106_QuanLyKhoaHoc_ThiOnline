@@ -86,7 +86,11 @@ namespace CourseGuard.Frontend.UserControls.Student
             Invoke((MethodInvoker)delegate
             {
                 if (_sessions.Any(s => s.SessionId == e.SessionId))
+                {
+                    // Xóa bộ đệm lọc cũ để giao diện cập nhật trạng thái lớp học ngay lập tức
+                    _filterCache.Clear();
                     LoadSchedule().FireAndForgetSafe(this);
+                }
             });
         }
 
