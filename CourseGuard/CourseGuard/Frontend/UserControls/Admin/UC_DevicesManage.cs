@@ -116,8 +116,12 @@ namespace CourseGuard.Frontend.UserControls.Admin
             _dgvDevices.Columns.Add("Status", "Trạng thái");
             _dgvDevices.Columns.Add("LastActive", "Hoạt động cuối");
 
-            _dgvDevices.Columns["Id"].Width = 60;
-            _dgvDevices.Columns["Id"].Visible = false;
+            var colId = _dgvDevices.Columns["Id"];
+            if (colId != null)
+            {
+                colId.Width = 60;
+                colId.Visible = false;
+            }
 
             MetaTheme.StyleGrid(_dgvDevices);
             pnlGrid.Controls.Add(_dgvDevices);
@@ -234,8 +238,8 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
 
             int deviceId = Convert.ToInt32(_dgvDevices.SelectedRows[0].Cells["Id"].Value);
-            string deviceName = _dgvDevices.SelectedRows[0].Cells["DeviceName"].Value.ToString() ?? "";
-            string username = _dgvDevices.SelectedRows[0].Cells["Username"].Value.ToString() ?? "";
+            string deviceName = _dgvDevices.SelectedRows[0].Cells["DeviceName"].Value?.ToString() ?? "";
+            string username = _dgvDevices.SelectedRows[0].Cells["Username"].Value?.ToString() ?? "";
 
             if (MetaTheme.ShowModernDialog($"Bạn có chắc chắn muốn KHÓA thiết bị '{deviceName}' của tài khoản '{username}'?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
             {
@@ -269,8 +273,8 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
 
             int deviceId = Convert.ToInt32(_dgvDevices.SelectedRows[0].Cells["Id"].Value);
-            string deviceName = _dgvDevices.SelectedRows[0].Cells["DeviceName"].Value.ToString() ?? "";
-            string username = _dgvDevices.SelectedRows[0].Cells["Username"].Value.ToString() ?? "";
+            string deviceName = _dgvDevices.SelectedRows[0].Cells["DeviceName"].Value?.ToString() ?? "";
+            string username = _dgvDevices.SelectedRows[0].Cells["Username"].Value?.ToString() ?? "";
 
             if (MetaTheme.ShowModernDialog($"Bạn có chắc chắn muốn MỞ KHÓA thiết bị '{deviceName}' của tài khoản '{username}'?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
             {
@@ -304,8 +308,8 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
 
             int deviceId = Convert.ToInt32(_dgvDevices.SelectedRows[0].Cells["Id"].Value);
-            string deviceName = _dgvDevices.SelectedRows[0].Cells["DeviceName"].Value.ToString() ?? "";
-            string username = _dgvDevices.SelectedRows[0].Cells["Username"].Value.ToString() ?? "";
+            string deviceName = _dgvDevices.SelectedRows[0].Cells["DeviceName"].Value?.ToString() ?? "";
+            string username = _dgvDevices.SelectedRows[0].Cells["Username"].Value?.ToString() ?? "";
 
             if (MetaTheme.ShowModernDialog($"Bạn có chắc chắn muốn ĐĂNG XUẤT CƯỠNG BỨC thiết bị '{deviceName}' của tài khoản '{username}'?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
             {
