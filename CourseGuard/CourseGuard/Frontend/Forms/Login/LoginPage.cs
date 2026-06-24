@@ -783,7 +783,7 @@ namespace CourseGuard.Frontend.Forms.Login
                 Stopwatch stopwatch = Stopwatch.StartNew();
                 LogLoginTiming("start login", stopwatch);
 
-                LoginResultModel loginResult = await AuthService.LoginAsync(username, password, Environment.MachineName);
+                LoginResultModel loginResult = await Task.Run(() => AuthService.LoginAsync(username, password, Environment.MachineName));
                 LogLoginTiming("auth response", stopwatch);
 
                 if (loginResult.ErrorCode == LoginErrorCodes.DeviceBlocked)

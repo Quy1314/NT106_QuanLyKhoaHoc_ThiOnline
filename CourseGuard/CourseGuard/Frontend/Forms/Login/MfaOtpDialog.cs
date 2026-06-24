@@ -165,7 +165,7 @@ namespace CourseGuard.Frontend.Forms.Login
             }
         }
 
-        private void BtnConfirm_Click(object? sender, EventArgs e)
+        private async void BtnConfirm_Click(object? sender, EventArgs e)
         {
             string otp = _txtOtp.Text.Trim();
             if (string.IsNullOrWhiteSpace(otp))
@@ -185,7 +185,7 @@ namespace CourseGuard.Frontend.Forms.Login
             try
             {
                 Cursor = Cursors.WaitCursor;
-                bool mfaSuccess = _authController.VerifyMfaOtp(_userId, otp);
+                bool mfaSuccess = await Task.Run(() => _authController.VerifyMfaOtp(_userId, otp));
                 if (mfaSuccess)
                 {
                     this.DialogResult = DialogResult.OK;
