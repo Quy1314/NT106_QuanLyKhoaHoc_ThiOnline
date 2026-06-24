@@ -90,21 +90,32 @@ namespace CourseGuard.Frontend.Forms.Student
                 if (_isClosing)
                     return;
 
-                await _client.ConnectAsync("127.0.0.1", ClassroomProtocol.DefaultPort);
+                try
+                {
+                    await _client.ConnectAsync("127.0.0.1", ClassroomProtocol.DefaultPort);
+                    if (!_isClosing)
+                    {
+                        await _client.JoinRoomAsync(
+                            _sessionId,
+                            UserSessionContext.CurrentUserId ?? 0,
+                            UserSessionContext.CurrentUsername ?? "Student",
+                            "STUDENT",
+                            UserSessionContext.CurrentAvatarPath);
+                        
+                        _isConnectedToClassroom = true;
+                        UpdateClassroomPresentation();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _isConnectedToClassroom = false;
+                    UpdateClassroomPresentation(forceStatus: true);
+                    SafeAddEvent("Không kết nối được kênh native (Local fallback): " + ex.Message);
+                }
+
                 if (_isClosing)
                     return;
 
-                await _client.JoinRoomAsync(
-                    _sessionId,
-                    UserSessionContext.CurrentUserId ?? 0,
-                    UserSessionContext.CurrentUsername ?? "Student",
-                    "STUDENT",
-                    UserSessionContext.CurrentAvatarPath);
-                if (_isClosing)
-                    return;
-
-                _isConnectedToClassroom = true;
-                UpdateClassroomPresentation();
                 await StartWebRtcClassroomAsync();
 
                 _attendanceInTask = LogAttendanceInIfPossibleAsync();
@@ -114,9 +125,7 @@ namespace CourseGuard.Frontend.Forms.Student
             }
             catch (Exception ex)
             {
-                _isConnectedToClassroom = false;
-                UpdateClassroomPresentation(forceStatus: true);
-                MetaTheme.ShowModernDialog("Không kết nối được lớp học native: " + ex.Message, "Thông báo");
+                MetaTheme.ShowModernDialog("Lỗi khởi tạo lớp học: " + ex.Message, "Thông báo");
             }
         }
 
