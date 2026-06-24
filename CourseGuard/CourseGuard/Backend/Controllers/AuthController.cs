@@ -193,11 +193,10 @@ namespace CourseGuard.Backend.Controllers
                 "Neu ban khong thuc hien yeu cau nay, vui long doi mat khau ngay lap tuc.\n\n" +
                 "CourseGuard Security Team";
 
-            smtpEmailService.SendEmail(
+            await smtpEmailService.SendEmailAsync(
                 user.Email,
                 "CourseGuard - Xac thuc dang nhap OTP",
-                emailBody,
-                out _);
+                emailBody);
 
             return LoginResultModel.MfaRequired(user);
         }

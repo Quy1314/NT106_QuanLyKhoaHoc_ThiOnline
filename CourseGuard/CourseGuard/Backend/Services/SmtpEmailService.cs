@@ -2,6 +2,7 @@ using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
 using CourseGuard.Backend.Config;
+using System.Threading.Tasks;
 
 namespace CourseGuard.Backend.Services
 {
@@ -62,6 +63,42 @@ namespace CourseGuard.Backend.Services
             {
                 errorMessage = $"Gửi SMTP thất bại: {ex.Message}";
                 return false;
+            }
+        }
+
+        public async Task<(bool Success, string ErrorMessage)> SendEmailAsync(string toEmail, string subject, string body)
+        {
+            if (string.IsNullOrWhiteSpace(toEmail))
+            {
+                return (false, "Email người nhận không hợp lệ.");
+            }
+
+            if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_password))
+            {
+                return (false, "Thiếu cấu hình SMTP_USER/SMTP_PASS.");
+            }
+
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(_fromName, _fromEmail));
+            message.To.Add(MailboxAddress.Parse(toEmail));
+            message.Subject = subject;
+            message.Body = new TextPart("plain")
+            {
+                Text = body
+            };
+
+            try
+            {
+                using var client = new SmtpClient();
+                await client.ConnectAsync(_host, _port, SecureSocketOptions.StartTls);
+                await client.AuthenticateAsync(_username, _password);
+                await client.SendAsync(message);
+                await client.DisconnectAsync(true);
+                return (true, string.Empty);
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Gửi SMTP thất bại: {ex.Message}");
             }
         }
     }

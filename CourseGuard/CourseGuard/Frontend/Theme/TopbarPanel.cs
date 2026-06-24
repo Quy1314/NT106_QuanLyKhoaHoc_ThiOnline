@@ -331,14 +331,8 @@ namespace CourseGuard.Frontend.Theme
                 rx -= (int)userW;
                 g.DrawString(_userName, AppFonts.Body, textPrimary, new RectangleF(rx, 14, userW, 32), sfCenter);
 
-                // Settings Icon
-                rx -= 20; // padding
-                rx -= 32; // settings width
-                Rectangle settingsRect = new Rectangle(rx, 14, 32, 32);
-                DrawGearIcon(g, settingsRect, AppColors.TextSecondary);
-
                 // Bell Icon
-                rx -= 10;
+                rx -= 20; // padding
                 rx -= 32;
                 Rectangle bellRect = new Rectangle(rx, 14, 32, 32);
                 DrawBellIcon(g, bellRect, AppColors.TextSecondary);
