@@ -236,10 +236,19 @@ namespace CourseGuard.Backend.Data
             }
 
             currentAttempts++;
+            
+            int limit = 5;
+            string? limitStr = Environment.GetEnvironmentVariable("BRUTE_FORCE_LIMIT");
+            if (int.TryParse(limitStr, out int l)) limit = l;
+
+            int lockoutMinutes = 15;
+            string? lockoutStr = Environment.GetEnvironmentVariable("BRUTE_FORCE_LOCKOUT_MINUTES");
+            if (int.TryParse(lockoutStr, out int lm)) lockoutMinutes = lm;
+
             DateTime? lockoutUntil = null;
-            if (currentAttempts >= 5)
+            if (currentAttempts >= limit)
             {
-                lockoutUntil = DateTime.Now.AddMinutes(15);
+                lockoutUntil = DateTime.Now.AddMinutes(lockoutMinutes);
             }
 
             const string updateSql = @"
@@ -5342,6 +5351,80 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@meeting_link", string.IsNullOrWhiteSpace(meetingLink) ? (object)DBNull.Value : meetingLink);
 
             return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+        }
+
+        public List<Models.DeviceModel> GetActiveDevices()
+        {
+            var list = new List<Models.DeviceModel>();
+            using var connection = CreateConnection();
+            connection.Open();
+            const string query = @"
+                SELECT d.id, d.user_id, u.username, u.full_name, d.device_name, d.ip_address, d.status, d.last_active
+                FROM DEVICES d
+                JOIN USERS u ON d.user_id = u.id
+                ORDER BY d.last_active DESC";
+            using var command = new NpgsqlCommand(query, connection);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                list.Add(new Models.DeviceModel
+                {
+                    Id = reader.GetInt32(0),
+                    UserId = reader.GetInt32(1),
+                    Username = reader.GetString(2),
+                    UserFullName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                    DeviceName = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                    IpAddress = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
+                    Status = reader.IsDBNull(6) ? "ACTIVE" : reader.GetString(6),
+                    LastActive = reader.GetDateTime(7)
+                });
+            }
+            return list;
+        }
+
+        public bool UpdateDeviceStatus(int deviceId, string status)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            const string query = "UPDATE DEVICES SET status = @status WHERE id = @id";
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@status", status);
+            command.Parameters.AddWithValue("@id", deviceId);
+            return command.ExecuteNonQuery() > 0;
+        }
+
+        public bool DeleteDevice(int deviceId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            const string query = "DELETE FROM DEVICES WHERE id = @id";
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@id", deviceId);
+            return command.ExecuteNonQuery() > 0;
+        }
+
+        public bool IsDeviceBlocked(int userId, string deviceName)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            const string query = "SELECT 1 FROM DEVICES WHERE user_id = @user_id AND device_name = @device_name AND UPPER(status) = 'BLOCKED'";
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            command.Parameters.AddWithValue("@device_name", deviceName);
+            var result = command.ExecuteScalar();
+            return result != null;
+        }
+
+        public async Task<bool> IsDeviceBlockedAsync(int userId, string deviceName, CancellationToken cancellationToken = default)
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            const string query = "SELECT 1 FROM DEVICES WHERE user_id = @user_id AND device_name = @device_name AND UPPER(status) = 'BLOCKED'";
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            command.Parameters.AddWithValue("@device_name", deviceName);
+            var result = await command.ExecuteScalarAsync(cancellationToken);
+            return result != null;
         }
     }
 }

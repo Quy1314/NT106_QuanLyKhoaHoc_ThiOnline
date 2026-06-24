@@ -96,9 +96,9 @@ namespace CourseGuard.Frontend.Forms.Admin
                 { "Người dùng", () => new UC_UsersManage() },
                 { "Khóa học", () => new UC_CoursesManage() },
                 { "Báo cáo", () => new UC_AdminReports() },
-                { "Thiết bị", () => CreateEmptyView("Giám sát thiết bị") },
+                { "Thiết bị", () => new UC_DevicesManage() },
                 { "Nhật ký", () => new UC_AdminLogStatistics() },
-                { "Cài đặt", () => CreateEmptyView("Cài đặt") }
+                { "Cài đặt", () => new UC_SystemSettings() }
             };
         }
 

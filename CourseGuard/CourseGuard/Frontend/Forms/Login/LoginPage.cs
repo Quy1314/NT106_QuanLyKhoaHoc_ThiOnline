@@ -767,13 +767,23 @@ namespace CourseGuard.Frontend.Forms.Login
                 Stopwatch stopwatch = Stopwatch.StartNew();
                 LogLoginTiming("start login", stopwatch);
 
-                LoginResultModel loginResult = await AuthService.LoginAsync(username, password);
+                LoginResultModel loginResult = await AuthService.LoginAsync(username, password, Environment.MachineName);
                 LogLoginTiming("auth response", stopwatch);
+
+                if (loginResult.ErrorCode == LoginErrorCodes.DeviceBlocked)
+                {
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(
+                        "Thiết bị truy cập của bạn đã bị khóa bởi Quản trị viên (Admin).\nVui lòng liên hệ Admin để mở khóa thiết bị.",
+                        "Thiết bị bị khóa",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                    return;
+                }
 
                 if (loginResult.ErrorCode == LoginErrorCodes.AccountLocked)
                 {
                     CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(
-                        "Tài khoản tạm thời bị khóa 15 phút do nhập sai mật khẩu quá nhiều lần.",
+                        "Tài khoản tạm thời bị khóa do nhập sai mật khẩu quá nhiều lần.",
                         "Tài khoản bị khóa",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
@@ -895,7 +905,7 @@ namespace CourseGuard.Frontend.Forms.Login
         {
             try
             {
-                Task updateDeviceTask = AuthService.UpdateLoginInfoAsync(user.Id, user.Username, ipAddress);
+                Task updateDeviceTask = AuthService.UpdateLoginInfoAsync(user.Id, Environment.MachineName, ipAddress);
                 Task logLoginTask = AuthService.LogUserActivityAsync(user.Id, "LOGIN", $"Login success: {user.Username}", ipAddress);
                 await Task.WhenAll(updateDeviceTask, logLoginTask);
             }

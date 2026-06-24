@@ -58,5 +58,6 @@ namespace CourseGuard.Backend.Models
         public const string TempPasswordExpired = "TEMP_PASSWORD_EXPIRED";
         public const string AccountLocked = "ACCOUNT_LOCKED";
         public const string InvalidMfa = "INVALID_MFA";
+        public const string DeviceBlocked = "DEVICE_BLOCKED";
     }
 }

@@ -93,7 +93,7 @@ namespace CourseGuard.Backend.Controllers
             return true;
         }
 
-        public UserModel? Login(string username, string password)
+        public UserModel? Login(string username, string password, string? deviceName = null)
         {
             if (!UserIdentityBloomIndex.UsernameExists(_dbContext, username))
             {
@@ -102,6 +102,12 @@ namespace CourseGuard.Backend.Controllers
 
             var user = _dbContext.GetUserByUsername(username);
             if (user == null)
+            {
+                return null;
+            }
+
+            // Check if device is blocked
+            if (!string.IsNullOrWhiteSpace(deviceName) && _dbContext.IsDeviceBlocked(user.Id, deviceName))
             {
                 return null;
             }
@@ -124,7 +130,7 @@ namespace CourseGuard.Backend.Controllers
             return result.Succeeded ? result.User : null;
         }
 
-        public async Task<LoginResultModel> LoginAsync(string username, string password, CancellationToken cancellationToken = default)
+        public async Task<LoginResultModel> LoginAsync(string username, string password, string? deviceName = null, CancellationToken cancellationToken = default)
         {
             if (!UserIdentityBloomIndex.UsernameExists(_dbContext, username))
             {
@@ -135,6 +141,16 @@ namespace CourseGuard.Backend.Controllers
             if (user == null)
             {
                 return LoginResultModel.Failed();
+            }
+
+            // Check if device is blocked
+            if (!string.IsNullOrWhiteSpace(deviceName))
+            {
+                bool isBlocked = await _dbContext.IsDeviceBlockedAsync(user.Id, deviceName, cancellationToken);
+                if (isBlocked)
+                {
+                    return LoginResultModel.Error(LoginErrorCodes.DeviceBlocked);
+                }
             }
 
             // Check if locked
@@ -161,7 +177,11 @@ namespace CourseGuard.Backend.Controllers
             // MFA implementation
             // 1. Generate OTP
             string otp = GenerateMfaOtp();
-            DateTime expiresAt = DateTime.Now.AddMinutes(5);
+            int otpExpiryMinutes = 5;
+            string? otpStr = Environment.GetEnvironmentVariable("OTP_EXPIRY_MINUTES");
+            if (int.TryParse(otpStr, out int om)) otpExpiryMinutes = om;
+
+            DateTime expiresAt = DateTime.Now.AddMinutes(otpExpiryMinutes);
             _dbContext.SaveMfaOtp(user.Id, otp, expiresAt);
 
             // 2. Send Email
@@ -169,7 +189,7 @@ namespace CourseGuard.Backend.Controllers
             string emailBody = 
                 $"Xin chao {user.FullName ?? user.Username},\n\n" +
                 $"Ma OTP xac thuc 2 lop de dang nhap vao CourseGuard cua ban la: {otp}\n" +
-                $"Ma co hieu luc trong 5 phut (den luc: {expiresAt:dd/MM/yyyy HH:mm}).\n\n" +
+                $"Ma co hieu luc trong {otpExpiryMinutes} phut (den luc: {expiresAt:dd/MM/yyyy HH:mm}).\n\n" +
                 "Neu ban khong thuc hien yeu cau nay, vui long doi mat khau ngay lap tuc.\n\n" +
                 "CourseGuard Security Team";
 
