@@ -103,7 +103,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     model.ContentType = dialog.ContentType;
                 }
 
-                Controller.CreateLesson(TeacherId, model);
+                await Task.Run(() => Controller.CreateLesson(TeacherId, model));
                 LoadCourseFilter();
                 await LoadDataAsync();
             }
@@ -145,7 +145,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     model.HasStoredContent = !string.IsNullOrEmpty(dialog.SelectedFilePath) && existing.HasStoredContent;
                 }
 
-                Controller.UpdateLesson(TeacherId, model);
+                await Task.Run(() => Controller.UpdateLesson(TeacherId, model));
                 LoadCourseFilter();
                 await LoadDataAsync();
             }
@@ -165,7 +165,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             if (result != DialogResult.Yes)
                 return;
 
-            Controller.DeleteLesson(TeacherId, id);
+            await Task.Run(() => Controller.DeleteLesson(TeacherId, id));
             await LoadDataAsync();
         }
 

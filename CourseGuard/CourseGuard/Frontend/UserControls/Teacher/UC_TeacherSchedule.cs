@@ -617,14 +617,14 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 selectedEndTime: defaultStart.AddHours(2));
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                _controller.CreateScheduleItem(_teacherId, new TeacherScheduleItemModel
+                await Task.Run(() => _controller.CreateScheduleItem(_teacherId, new TeacherScheduleItemModel
                 {
                     CourseId = dialog.CourseId,
                     Title = dialog.ItemTitle,
                     StartTime = dialog.SelectedStartTime,
                     EndTime = dialog.SelectedEndTime,
                     MeetingLink = dialog.Details
-                });
+                }));
                 await LoadDataAsync();
             }
         }
@@ -653,7 +653,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 selectedEndTime: selectedEnd);
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                _controller.UpdateScheduleItem(_teacherId, new TeacherScheduleItemModel
+                await Task.Run(() => _controller.UpdateScheduleItem(_teacherId, new TeacherScheduleItemModel
                 {
                     Id = session.Id,
                     CourseId = dialog.CourseId,
@@ -661,7 +661,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     StartTime = dialog.SelectedStartTime,
                     EndTime = dialog.SelectedEndTime,
                     MeetingLink = dialog.Details
-                });
+                }));
                 await LoadDataAsync();
             }
         }
@@ -677,7 +677,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             DialogResult result = MetaTheme.ShowModernDialog("Bạn có chắc chắn muốn xóa lịch này không?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (result == DialogResult.Yes)
             {
-                _controller.DeleteScheduleItem(_teacherId, session.Id);
+                await Task.Run(() => _controller.DeleteScheduleItem(_teacherId, session.Id));
                 await LoadDataAsync();
             }
         }
