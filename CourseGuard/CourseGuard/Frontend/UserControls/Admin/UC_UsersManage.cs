@@ -96,7 +96,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
         }
 
-        private void btn_insert_Click(object sender, EventArgs e)
+        private async void btn_insert_Click(object sender, EventArgs e)
         {
             // Validate
             if (string.IsNullOrWhiteSpace(txt_Username.Text) ||
@@ -120,9 +120,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
             string password = txt_Password.Text.Trim();
 
+            this.ShowSkeleton(SkeletonType.FormWithTable);
             try
             {
-                string result = _userService.AddUser(user, password);
+                string result = await Task.Run(() => _userService.AddUser(user, password));
                 if (result == "Success")
                 {
                     CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Thêm user thành công.");
@@ -141,9 +142,13 @@ namespace CourseGuard.Frontend.UserControls.Admin
             {
                 CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi: " + ex.Message);
             }
+            finally
+            {
+                this.HideSkeleton();
+            }
         }
 
-        private void btn_delete_Click(object? sender, EventArgs e)
+        private async void btn_delete_Click(object? sender, EventArgs e)
         {
             if (dataGridView1.SelectedRows.Count > 0)
             {
@@ -155,18 +160,26 @@ namespace CourseGuard.Frontend.UserControls.Admin
                         int userId = Convert.ToInt32(cell.Value);
                         if (CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Bạn có chắc chắn muốn xóa user này?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
                         {
-                            bool success = _userService.DeleteUser(userId);
-                            if (success)
+                            this.ShowSkeleton(SkeletonType.FormWithTable);
+                            try
                             {
-                                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Xóa thành công!");
-                                LoadData(); 
+                                bool success = await Task.Run(() => _userService.DeleteUser(userId));
+                                if (success)
+                                {
+                                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Xóa thành công!");
+                                    LoadData(); 
+                                }
+                                else
+                                {
+                                    string detail = string.IsNullOrWhiteSpace(_userService.LastErrorMessage)
+                                        ? $"Xóa thất bại (ID: {userId})"
+                                        : _userService.LastErrorMessage;
+                                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(detail);
+                                }
                             }
-                            else
+                            finally
                             {
-                                string detail = string.IsNullOrWhiteSpace(_userService.LastErrorMessage)
-                                    ? $"Xóa thất bại (ID: {userId})"
-                                    : _userService.LastErrorMessage;
-                                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(detail);
+                                this.HideSkeleton();
                             }
                         }
                     }
@@ -200,7 +213,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             cb_roleID.SelectedIndex = -1;
         }
 
-        private void btn_Approve_Click(object? sender, EventArgs e)
+        private async void btn_Approve_Click(object? sender, EventArgs e)
         {
             if (dataGridView1.SelectedRows.Count > 0)
             {
@@ -222,20 +235,28 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
                         if (CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(confirmMsg, "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                         {
-                            bool success = _userService.ApproveUserRequest(userId, action);
-                            if (success)
+                            this.ShowSkeleton(SkeletonType.FormWithTable);
+                            try
                             {
-                                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(action == "RESET"
-                                    ? "Đã gửi mật khẩu tạm thời qua email cho user."
-                                    : "Thực hiện thành công!");
-                                LoadData();
+                                bool success = await Task.Run(() => _userService.ApproveUserRequest(userId, action));
+                                if (success)
+                                {
+                                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(action == "RESET"
+                                        ? "Đã gửi mật khẩu tạm thời qua email cho user."
+                                        : "Thực hiện thành công!");
+                                    LoadData();
+                                }
+                                else
+                                {
+                                    string detail = string.IsNullOrWhiteSpace(_userService.LastErrorMessage)
+                                        ? "Kiểm tra email user hoặc cấu hình SMTP_USER/SMTP_PASS."
+                                        : _userService.LastErrorMessage;
+                                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog($"Thao tác thất bại.\nChi tiết: {detail}");
+                                }
                             }
-                            else
+                            finally
                             {
-                                string detail = string.IsNullOrWhiteSpace(_userService.LastErrorMessage)
-                                    ? "Kiểm tra email user hoặc cấu hình SMTP_USER/SMTP_PASS."
-                                    : _userService.LastErrorMessage;
-                                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog($"Thao tác thất bại.\nChi tiết: {detail}");
+                                this.HideSkeleton();
                             }
                         }
                     }

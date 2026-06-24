@@ -4284,7 +4284,7 @@ namespace CourseGuard.Backend.Data
                 TotalUsers = ScalarInt("SELECT COUNT(*) FROM USERS"),
                 ActiveCourses = ScalarInt("SELECT COUNT(*) FROM COURSES WHERE UPPER(COALESCE(STATUS, '')) = 'ACTIVE'"),
                 PendingRequests = ScalarInt("SELECT COUNT(*) FROM USERS WHERE UPPER(COALESCE(STATUS, '')) = 'PENDING'"),
-                TodayLogins = ScalarInt("SELECT COUNT(*) FROM AUDIT_LOGS WHERE ACTION = 'LOGIN' AND CREATED_AT::date = CURRENT_DATE")
+                TodayLogins = ScalarInt("SELECT COUNT(*) FROM AUDIT_LOGS WHERE ACTION = 'LOGIN' AND CREATED_AT >= CURRENT_DATE AND CREATED_AT < CURRENT_DATE + INTERVAL '1 day'")
             };
         }
 
