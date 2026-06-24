@@ -678,7 +678,7 @@ namespace CourseGuard.Frontend.Forms.Login
         }
 
 
-        private void btnRegisterSubmit_Click(object? sender, EventArgs e)
+        private async void btnRegisterSubmit_Click(object? sender, EventArgs e)
         {
             string user = txtRegUsername.Text.Trim();
             string name = txtRegFullName.Text.Trim();
@@ -698,20 +698,28 @@ namespace CourseGuard.Frontend.Forms.Login
                 Email = email
             };
             
-            bool success = AuthService.RegisterRequest(newUser, pass);
+            SetLoginUiBusy(true);
+            try
+            {
+                bool success = await Task.Run(() => AuthService.RegisterRequest(newUser, pass));
 
-            if (success)
-            {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Yêu cầu đăng ký đã được gửi tới Admin chờ phê duyệt", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                ClearRegisterInputs();
-                ShowPanel(LoginPanel);
+                if (success)
+                {
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Yêu cầu đăng ký đã được gửi tới Admin chờ phê duyệt", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    ClearRegisterInputs();
+                    ShowPanel(LoginPanel);
+                }
+                else
+                {
+                    string detail = string.IsNullOrWhiteSpace(AuthService.LastErrorMessage)
+                        ? "Đăng ký thất bại. Tên đăng nhập có thể đã tồn tại."
+                        : AuthService.LastErrorMessage;
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(detail, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
             }
-            else
+            finally
             {
-                string detail = string.IsNullOrWhiteSpace(AuthService.LastErrorMessage)
-                    ? "Đăng ký thất bại. Tên đăng nhập có thể đã tồn tại."
-                    : AuthService.LastErrorMessage;
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(detail, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                SetLoginUiBusy(false);
             }
         }
 
@@ -723,7 +731,7 @@ namespace CourseGuard.Frontend.Forms.Login
             txtRegPassword.Clear();
         }
 
-        private void btnForgotSubmit_Click(object? sender, EventArgs e)
+        private async void btnForgotSubmit_Click(object? sender, EventArgs e)
         {
             string user = txtForgotUsername.Text.Trim();
             string email = txtForgotEmail.Text.Trim();
@@ -734,18 +742,26 @@ namespace CourseGuard.Frontend.Forms.Login
                 return;
             }
 
-            bool success = AuthService.ForgotPasswordRequest(user, email);
+            SetLoginUiBusy(true);
+            try
+            {
+                bool success = await Task.Run(() => AuthService.ForgotPasswordRequest(user, email));
 
-            if (success)
-            {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Yêu cầu cấp lại mật khẩu đã được tiếp nhận. Vui lòng liên hệ Admin để duyệt hoặc kiểm tra hòm thư của bạn nếu thông tin chính xác.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                txtForgotUsername.Clear();
-                txtForgotEmail.Clear();
-                ShowPanel(LoginPanel);
+                if (success)
+                {
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Yêu cầu cấp lại mật khẩu đã được tiếp nhận. Vui lòng liên hệ Admin để duyệt hoặc kiểm tra hòm thư của bạn nếu thông tin chính xác.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    txtForgotUsername.Clear();
+                    txtForgotEmail.Clear();
+                    ShowPanel(LoginPanel);
+                }
+                else
+                {
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Thông tin không chính xác hoặc không tồn tại.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
-            else
+            finally
             {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Thông tin không chính xác hoặc không tồn tại.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetLoginUiBusy(false);
             }
         }
 

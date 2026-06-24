@@ -277,7 +277,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                 _lblHeaderName.Text = lblValName.Text;
         }
 
-        private void BtnSavePassword_Click(object? sender, EventArgs e)
+        private async void BtnSavePassword_Click(object? sender, EventArgs e)
         {
             string oldPassword = txtOldPassword.Text.Trim();
             string newPassword = txtNewPassword.Text.Trim();
@@ -306,14 +306,22 @@ namespace CourseGuard.Frontend.UserControls.Student
 
             if (UserSessionContext.CurrentUserId.HasValue && UserSessionContext.CurrentUserId.Value > 0)
             {
-                bool changed = _authController.ChangePassword(UserSessionContext.CurrentUserId.Value, oldPassword, newPassword);
-                if (!changed)
+                this.ShowSkeleton(SkeletonType.FormWithTable);
+                try
                 {
-                    string detail = string.IsNullOrWhiteSpace(_authController.LastErrorMessage)
-                        ? "Đổi mật khẩu thất bại."
-                        : _authController.LastErrorMessage;
-                    MetaTheme.ShowModernDialog(detail, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
+                    bool changed = await Task.Run(() => _authController.ChangePassword(UserSessionContext.CurrentUserId.Value, oldPassword, newPassword));
+                    if (!changed)
+                    {
+                        string detail = string.IsNullOrWhiteSpace(_authController.LastErrorMessage)
+                            ? "Đổi mật khẩu thất bại."
+                            : _authController.LastErrorMessage;
+                        MetaTheme.ShowModernDialog(detail, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                }
+                finally
+                {
+                    this.HideSkeleton();
                 }
             }
 

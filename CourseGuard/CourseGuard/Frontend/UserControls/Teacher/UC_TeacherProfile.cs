@@ -780,7 +780,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _activityList.Controls.Add(panel);
         }
 
-        private void SavePasswordButton_Click(object? sender, EventArgs e)
+        private async void SavePasswordButton_Click(object? sender, EventArgs e)
         {
             string oldPassword = _oldPassword.Text.Trim();
             string newPassword = _newPassword.Text.Trim();
@@ -798,14 +798,22 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 return;
             }
 
-            bool changed = _authController.ChangePassword(_teacherId, oldPassword, newPassword);
-            if (!changed)
+            this.ShowSkeleton(SkeletonType.FormWithTable);
+            try
             {
-                string message = string.IsNullOrWhiteSpace(_authController.LastErrorMessage)
-                    ? "Đổi mật khẩu thất bại."
-                    : _authController.LastErrorMessage;
-                MetaTheme.ShowModernDialog(message, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                bool changed = await Task.Run(() => _authController.ChangePassword(_teacherId, oldPassword, newPassword));
+                if (!changed)
+                {
+                    string message = string.IsNullOrWhiteSpace(_authController.LastErrorMessage)
+                        ? "Đổi mật khẩu thất bại."
+                        : _authController.LastErrorMessage;
+                    MetaTheme.ShowModernDialog(message, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+            finally
+            {
+                this.HideSkeleton();
             }
 
             _oldPassword.Clear();

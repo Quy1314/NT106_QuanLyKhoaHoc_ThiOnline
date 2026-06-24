@@ -519,7 +519,7 @@ namespace CourseGuard.Frontend.Forms.Student
             var authService = new CourseGuard.Backend.Controllers.AuthController(
                 _dbContext);
             string ipAddress = GetLocalIpAddress();
-            authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty, ipAddress);
+            Task.Run(() => authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty, ipAddress));
             DialogResult = DialogResult.OK;
             Close();
         }

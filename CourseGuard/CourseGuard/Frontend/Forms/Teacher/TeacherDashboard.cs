@@ -416,7 +416,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 return;
 
             var authService = new AuthController(_dbContext);
-            authService.Logout(_teacherId, _currentUser?.Username ?? _teacherName, GetLocalIpAddress());
+            string ipAddress = GetLocalIpAddress();
+            Task.Run(() => authService.Logout(_teacherId, _currentUser?.Username ?? _teacherName, ipAddress));
             DialogResult = DialogResult.OK;
             Close();
         }

@@ -111,7 +111,7 @@ namespace CourseGuard.Frontend.Forms.Admin
 
                 var authService = new CourseGuard.Backend.Controllers.AuthController(
                     new CourseGuard.Backend.Data.CourseGuardDbContext(""));
-                authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty);
+                Task.Run(() => authService.Logout(currentUser?.Id, currentUser?.Username ?? string.Empty));
                 this.DialogResult = DialogResult.OK;
                 this.Close();
                 return;

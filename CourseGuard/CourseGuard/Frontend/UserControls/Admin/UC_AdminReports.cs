@@ -148,7 +148,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // Note: Saving as .xls with tab delimiter handles basic data well. Use .csv for strict CSV.
         }
 
-        private void ExportToTextFile(string separator, string filter)
+        private async void ExportToTextFile(string separator, string filter)
         {
             if (dataGridView1.Rows.Count == 0)
             {
@@ -162,46 +162,70 @@ namespace CourseGuard.Frontend.UserControls.Admin
             
             if (sfd.ShowDialog() == DialogResult.OK)
             {
+                this.ShowSkeleton(SkeletonType.FormWithTable);
                 try
                 {
-                    StringBuilder sb = new StringBuilder();
-
-                    // Headers
+                    // 1. Extract data from UI on UI thread (safe and fast)
+                    var headers = new List<string>();
                     for (int i = 0; i < dataGridView1.Columns.Count; i++)
                     {
-                        sb.Append(dataGridView1.Columns[i].HeaderText);
-                        if (i < dataGridView1.Columns.Count - 1) sb.Append(separator);
+                        headers.Add(dataGridView1.Columns[i].HeaderText);
                     }
-                    sb.AppendLine();
 
-                    // Rows
+                    var rowData = new List<string[]>();
                     foreach (DataGridViewRow row in dataGridView1.Rows)
                     {
                         if (!row.IsNewRow)
                         {
+                            var cells = new string[dataGridView1.Columns.Count];
                             for (int i = 0; i < dataGridView1.Columns.Count; i++)
                             {
-                                string value = row.Cells[i].Value?.ToString() ?? "";
-                                // Escape if necessary (basic)
-                                value = value.Replace("\n", " ").Replace("\r", " ");
+                                cells[i] = row.Cells[i].Value?.ToString() ?? "";
+                            }
+                            rowData.Add(cells);
+                        }
+                    }
+
+                    string filePath = sfd.FileName;
+
+                    // 2. Perform string building and file writing on background thread
+                    await System.Threading.Tasks.Task.Run(() =>
+                    {
+                        StringBuilder sb = new StringBuilder();
+
+                        // Headers
+                        for (int i = 0; i < headers.Count; i++)
+                        {
+                            sb.Append(headers[i]);
+                            if (i < headers.Count - 1) sb.Append(separator);
+                        }
+                        sb.AppendLine();
+
+                        // Rows
+                        foreach (var cells in rowData)
+                        {
+                            for (int i = 0; i < cells.Length; i++)
+                            {
+                                string value = cells[i].Replace("\n", " ").Replace("\r", " ");
                                 if (value.Contains(separator))
                                 {
                                     value = "\"" + value + "\"";
                                 }
                                 sb.Append(value);
-                                if (i < dataGridView1.Columns.Count - 1) sb.Append(separator);
+                                if (i < cells.Length - 1) sb.Append(separator);
                             }
                             sb.AppendLine();
                         }
-                    }
 
-                    File.WriteAllText(sfd.FileName, sb.ToString(), Encoding.UTF8);
+                        File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
+                    });
+
                     CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Xuất file thành công!");
                     try
                     {
                         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                         {
-                            FileName = sfd.FileName,
+                            FileName = filePath,
                             UseShellExecute = true
                         });
                     }
@@ -210,6 +234,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 catch (Exception ex)
                 {
                     CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi xuất file: " + ex.Message);
+                }
+                finally
+                {
+                    this.HideSkeleton();
                 }
             }
         }
