@@ -417,11 +417,38 @@ namespace CourseGuard.Frontend.Theme
             base.Dispose(disposing);
         }
 
+        private Color ResolveParentColor()
+        {
+            Control? p = Parent;
+            while (p != null)
+            {
+                if (p is GlassCardHostPanel gp)
+                {
+                    var baseBg = ColorTranslator.FromHtml("#F1F5F9");
+                    var gf = gp.GlassFill;
+                    float alpha = gf.A / 255f;
+                    int r = (int)(gf.R * alpha + baseBg.R * (1 - alpha));
+                    int gVal = (int)(gf.G * alpha + baseBg.G * (1 - alpha));
+                    int bVal = (int)(gf.B * alpha + baseBg.B * (1 - alpha));
+                    return Color.FromArgb(255, r, gVal, bVal);
+                }
+                if (p.BackColor != Color.Transparent && p.BackColor != Color.Empty)
+                {
+                    return p.BackColor;
+                }
+                p = p.Parent;
+            }
+            return ColorTranslator.FromHtml("#F1F5F9");
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.Clear(Color.Transparent);
+            
+            // Resolve parent background color to avoid black/dark corners
+            Color parentBg = ResolveParentColor();
+            g.Clear(parentBg);
 
             var rect = new RectangleF(0, 0, Width - 1f, Height - 1f);
             float r = Math.Min(Height, 56) / 2f;
