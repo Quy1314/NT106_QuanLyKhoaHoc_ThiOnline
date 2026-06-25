@@ -21,6 +21,11 @@ var students = new ConcurrentDictionary<int, ConcurrentDictionary<int, WebSocket
 // examId -> list of teacher WebSockets
 var teachers = new ConcurrentDictionary<int, ConcurrentBag<WebSocket>>();
 
+// classId -> (connectionId -> WebSocket)
+var classroomParticipants = new ConcurrentDictionary<int, ConcurrentDictionary<Guid, WebSocket>>();
+// List of all active background status signaling WebSockets
+var classroomStatusSockets = new ConcurrentBag<WebSocket>();
+
 app.Map("/relay", async context =>
 {
     if (!context.WebSockets.IsWebSocketRequest)
@@ -151,6 +156,171 @@ app.Map("/relay", async context =>
         {
             // The teacher socket will be filtered out in the broadcast loop once State != Open
             Console.WriteLine($"Teacher disconnected from monitor room for exam {examId}");
+        }
+    }
+});
+
+app.Map("/classroom-status-relay", async context =>
+{
+    if (!context.WebSockets.IsWebSocketRequest)
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        return;
+    }
+
+    using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
+    classroomStatusSockets.Add(webSocket);
+    Console.WriteLine("Client connected to classroom status relay.");
+
+    var buffer = new byte[1024];
+    try
+    {
+        while (webSocket.State == WebSocketState.Open)
+        {
+            var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+            if (result.MessageType == WebSocketMessageType.Close)
+            {
+                await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+                break;
+            }
+
+            if (result.MessageType == WebSocketMessageType.Binary && result.Count > 0)
+            {
+                // Broadcast status payload to all other active sockets
+                var activeSockets = classroomStatusSockets.Where(s => s != webSocket && s.State == WebSocketState.Open).ToList();
+                foreach (var socket in activeSockets)
+                {
+                    try
+                    {
+                        await socket.SendAsync(
+                            new ArraySegment<byte>(buffer, 0, result.Count),
+                            WebSocketMessageType.Binary,
+                            true,
+                            CancellationToken.None);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error forwarding status: {ex.Message}");
+                    }
+                }
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Status relay socket error: {ex.Message}");
+    }
+    Console.WriteLine("Client disconnected from classroom status relay.");
+});
+
+app.Map("/classroom-relay", async context =>
+{
+    if (!context.WebSockets.IsWebSocketRequest)
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        await context.Response.WriteAsync("Only WebSocket connections are accepted at this endpoint.");
+        return;
+    }
+
+    var query = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
+    string? role = query["role"];
+    string? classIdStr = query["classId"];
+    string? userIdStr = query["userId"];
+    string? name = query["name"];
+
+    if (string.IsNullOrEmpty(role) || !int.TryParse(classIdStr, out int classId))
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        await context.Response.WriteAsync("Missing or invalid role/classId.");
+        return;
+    }
+
+    int.TryParse(userIdStr, out int userId);
+    name ??= "User";
+
+    using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
+    var connectionId = Guid.NewGuid();
+
+    var room = classroomParticipants.GetOrAdd(classId, _ => new ConcurrentDictionary<Guid, WebSocket>());
+    room[connectionId] = webSocket;
+    Console.WriteLine($"{role} {name} (ID: {userId}) joined classroom room {classId}");
+
+    var buffer = new byte[1024 * 1024 * 2]; // 2MB buffer for video/audio/screen frames
+    try
+    {
+        while (webSocket.State == WebSocketState.Open)
+        {
+            var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+            if (result.MessageType == WebSocketMessageType.Close)
+            {
+                await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+                break;
+            }
+
+            if (result.Count > 0)
+            {
+                // Forward frame/message to all other participants in the same classId room
+                var activeParticipants = room.Where(p => p.Key != connectionId && p.Value.State == WebSocketState.Open).ToList();
+                foreach (var participant in activeParticipants)
+                {
+                    try
+                    {
+                        await participant.Value.SendAsync(
+                            new ArraySegment<byte>(buffer, 0, result.Count),
+                            result.MessageType,
+                            result.EndOfMessage,
+                            CancellationToken.None);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error forwarding frame in classroom {classId}: {ex.Message}");
+                    }
+                }
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error on classroom {classId} connection: {ex.Message}");
+    }
+    finally
+    {
+        room.TryRemove(connectionId, out _);
+        Console.WriteLine($"{role} {name} (ID: {userId}) disconnected from classroom {classId}");
+
+        // Automatically broadcast LEAVE_ROOM signal on behalf of this client so that the UI can clean up immediately
+        if (room.Count > 0)
+        {
+            var leaveSignal = new
+            {
+                type = "LEAVE_ROOM",
+                sessionId = classId,
+                senderId = userId,
+                senderName = name,
+                senderRole = role.ToUpperInvariant(),
+                timestampUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                payload = new Dictionary<string, string>()
+            };
+
+            byte[] leaveBytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(leaveSignal);
+            
+            // Broadcast LEAVE_ROOM to remaining participants
+            var activeParticipants = room.Where(p => p.Value.State == WebSocketState.Open).ToList();
+            foreach (var participant in activeParticipants)
+            {
+                try
+                {
+                    await participant.Value.SendAsync(
+                        new ArraySegment<byte>(leaveBytes),
+                        WebSocketMessageType.Binary,
+                        true,
+                        CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error broadcasting leave signal: {ex.Message}");
+                }
+            }
         }
     }
 });

@@ -1,7 +1,9 @@
 using System;
-using System.Net.Sockets;
+using System.IO;
+using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
+using CourseGuard.Backend.Config;
 
 namespace CourseGuard.Backend.Services.Realtime
 {
@@ -19,7 +21,7 @@ namespace CourseGuard.Backend.Services.Realtime
     public sealed class TcpClassroomClient : IDisposable
     {
         private readonly string _host;
-        private TcpClient? _client;
+        private ClientWebSocket? _ws;
         private CancellationTokenSource? _cts;
 
         public event EventHandler<ClassStatusEventArgs>? ClassStatusChanged;
@@ -36,20 +38,50 @@ namespace CourseGuard.Backend.Services.Realtime
             {
                 try
                 {
-                    _client?.Dispose();
-                    _client = new TcpClient();
-                    await _client.ConnectAsync(_host, TcpClassroomService.DefaultPort, _cts.Token);
-                    await using NetworkStream stream = _client.GetStream();
-                    
-                    var payload = new byte[5];
-                    while (!_cts.Token.IsCancellationRequested)
+                    _ws?.Dispose();
+                    _ws = new ClientWebSocket();
+
+                    string? rawRelay = AppEnvironment.GetOptional("RELAY_WS_URL");
+                    string wsBase = "ws://localhost:8080";
+                    if (!string.IsNullOrWhiteSpace(rawRelay))
                     {
-                        int read = await stream.ReadAsync(payload, _cts.Token);
-                        if (read == 0) break;
-                        if (read == 5)
+                        wsBase = rawRelay;
+                        if (wsBase.EndsWith("/relay", StringComparison.OrdinalIgnoreCase))
                         {
-                            bool isOpened = payload[0] == 1;
-                            int sessionId = BitConverter.ToInt32(payload, 1);
+                            wsBase = wsBase.Substring(0, wsBase.Length - 6);
+                        }
+                    }
+
+                    string connectionUrl = $"{wsBase}/classroom-status-relay?role=student";
+                    await _ws.ConnectAsync(new Uri(connectionUrl), _cts.Token);
+
+                    var payload = new byte[5];
+                    while (!_cts.Token.IsCancellationRequested && _ws.State == WebSocketState.Open)
+                    {
+                        using var ms = new MemoryStream();
+                        WebSocketReceiveResult result;
+                        do
+                        {
+                            var segment = new ArraySegment<byte>(payload);
+                            result = await _ws.ReceiveAsync(segment, _cts.Token);
+                            if (result.MessageType == WebSocketMessageType.Close)
+                            {
+                                break;
+                            }
+                            await ms.WriteAsync(payload, 0, result.Count, _cts.Token);
+                        }
+                        while (!result.EndOfMessage);
+
+                        if (result.MessageType == WebSocketMessageType.Close)
+                        {
+                            break;
+                        }
+
+                        byte[] data = ms.ToArray();
+                        if (data.Length == 5)
+                        {
+                            bool isOpened = data[0] == 1;
+                            int sessionId = BitConverter.ToInt32(data, 1);
                             ClassStatusChanged?.Invoke(this, new ClassStatusEventArgs(sessionId, isOpened));
                         }
                     }
@@ -65,7 +97,7 @@ namespace CourseGuard.Backend.Services.Realtime
         public void Dispose()
         {
             _cts?.Cancel();
-            _client?.Dispose();
+            _ws?.Dispose();
         }
     }
 }

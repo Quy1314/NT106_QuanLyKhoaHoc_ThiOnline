@@ -1,11 +1,11 @@
-using System.Net.Sockets;
+using System;
+using System.Threading;
 
 namespace CourseGuard.Backend.Services.Classroom
 {
     public sealed class ClassroomConnectionState
     {
         public Guid ConnectionId { get; } = Guid.NewGuid();
-        public TcpClient Client { get; }
         public int SessionId { get; set; }
         public int UserId { get; set; }
         public string DisplayName { get; set; } = string.Empty;
@@ -18,9 +18,8 @@ namespace CourseGuard.Backend.Services.Classroom
         public DateTime ConnectedAt { get; } = DateTime.UtcNow;
         public DateTime LastSeenAt { get; set; } = DateTime.UtcNow;
 
-        public ClassroomConnectionState(TcpClient client)
+        public ClassroomConnectionState()
         {
-            Client = client;
         }
     }
 }

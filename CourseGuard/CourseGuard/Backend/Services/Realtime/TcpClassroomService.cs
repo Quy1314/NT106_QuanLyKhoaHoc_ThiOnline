@@ -1,21 +1,18 @@
 using System;
-using System.Collections.Concurrent;
-using System.Net;
-using System.Net.Sockets;
+using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
+using CourseGuard.Backend.Config;
 
 namespace CourseGuard.Backend.Services.Realtime
 {
     public sealed class TcpClassroomService : IClassroomSignalService, IDisposable
     {
         public static readonly TcpClassroomService Instance = new();
-        public const int DefaultPort = 5056;
 
-        private TcpListener? _listener;
+        private ClientWebSocket? _ws;
         private bool _isRunning;
         private CancellationTokenSource? _cts;
-        private readonly ConcurrentBag<TcpClient> _clients = new();
         private readonly object _startLock = new();
 
         private TcpClassroomService() { }
@@ -26,106 +23,84 @@ namespace CourseGuard.Backend.Services.Realtime
             {
                 if (_isRunning) return;
 
-                var cts = new CancellationTokenSource();
-                var listener = new TcpListener(IPAddress.Any, DefaultPort);
-                try
+                _cts = new CancellationTokenSource();
+                
+                string? rawRelay = AppEnvironment.GetOptional("RELAY_WS_URL");
+                string wsBase = "ws://localhost:8080";
+                if (!string.IsNullOrWhiteSpace(rawRelay))
                 {
-                    listener.Start();
-                }
-                catch
-                {
-                    listener.Stop();
-                    cts.Dispose();
-                    throw;
-                }
-
-                _cts = cts;
-                _listener = listener;
-                _isRunning = true;
-
-                _ = Task.Run(() => AcceptLoopAsync(cts.Token));
-            }
-        }
-
-        private async Task AcceptLoopAsync(CancellationToken cancellationToken)
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                try
-                {
-                    TcpClient client = await _listener!.AcceptTcpClientAsync(cancellationToken);
-                    _clients.Add(client);
-                    _ = Task.Run(() => ReadClientLoop(client, cancellationToken));
-                }
-                catch (OperationCanceledException) { break; }
-                catch (Exception) { /* log or ignore */ }
-            }
-        }
-
-        private async Task ReadClientLoop(TcpClient client, CancellationToken token)
-        {
-            using (client)
-            {
-                try
-                {
-                    await using NetworkStream stream = client.GetStream();
-                    var buffer = new byte[1];
-                    while (!token.IsCancellationRequested)
+                    wsBase = rawRelay;
+                    if (wsBase.EndsWith("/relay", StringComparison.OrdinalIgnoreCase))
                     {
-                        int read = await stream.ReadAsync(buffer, token);
-                        if (read == 0) break; // Client disconnected
+                        wsBase = wsBase.Substring(0, wsBase.Length - 6);
                     }
                 }
-                catch { }
+
+                string connectionUrl = $"{wsBase}/classroom-status-relay?role=teacher";
+
+                _ws = new ClientWebSocket();
+                try
+                {
+                    _ws.ConnectAsync(new Uri(connectionUrl), _cts.Token).GetAwaiter().GetResult();
+                    _isRunning = true;
+                }
+                catch (Exception ex)
+                {
+                    _ws.Dispose();
+                    _cts.Dispose();
+                    throw new InvalidOperationException($"Could not connect to Cloud Status Relay: {ex.Message}", ex);
+                }
             }
         }
 
         public async Task BroadcastClassOpened(int sessionId)
         {
+            if (_ws == null || _ws.State != WebSocketState.Open)
+            {
+                return;
+            }
+
             var payload = new byte[5];
             payload[0] = 1;
             BitConverter.GetBytes(sessionId).CopyTo(payload, 1);
 
-            foreach (var client in _clients)
+            try
             {
-                if (client.Connected)
-                {
-                    try
-                    {
-                        var stream = client.GetStream();
-                        await stream.WriteAsync(payload);
-                        await stream.FlushAsync();
-                    }
-                    catch { }
-                }
+                await _ws.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Binary, true, CancellationToken.None);
             }
+            catch { }
         }
 
         public async Task BroadcastClassClosed(int sessionId)
         {
+            if (_ws == null || _ws.State != WebSocketState.Open)
+            {
+                return;
+            }
+
             var payload = new byte[5];
             payload[0] = 0;
             BitConverter.GetBytes(sessionId).CopyTo(payload, 1);
 
-            foreach (var client in _clients)
+            try
             {
-                if (client.Connected)
-                {
-                    try
-                    {
-                        var stream = client.GetStream();
-                        await stream.WriteAsync(payload);
-                        await stream.FlushAsync();
-                    }
-                    catch { }
-                }
+                await _ws.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Binary, true, CancellationToken.None);
             }
+            catch { }
         }
 
         public void Dispose()
         {
             _cts?.Cancel();
-            _listener?.Stop();
+            if (_ws != null && _ws.State == WebSocketState.Open)
+            {
+                try
+                {
+                    _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None).GetAwaiter().GetResult();
+                }
+                catch { }
+            }
+            _ws?.Dispose();
             _isRunning = false;
         }
     }

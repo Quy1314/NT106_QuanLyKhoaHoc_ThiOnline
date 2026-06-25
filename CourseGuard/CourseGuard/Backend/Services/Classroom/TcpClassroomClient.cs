@@ -1,11 +1,17 @@
-using System.Net.Sockets;
+using System;
+using System.IO;
+using System.Net.WebSockets;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using CourseGuard.Backend.Config;
 using CourseGuard.Backend.Models;
 
 namespace CourseGuard.Backend.Services.Classroom
 {
     public sealed class TcpClassroomClient : IDisposable
     {
-        private TcpClient? _client;
+        private ClientWebSocket? _ws;
         private CancellationTokenSource? _cts;
         private readonly SemaphoreSlim _sendLock = new(1, 1);
         private bool _isConnected;
@@ -17,6 +23,12 @@ namespace CourseGuard.Backend.Services.Classroom
         public string Host { get; private set; } = string.Empty;
         public int Port { get; private set; } = ClassroomProtocol.DefaultPort;
 
+        private static readonly JsonSerializerOptions JsonOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true
+        };
+
         public async Task ConnectAsync(string host, int port = ClassroomProtocol.DefaultPort, CancellationToken cancellationToken = default)
         {
             if (_isConnected)
@@ -27,52 +39,56 @@ namespace CourseGuard.Backend.Services.Classroom
             Host = host;
             Port = port;
             _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _client = new TcpClient
-            {
-                NoDelay = true
-            };
-
-            await _client.ConnectAsync(host, port, _cts.Token);
+            
+            // Set connected to true for form compatibility. The actual websocket
+            // connection will be established once we have sessionId in JoinRoomAsync.
             _isConnected = true;
-            StatusChanged?.Invoke(this, new ClassroomStatusEventArgs($"Connected to classroom server {host}:{port}."));
-
-            _ = Task.Run(() => ReceiveLoopAsync(_cts.Token), _cts.Token);
+            await Task.CompletedTask;
         }
 
         private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
         {
+            var buffer = new byte[1024 * 1024 * 2]; // 2MB buffer for video/screen frames
             try
             {
-                if (_client == null)
+                while (!cancellationToken.IsCancellationRequested && _ws!.State == WebSocketState.Open)
                 {
-                    return;
-                }
+                    using var ms = new MemoryStream();
+                    WebSocketReceiveResult result;
+                    do
+                    {
+                        var segment = new ArraySegment<byte>(buffer);
+                        result = await _ws.ReceiveAsync(segment, cancellationToken);
+                        if (result.MessageType == WebSocketMessageType.Close)
+                        {
+                            break;
+                        }
+                        await ms.WriteAsync(buffer, 0, result.Count, cancellationToken);
+                    }
+                    while (!result.EndOfMessage);
 
-                await using NetworkStream stream = _client.GetStream();
-                while (!cancellationToken.IsCancellationRequested && _client.Connected)
-                {
-                    ClassroomSignalModel? signal = await ClassroomProtocol.ReadMessageAsync(stream, cancellationToken);
+                    if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        break;
+                    }
+
+                    if (ms.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    byte[] data = ms.ToArray();
+                    var signal = JsonSerializer.Deserialize<ClassroomSignalModel>(data, JsonOptions);
                     if (signal != null)
                     {
                         SignalReceived?.Invoke(this, new ClassroomSignalReceivedEventArgs(signal));
                     }
                 }
             }
-            catch (OperationCanceledException)
-            {
-                // Normal shutdown.
-            }
-            catch (IOException ex)
-            {
-                StatusChanged?.Invoke(this, new ClassroomStatusEventArgs($"Classroom stream closed: {ex.Message}"));
-            }
-            catch (SocketException ex)
-            {
-                StatusChanged?.Invoke(this, new ClassroomStatusEventArgs($"Classroom socket closed: {ex.Message}"));
-            }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                StatusChanged?.Invoke(this, new ClassroomStatusEventArgs($"Receive classroom signal failed: {ex.Message}"));
+                StatusChanged?.Invoke(this, new ClassroomStatusEventArgs($"Mất kết nối với Cloud Relay: {ex.Message}"));
             }
             finally
             {
@@ -83,16 +99,16 @@ namespace CourseGuard.Backend.Services.Classroom
 
         public async Task SendAsync(ClassroomSignalModel signal, CancellationToken cancellationToken = default)
         {
-            if (_client == null || !_isConnected)
+            if (_ws == null || _ws.State != WebSocketState.Open)
             {
-                throw new InvalidOperationException("Classroom client is not connected.");
+                return;
             }
 
             await _sendLock.WaitAsync(cancellationToken);
             try
             {
-                NetworkStream stream = _client.GetStream();
-                await ClassroomProtocol.WriteMessageAsync(stream, signal, cancellationToken);
+                byte[] packet = JsonSerializer.SerializeToUtf8Bytes(signal, JsonOptions);
+                await _ws.SendAsync(new ArraySegment<byte>(packet), WebSocketMessageType.Binary, true, cancellationToken);
             }
             finally
             {
@@ -102,6 +118,30 @@ namespace CourseGuard.Backend.Services.Classroom
 
         public async Task JoinRoomAsync(int sessionId, int userId, string displayName, string role, string avatarPath = "", CancellationToken cancellationToken = default)
         {
+            string? rawRelay = AppEnvironment.GetOptional("RELAY_WS_URL");
+            string wsBase = "ws://localhost:8080";
+            if (!string.IsNullOrWhiteSpace(rawRelay))
+            {
+                wsBase = rawRelay;
+                if (wsBase.EndsWith("/relay", StringComparison.OrdinalIgnoreCase))
+                {
+                    wsBase = wsBase.Substring(0, wsBase.Length - 6);
+                }
+            }
+
+            string nameEscaped = Uri.EscapeDataString(displayName);
+            string connectionUrl = $"{wsBase}/classroom-relay?role=student&classId={sessionId}&userId={userId}&name={nameEscaped}";
+
+            _ws = new ClientWebSocket();
+            await _ws.ConnectAsync(new Uri(connectionUrl), cancellationToken);
+            _isConnected = true;
+
+            StatusChanged?.Invoke(this, new ClassroomStatusEventArgs($"Đã kết nối tới Cloud Classroom Relay cho phòng {sessionId}."));
+            if (_cts != null)
+            {
+                _ = Task.Run(() => ReceiveLoopAsync(_cts.Token), _cts.Token);
+            }
+
             await SendAsync(new ClassroomSignalModel
             {
                 Type = ClassroomMessageType.JoinRoom,
@@ -133,15 +173,16 @@ namespace CourseGuard.Backend.Services.Classroom
             _cts?.Cancel();
             _isConnected = false;
 
-            try
+            if (_ws != null && _ws.State == WebSocketState.Open)
             {
-                _client?.Close();
-            }
-            catch
-            {
-                // Ignore cleanup failures.
+                try
+                {
+                    await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+                }
+                catch { }
             }
 
+            _ws?.Dispose();
             await Task.CompletedTask;
         }
 
