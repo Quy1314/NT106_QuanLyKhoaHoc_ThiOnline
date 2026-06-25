@@ -20,6 +20,7 @@ namespace CourseGuard.Frontend.Forms.Student
         private readonly int _examId;
         private readonly System.Threading.CancellationTokenSource _monitoringCts = new();
         private readonly System.Windows.Forms.Timer _timer = new();
+        private readonly System.Windows.Forms.Timer _antiCheatTimer = new();
         private StudentScreenStreamClient? _screenStreamClient;
         private StudentExamTakingModel? _session;
         private StudentExamTakingModel? _preloadedSession;
@@ -111,6 +112,8 @@ namespace CourseGuard.Frontend.Forms.Student
             rbD.CheckedChanged += (_, _) => SaveSelectedAnswer("D");
             _timer.Interval = 1000;
             _timer.Tick += (_, _) => UpdateTimerText();
+            _antiCheatTimer.Interval = 1000;
+            _antiCheatTimer.Tick += AntiCheatTimer_Tick;
         }
 
         private void LoadExamSession()
@@ -121,6 +124,27 @@ namespace CourseGuard.Frontend.Forms.Student
                 ShowErrorAndClose("Không xác định được bài kiểm tra hoặc tài khoản học sinh.");
                 return;
             }
+
+            // --- Startup Anti-Cheat Checks ---
+            if (AntiCheatEngine.HasMultipleScreens())
+            {
+                ShowErrorAndClose("Hệ thống phát hiện bạn đang sử dụng nhiều màn hình. Vui lòng ngắt kết nối màn hình phụ trước khi làm bài.");
+                return;
+            }
+
+            if (AntiCheatEngine.IsRunningInVirtualMachine())
+            {
+                ShowErrorAndClose("Hệ thống phát hiện ứng dụng đang chạy trên máy ảo. Không cho phép làm bài thi trên máy ảo.");
+                return;
+            }
+
+            var startupBlacklistedApps = AntiCheatEngine.GetRunningBlacklistedApps(out bool _);
+            if (startupBlacklistedApps.Count > 0)
+            {
+                ShowErrorAndClose($"Hệ thống phát hiện ứng dụng bị cấm đang hoạt động: {string.Join(", ", startupBlacklistedApps)}. Vui lòng tắt các ứng dụng này trước khi bắt đầu thi.");
+                return;
+            }
+            // ---------------------------------
 
             StudentExamTakingModel? session = _preloadedSession;
             _preloadedSession = null;
@@ -140,6 +164,7 @@ namespace CourseGuard.Frontend.Forms.Student
             ShowQuestion(0);
             UpdateTimerText();
             _timer.Start();
+            _antiCheatTimer.Start();
             StartScreenMonitoring();
             UpdateProgressSummary();
         }
@@ -609,6 +634,7 @@ namespace CourseGuard.Frontend.Forms.Student
             LowLevelKeyboardHook.OnCheatKeyPressed -= LowLevelKeyboardHook_OnCheatKeyPressed;
             
             _timer.Stop();
+            _antiCheatTimer.Stop();
             _monitoringCts.Cancel();
             if (_screenStreamClient != null)
                 _screenStreamClient.ConnectionLostThresholdReached -= HandleMonitoringConnectionLost;
@@ -623,6 +649,77 @@ namespace CourseGuard.Frontend.Forms.Student
                 }
                 catch { }
             }).FireAndForgetSafe(this);
+        }
+
+        private bool _isAntiCheatDialogShowing;
+
+        private void AntiCheatTimer_Tick(object? sender, EventArgs e)
+        {
+            if (_submitted || _autoSubmitTriggered || _isAntiCheatDialogShowing)
+                return;
+
+            // 1. Overwrite/Clear Clipboard
+            AntiCheatEngine.ClearClipboard();
+
+            // 2. Check for multiple screens
+            if (AntiCheatEngine.HasMultipleScreens())
+            {
+                _isAntiCheatDialogShowing = true;
+                try
+                {
+                    _screenStreamClient?.SendWarning();
+                    HandleViolationAsync("MULTI_MONITOR", "Hệ thống phát hiện kết nối thêm màn hình phụ trong khi thi.").FireAndForgetSafe(this);
+                    MetaTheme.ShowModernDialog(
+                        this,
+                        "Hệ thống phát hiện bạn đang sử dụng nhiều màn hình. Vui lòng ngắt kết nối màn hình phụ ngay lập tức để tránh bị nộp bài tự động.",
+                        "Cảnh báo vi phạm",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
+                finally
+                {
+                    _isAntiCheatDialogShowing = false;
+                }
+                return;
+            }
+
+            // 3. Check for blacklisted apps
+            var detected = AntiCheatEngine.GetRunningBlacklistedApps(out bool hasRemoteControl);
+            if (detected.Count > 0)
+            {
+                _isAntiCheatDialogShowing = true;
+                try
+                {
+                    _screenStreamClient?.SendWarning();
+                    string appList = string.Join(", ", detected);
+                    HandleViolationAsync("BLACKLISTED_APP", $"Phát hiện ứng dụng cấm đang chạy: {appList}").FireAndForgetSafe(this);
+
+                    if (hasRemoteControl)
+                    {
+                        _autoSubmitTriggered = true;
+                        MetaTheme.ShowModernDialog(
+                            this,
+                            $"Hệ thống phát hiện ứng dụng điều khiển từ xa đang chạy ({appList}). Bài thi của bạn sẽ tự động được nộp lập tức để bảo mật đề thi.",
+                            "Tự động nộp bài",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error);
+                        SubmitExam(confirm: false);
+                    }
+                    else
+                    {
+                        MetaTheme.ShowModernDialog(
+                            this,
+                            $"Hệ thống phát hiện ứng dụng cấm đang chạy: {appList}. Vui lòng đóng ứng dụng này ngay lập tức.",
+                            "Cảnh báo vi phạm",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning);
+                    }
+                }
+                finally
+                {
+                    _isAntiCheatDialogShowing = false;
+                }
+            }
         }
     }
 }
