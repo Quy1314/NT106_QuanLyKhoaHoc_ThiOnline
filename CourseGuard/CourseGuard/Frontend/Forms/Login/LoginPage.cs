@@ -444,15 +444,15 @@ namespace CourseGuard.Frontend.Forms.Login
             lblPassword.Left = padding;
 
             // Reposition Y coords to look good and prevent clipping
-            LOGO.Top = -4;
-            LOGO.Height = 44; // Fits 26f font cleanly
+            LOGO.Top = 5;
+            LOGO.Height = 50; // Fits 26f font cleanly, no sibling overlap
 
-            LoginTitle.Top = 38; // Spaced exactly below LOGO
-            LoginTitle.Height = 30; // Fits 18f font cleanly
+            LoginTitle.Top = 55; // Placed exactly below LOGO, disjoint coordinate
+            LoginTitle.Height = 35; // Fits 18f font cleanly, no sibling overlap
 
             if (_lblSubtitle != null)
             {
-                _lblSubtitle.Top = 68; // Spaced exactly below LoginTitle
+                _lblSubtitle.Top = 90; // Placed exactly below LoginTitle, disjoint coordinate
                 _lblSubtitle.Height = 20;
                 _lblSubtitle.Width = LoginPanel.Width;
                 _lblSubtitle.Left = 0;
@@ -462,8 +462,8 @@ namespace CourseGuard.Frontend.Forms.Login
             lblPassword.Visible = false;
 
             // Tighten input shells vertical position to match mockup (no username/password label gaps)
-            _usernameShell!.Top = 115; // Lifted slightly and spaced with 27px gap below subtitle
-            _passwordShell!.Top = 175;
+            _usernameShell!.Top = 135; // Spaced below subtitle with 25px gap
+            _passwordShell!.Top = 195;
 
             // Re-arrange Checkbox and Forgot Password if they exist
             chkRemember.Top = _passwordShell.Bottom + 14;
