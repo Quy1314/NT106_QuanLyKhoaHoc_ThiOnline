@@ -32,3 +32,8 @@ PROJECT_CONTEXT.md
 stitch_tools/
 report.html
 dist/
+
+# Templates
+login-form-20/
+login-form20/
+

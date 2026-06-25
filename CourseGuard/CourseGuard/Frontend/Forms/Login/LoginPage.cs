@@ -131,7 +131,7 @@ namespace CourseGuard.Frontend.Forms.Login
             }
 
             // Typography
-            var titleFont = FuturisticLoginKit.CreateUiFont(20f, FontStyle.Regular); // Lato-like regular style
+            var titleFont = FuturisticLoginKit.CreateUiFont(18f, FontStyle.Regular); // Lato-like regular style
             var smallBold = FuturisticLoginKit.CreateUiFont(10.5f, FontStyle.Bold);
             var inputFont = FuturisticLoginKit.CreateUiFont(11.5f, FontStyle.Regular);
             var buttonFont = FuturisticLoginKit.CreateUiFont(11.5f, FontStyle.Bold);
@@ -160,7 +160,7 @@ namespace CourseGuard.Frontend.Forms.Login
 
             // Brand (Peach logo accent / Top title text)
             LOGO.Text = "Welcome back mate!";
-            LOGO.Font = FuturisticLoginKit.CreateUiFont(28f, FontStyle.Bold);
+            LOGO.Font = FuturisticLoginKit.CreateUiFont(26f, FontStyle.Bold);
             LOGO.ForeColor = Color.White; // White top title matching website
             LOGO.BorderStyle = BorderStyle.None;
             LOGO.TextAlign = ContentAlignment.MiddleCenter;
@@ -444,16 +444,16 @@ namespace CourseGuard.Frontend.Forms.Login
             lblPassword.Left = padding;
 
             // Reposition Y coords to look good and prevent clipping
-            LOGO.Top = 5;
-            LOGO.Height = 50; // Increased to 50px to prevent text clipping of 28f font
+            LOGO.Top = -4;
+            LOGO.Height = 44; // Fits 26f font cleanly
 
-            LoginTitle.Top = 55; // Shifted up
-            LoginTitle.Height = 35; // Sized appropriately for 20f subtitle font
+            LoginTitle.Top = 38; // Spaced exactly below LOGO
+            LoginTitle.Height = 30; // Fits 18f font cleanly
 
             if (_lblSubtitle != null)
             {
-                _lblSubtitle.Top = 90; // Shifted up
-                _lblSubtitle.Height = 22;
+                _lblSubtitle.Top = 68; // Spaced exactly below LoginTitle
+                _lblSubtitle.Height = 20;
                 _lblSubtitle.Width = LoginPanel.Width;
                 _lblSubtitle.Left = 0;
             }
@@ -462,8 +462,8 @@ namespace CourseGuard.Frontend.Forms.Login
             lblPassword.Visible = false;
 
             // Tighten input shells vertical position to match mockup (no username/password label gaps)
-            _usernameShell!.Top = 132;
-            _passwordShell!.Top = 192;
+            _usernameShell!.Top = 115; // Lifted slightly and spaced with 27px gap below subtitle
+            _passwordShell!.Top = 175;
 
             // Re-arrange Checkbox and Forgot Password if they exist
             chkRemember.Top = _passwordShell.Bottom + 14;
