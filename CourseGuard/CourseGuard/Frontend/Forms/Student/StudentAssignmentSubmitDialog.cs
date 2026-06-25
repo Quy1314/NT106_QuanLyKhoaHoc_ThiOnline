@@ -525,19 +525,8 @@ namespace CourseGuard.Frontend.Forms.Student
                     string studentEmail = UserSessionContext.CurrentUsername + "@student.edu.vn";
                     string assignmentTitle = _assignment.Title;
 
-                    Task.Run(() =>
-                    {
-                        try
-                        {
-                            var emailService = new SmtpEmailService();
-                            string emailBody = $"Chào bạn,\n\nBạn đã nộp bài làm thành công cho bài tập '{assignmentTitle}'.\n\nTrân trọng,\nCourseGuard";
-                            emailService.SendEmail(studentEmail, "Xác nhận nộp bài tập: " + assignmentTitle, emailBody, out _);
-                        }
-                        catch
-                        {
-                            // Ignore SMTP errors so it doesn't crash the app
-                        }
-                    }).FireAndForgetSafe(this);
+                    string emailBody = $"Chào bạn,\n\nBạn đã nộp bài làm thành công cho bài tập '{assignmentTitle}'.\n\nTrân trọng,\nCourseGuard";
+                    EmailQueueService.QueueEmail(studentEmail, "Xác nhận nộp bài tập: " + assignmentTitle, emailBody);
 
                     MetaTheme.ShowModernDialog("Nộp bài thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     this.DialogResult = DialogResult.OK;

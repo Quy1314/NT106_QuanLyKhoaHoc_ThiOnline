@@ -2946,6 +2946,28 @@ namespace CourseGuard.Backend.Data
 
             using var cmd = new NpgsqlCommand(sql, connection);
             cmd.ExecuteNonQuery();
+
+            try
+            {
+                const string publicationSql = @"
+                    DO $$
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM pg_publication_tables 
+                                WHERE pubname = 'supabase_realtime' AND tablename = 'messages'
+                            ) THEN
+                                ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+                            END IF;
+                        END IF;
+                    END $$;";
+                using var pubCmd = new NpgsqlCommand(publicationSql, connection);
+                pubCmd.ExecuteNonQuery();
+            }
+            catch
+            {
+                // Bỏ qua lỗi phân quyền trong môi trường DB bị hạn chế
+            }
         }
 
         public List<ChatCourseModel> GetChatCoursesForUser(int userId)

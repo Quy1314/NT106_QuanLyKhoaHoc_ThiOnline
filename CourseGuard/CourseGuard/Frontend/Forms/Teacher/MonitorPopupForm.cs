@@ -12,6 +12,7 @@ using CourseGuard.Backend.Services.Monitoring;
 using CourseGuard.Backend.Services.Storage;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Backend.Services.Realtime;
 
 namespace CourseGuard.Frontend.Forms.Teacher
 {
@@ -46,12 +47,52 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             SetupLayout();
 
+            SupabaseRealtimeChatService.Instance.OnViolationChanged += OnViolationRealtimeChanged;
+            SupabaseRealtimeChatService.Instance.Start();
+
             FormClosing += (_, _) =>
             {
+                if (_ws != null && _ws.State == WebSocketState.Open)
+                {
+                    try
+                    {
+                        string revertRateCommand = $"{_studentId}:3000";
+                        byte[] cmdBytes = System.Text.Encoding.UTF8.GetBytes(revertRateCommand);
+                        _ws.SendAsync(new ArraySegment<byte>(cmdBytes), WebSocketMessageType.Text, true, CancellationToken.None).GetAwaiter().GetResult();
+                    }
+                    catch
+                    {
+                        // Bỏ qua
+                    }
+                }
+
                 _cts.Cancel();
                 _ws?.Dispose();
                 _picture.Image?.Dispose();
+
+                SupabaseRealtimeChatService.Instance.OnViolationChanged -= OnViolationRealtimeChanged;
             };
+        }
+
+        private void OnViolationRealtimeChanged(object? sender, ViolationChangedEventArgs e)
+        {
+            if (e.AttemptId == _attemptId)
+            {
+                if (InvokeRequired)
+                {
+                    try
+                    {
+                        BeginInvoke(new Action(() => OnViolationRealtimeChanged(sender, e)));
+                    }
+                    catch
+                    {
+                    }
+                    return;
+                }
+
+                if (IsDisposed) return;
+                LoadViolationsAsync().FireAndForgetSafe(this);
+            }
         }
 
         protected override void OnLoad(EventArgs e)
@@ -77,6 +118,17 @@ namespace CourseGuard.Frontend.Forms.Teacher
                     SetStatus("Đang kết nối tới Cloud Relay...");
                     await _ws.ConnectAsync(new Uri(connectionUrl), _cts.Token);
                     SetStatus("Đã kết nối tới Cloud Relay. Đang chờ học sinh...");
+
+                    try
+                    {
+                        string requestRateCommand = $"{_studentId}:1000";
+                        byte[] cmdBytes = System.Text.Encoding.UTF8.GetBytes(requestRateCommand);
+                        await _ws.SendAsync(new ArraySegment<byte>(cmdBytes), WebSocketMessageType.Text, true, _cts.Token);
+                    }
+                    catch
+                    {
+                        // Bỏ qua lỗi gửi tín hiệu ban đầu
+                    }
 
                     var buffer = new byte[1024 * 1024 * 5]; // 5MB buffer
                     while (_ws.State == WebSocketState.Open && !_cts.Token.IsCancellationRequested)

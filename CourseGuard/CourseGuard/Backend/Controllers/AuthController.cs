@@ -185,7 +185,6 @@ namespace CourseGuard.Backend.Controllers
             _dbContext.SaveMfaOtp(user.Id, otp, expiresAt);
 
             // 2. Send Email
-            var smtpEmailService = new SmtpEmailService();
             string emailBody = 
                 $"Xin chao {user.FullName ?? user.Username},\n\n" +
                 $"Ma OTP xac thuc 2 lop de dang nhap vao CourseGuard cua ban la: {otp}\n" +
@@ -193,7 +192,7 @@ namespace CourseGuard.Backend.Controllers
                 "Neu ban khong thuc hien yeu cau nay, vui long doi mat khau ngay lap tuc.\n\n" +
                 "CourseGuard Security Team";
 
-            await smtpEmailService.SendEmailAsync(
+            EmailQueueService.QueueEmail(
                 user.Email,
                 "CourseGuard - Xac thuc dang nhap OTP",
                 emailBody);

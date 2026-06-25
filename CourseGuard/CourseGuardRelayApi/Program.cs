@@ -108,12 +108,38 @@ app.Map("/relay", async context =>
             var buffer = new byte[1024];
             while (webSocket.State == WebSocketState.Open)
             {
-                // Teacher is listener only, keep connection open by waiting for messages (e.g. ping/pong or close)
+                // Teacher is listener but can send command to update streaming rate
                 var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
                     await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
                     break;
+                }
+
+                // If teacher sends a text command, e.g. "studentId:intervalMs"
+                if (result.MessageType == WebSocketMessageType.Text && result.Count > 0)
+                {
+                    string command = System.Text.Encoding.UTF8.GetString(buffer, 0, result.Count);
+                    var parts = command.Split(':');
+                    if (parts.Length == 2 && int.TryParse(parts[0], out int targetStudentId) && int.TryParse(parts[1], out int intervalMs))
+                    {
+                        if (students.TryGetValue(examId, out var examStudents) && examStudents.TryGetValue(targetStudentId, out var studentWs))
+                        {
+                            if (studentWs.State == WebSocketState.Open)
+                            {
+                                try
+                                {
+                                    byte[] cmdBytes = System.Text.Encoding.UTF8.GetBytes($"RATE:{intervalMs}");
+                                    await studentWs.SendAsync(new ArraySegment<byte>(cmdBytes), WebSocketMessageType.Text, true, CancellationToken.None);
+                                    Console.WriteLine($"Forwarded command RATE:{intervalMs} to student {targetStudentId} in exam {examId}");
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Error forwarding command to student: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -31,3 +31,4 @@ PROJECT_CONTEXT.md
 .vscode/
 stitch_tools/
 report.html
+dist/

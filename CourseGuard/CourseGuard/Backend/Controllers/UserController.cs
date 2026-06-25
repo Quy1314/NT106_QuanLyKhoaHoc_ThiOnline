@@ -179,23 +179,16 @@ namespace CourseGuard.Backend.Controllers
                     "Vui long dang nhap va doi mat khau ngay sau khi vao he thong.\n\n" +
                     "CourseGuard Admin";
 
-                var smtpEmailService = new SmtpEmailService();
-                bool emailSent = smtpEmailService.SendEmail(
-                    user.Email,
-                    "CourseGuard - Cap lai mat khau",
-                    emailBody,
-                    out string errorMessage);
-
-                if (!emailSent)
-                {
-                    LastErrorMessage = errorMessage;
-                    return false;
-                }
-
                 string passwordHash = PasswordHasher.HashPassword(temporaryPassword);
                 _dbContext.UpdateUserPassword(userId, passwordHash, tempPasswordExpiresAt);
                 _dbContext.UpdateUserStatus(userId, "ACTIVE");
                 _dbContext.LogUserActivity(userId, "FORGOT_PASSWORD_APPROVED", $"Admin da gui mat khau tam thoi cho: {user.Username}", string.Empty);
+
+                EmailQueueService.QueueEmail(
+                    user.Email,
+                    "CourseGuard - Cap lai mat khau",
+                    emailBody);
+
                 return true;
             }
             else if (action == "REJECT")

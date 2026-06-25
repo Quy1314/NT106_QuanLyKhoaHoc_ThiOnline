@@ -13,13 +13,13 @@ using CourseGuard.Backend.Security;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 using CourseGuard.Frontend.UserControls.Shared.Chat;
+using CourseGuard.Backend.Services.Realtime;
 
 namespace CourseGuard.Frontend.UserControls.Student
 {
     public partial class UC_Chat : UserControl
     {
         private readonly ChatController _chatController;
-        private readonly System.Windows.Forms.Timer _pollTimer;
         private readonly List<ChatCourseModel> _courses = new();
         private readonly ChatMessageListControl _messageList = new();
         private readonly int _userId;
@@ -53,13 +53,14 @@ namespace CourseGuard.Frontend.UserControls.Student
             DragDrop += async (_, e) => await OnChatDragDropAsync(e);
             _messageList.DragEnter += OnChatDragEnter;
             _messageList.DragDrop += async (_, e) => await OnChatDragDropAsync(e);
-            _pollTimer = new System.Windows.Forms.Timer { Interval = 3000 };
-            _pollTimer.Tick += async (_, _) => await RefreshMessagesAsync();
+
+            SupabaseRealtimeChatService.Instance.OnChatChanged += OnChatRealtimeChanged;
+            SupabaseRealtimeChatService.Instance.Start();
+
             Disposed += (_, _) =>
             {
                 _uiAlive = false;
-                _pollTimer.Stop();
-                _pollTimer.Dispose();
+                SupabaseRealtimeChatService.Instance.OnChatChanged -= OnChatRealtimeChanged;
             };
 
             RoundedButtonHelper.Apply(btnSend, 10);
@@ -100,8 +101,33 @@ namespace CourseGuard.Frontend.UserControls.Student
             Load += async (_, _) =>
             {
                 await LoadCoursesAsync();
-                _pollTimer.Start();
             };
+        }
+
+        private void OnChatRealtimeChanged(object? sender, ChatChangedEventArgs e)
+        {
+            if (e.CourseId == _selectedCourseId)
+            {
+                if (InvokeRequired)
+                {
+                    try
+                    {
+                        BeginInvoke(new Action(() => OnChatRealtimeChanged(sender, e)));
+                    }
+                    catch
+                    {
+                        // Control có thể đã bị hủy bỏ
+                    }
+                    return;
+                }
+
+                if (!_uiAlive || IsDisposed)
+                {
+                    return;
+                }
+
+                RefreshMessagesAsync().FireAndForgetSafe(this);
+            }
         }
 
         private void BuildCardLayout()

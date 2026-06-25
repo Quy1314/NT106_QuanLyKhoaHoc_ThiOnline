@@ -17,6 +17,7 @@ namespace CourseGuard.Backend.Services.Monitoring
         private readonly string _relayUri;
         private readonly ScreenMonitorConnectionLossTracker _connectionLossTracker;
         private ClientWebSocket? _ws;
+        private volatile int _streamIntervalMs = 3000; // 3 giây mặc định để tiết kiệm 66% băng thông
 
         private volatile bool _pendingWarning;
 
@@ -53,6 +54,38 @@ namespace CourseGuard.Backend.Services.Monitoring
             _pendingWarning = true;
         }
 
+        private async Task ReceiveCommandsAsync(CancellationToken cancellationToken)
+        {
+            var buffer = new byte[1024];
+            while (_ws != null && _ws.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    var result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+                    if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        break;
+                    }
+                    if (result.MessageType == WebSocketMessageType.Text && result.Count > 0)
+                    {
+                        string message = System.Text.Encoding.UTF8.GetString(buffer, 0, result.Count);
+                        if (message.StartsWith("RATE:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            string rateStr = message.Substring(5);
+                            if (int.TryParse(rateStr, out int rate) && rate >= 100)
+                            {
+                                _streamIntervalMs = rate;
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    break;
+                }
+            }
+        }
+
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -65,6 +98,9 @@ namespace CourseGuard.Backend.Services.Monitoring
                     string connectionUrl = $"{_relayUri}?role=student&examId={_examId}&studentId={_studentId}&attemptId={_attemptId}";
                     await _ws.ConnectAsync(new Uri(connectionUrl), cancellationToken);
                     _connectionLossTracker.ObserveConnected();
+
+                    // Chạy song song luồng nhận lệnh điều chỉnh từ giáo viên
+                    var receiveTask = ReceiveCommandsAsync(cancellationToken);
 
                     while (_ws.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
                     {
@@ -84,7 +120,7 @@ namespace CourseGuard.Backend.Services.Monitoring
                         Buffer.BlockCopy(jpeg, 0, packet, header.Length, jpeg.Length);
 
                         await _ws.SendAsync(new ArraySegment<byte>(packet), WebSocketMessageType.Binary, true, cancellationToken);
-                        await Task.Delay(1000, cancellationToken);
+                        await Task.Delay(_streamIntervalMs, cancellationToken);
                     }
                 }
                 catch

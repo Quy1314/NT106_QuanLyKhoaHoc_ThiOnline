@@ -19,12 +19,22 @@ namespace CourseGuard.Frontend.UserControls.Admin
         private Button _btnForceLogout = new();
         private Button _btnRefresh = new();
         private List<DeviceModel> _allDevices = new();
+        private System.Windows.Forms.Timer? _refreshTimer;
 
         public UC_DevicesManage()
         {
             _dbContext = new CourseGuardDbContext(string.Empty);
             BuildLayout();
             LoadDataAsync();
+
+            _refreshTimer = new System.Windows.Forms.Timer { Interval = 10000 }; // 10 seconds
+            _refreshTimer.Tick += (s, e) => AutoRefreshData();
+            _refreshTimer.Start();
+
+            this.Disposed += (s, e) => {
+                _refreshTimer?.Stop();
+                _refreshTimer?.Dispose();
+            };
         }
 
         private void BuildLayout()
@@ -123,6 +133,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 colId.Visible = false;
             }
 
+            _dgvDevices.CellFormatting += DgvDevices_CellFormatting;
             MetaTheme.StyleGrid(_dgvDevices);
             pnlGrid.Controls.Add(_dgvDevices);
 
@@ -199,15 +210,93 @@ namespace CourseGuard.Frontend.UserControls.Admin
             _dgvDevices.Rows.Clear();
             foreach (var d in devices)
             {
+                string displayStatus = d.Status;
+                if (d.Status == "ACTIVE")
+                {
+                    var diff = DateTime.Now - d.LastActive;
+                    if (diff.TotalSeconds <= 90)
+                    {
+                        displayStatus = "● Online";
+                    }
+                    else
+                    {
+                        displayStatus = "○ Offline";
+                    }
+                }
+                else if (d.Status == "BLOCKED")
+                {
+                    displayStatus = "🚫 Blocked";
+                }
+
                 _dgvDevices.Rows.Add(
                     d.Id,
                     d.Username,
                     d.UserFullName,
                     d.DeviceName,
                     d.IpAddress,
-                    d.Status,
+                    displayStatus,
                     d.LastActive.ToString("dd/MM/yyyy HH:mm:ss")
                 );
+            }
+        }
+
+        private void DgvDevices_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            if (_dgvDevices.Columns[e.ColumnIndex].Name == "Status" && e.Value != null)
+            {
+                string status = e.Value.ToString() ?? "";
+                if (status.Contains("Online"))
+                {
+                    e.CellStyle.ForeColor = Color.FromArgb(34, 197, 94); // Green
+                    e.CellStyle.SelectionForeColor = Color.FromArgb(34, 197, 94);
+                }
+                else if (status.Contains("Offline"))
+                {
+                    e.CellStyle.ForeColor = Color.FromArgb(156, 163, 175); // Gray
+                    e.CellStyle.SelectionForeColor = Color.FromArgb(156, 163, 175);
+                }
+                else if (status.Contains("Blocked"))
+                {
+                    e.CellStyle.ForeColor = Color.FromArgb(239, 68, 68); // Red
+                    e.CellStyle.SelectionForeColor = Color.FromArgb(239, 68, 68);
+                }
+            }
+        }
+
+        private async void AutoRefreshData()
+        {
+            try
+            {
+                var devices = await Task.Run(() => _dbContext.GetActiveDevices());
+                if (IsDisposed || Disposing) return;
+
+                int selectedDeviceId = -1;
+                if (_dgvDevices.SelectedRows.Count > 0)
+                {
+                    selectedDeviceId = Convert.ToInt32(_dgvDevices.SelectedRows[0].Cells["Id"].Value);
+                }
+
+                _allDevices = devices;
+                FilterDevices();
+
+                // Restore selection
+                if (selectedDeviceId != -1)
+                {
+                    foreach (DataGridViewRow row in _dgvDevices.Rows)
+                    {
+                        if (Convert.ToInt32(row.Cells["Id"].Value) == selectedDeviceId)
+                        {
+                            _dgvDevices.ClearSelection();
+                            row.Selected = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Silent error on auto-refresh
             }
         }
 
