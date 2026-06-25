@@ -51,7 +51,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             using var dialog = new TeacherCourseDialog();
             if (dialog.ShowDialog(FindForm()) == System.Windows.Forms.DialogResult.OK)
             {
-                Controller.CreateCourse(TeacherId, dialog.Course);
+                await Task.Run(() => Controller.CreateCourse(TeacherId, dialog.Course));
                 await LoadDataAsync();
             }
         }
@@ -70,7 +70,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             using var dialog = new TeacherCourseDialog(course);
             if (dialog.ShowDialog(FindForm()) == System.Windows.Forms.DialogResult.OK)
             {
-                Controller.UpdateCourse(TeacherId, dialog.Course);
+                await Task.Run(() => Controller.UpdateCourse(TeacherId, dialog.Course));
                 await LoadDataAsync();
             }
         }
@@ -80,7 +80,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             int id = CurrentInt("Id");
             if (id > 0 && CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Xóa khóa học đã chọn?", "Xác nhận", System.Windows.Forms.MessageBoxButtons.YesNo) == System.Windows.Forms.DialogResult.Yes)
             {
-                Controller.DeleteCourse(TeacherId, id);
+                await Task.Run(() => Controller.DeleteCourse(TeacherId, id));
                 await LoadDataAsync();
             }
         }

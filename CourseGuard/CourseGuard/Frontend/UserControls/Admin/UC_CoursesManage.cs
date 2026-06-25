@@ -135,12 +135,18 @@ namespace CourseGuard.Frontend.UserControls.Admin
             this.ShowSkeleton(SkeletonType.FormWithTable);
             try
             {
-                // Avoid parallel loading on shared services to prevent race/dispose issues.
-                var teachers = await Task.Run(() => _userService.GetByRole("TEACHER"));
-                var students = await Task.Run(() => _userService.GetByRole("STUDENT"));
-                var courses = await Task.Run(() => _courseService.GetAllCourses());
+                // Parallelize data loading since DbContext uses a separate connection per method call
+                var teachersTask = Task.Run(() => _userService.GetByRole("TEACHER"));
+                var studentsTask = Task.Run(() => _userService.GetByRole("STUDENT"));
+                var coursesTask = Task.Run(() => _courseService.GetAllCourses());
+
+                await Task.WhenAll(teachersTask, studentsTask, coursesTask);
 
                 if (IsDisposed || Disposing) return;
+
+                var teachers = await teachersTask;
+                var students = await studentsTask;
+                var courses = await coursesTask;
 
                 _allStudents = students;
                 BindTeachers(teachers);

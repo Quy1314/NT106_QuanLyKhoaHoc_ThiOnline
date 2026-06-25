@@ -104,6 +104,28 @@ namespace CourseGuard.Backend.Data
 
             await using var cmd = new NpgsqlCommand(sql, conn);
             await cmd.ExecuteNonQueryAsync();
+
+            try
+            {
+                const string publicationSql = @"
+                    DO $$
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM pg_publication_tables 
+                                WHERE pubname = 'supabase_realtime' AND tablename = 'violations'
+                            ) THEN
+                                ALTER PUBLICATION supabase_realtime ADD TABLE violations;
+                            END IF;
+                        END IF;
+                    END $$;";
+                await using var pubCmd = new NpgsqlCommand(publicationSql, conn);
+                await pubCmd.ExecuteNonQueryAsync();
+            }
+            catch
+            {
+                // Bỏ qua lỗi phân quyền trong môi trường DB bị hạn chế
+            }
         }
     }
 }

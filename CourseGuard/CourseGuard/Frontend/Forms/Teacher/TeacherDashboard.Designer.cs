@@ -18,6 +18,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             ClientSize = new System.Drawing.Size(1380, 860);
             Name = "TeacherDashboard";
             StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
+            WindowState = System.Windows.Forms.FormWindowState.Maximized;
         }
     }
 }

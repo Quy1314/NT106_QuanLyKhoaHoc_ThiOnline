@@ -77,7 +77,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             using var dialog = new TeacherMaterialUploadDialog(courses, SelectedCourseId ?? 0);
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                Controller.CreateMaterial(TeacherId, BuildMaterialModel(dialog.CourseId, dialog.SelectedFilePath));
+                var model = await Task.Run(() => BuildMaterialModel(dialog.CourseId, dialog.SelectedFilePath));
+                await Task.Run(() => Controller.CreateMaterial(TeacherId, model));
                 LoadCourseFilter();
                 await LoadDataAsync();
                 MetaTheme.ShowModernDialog(
@@ -95,9 +96,9 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             using var dialog = new TeacherMaterialUploadDialog(Controller.GetCourses(TeacherId), CurrentInt("CourseId"));
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                TeacherMaterialModel model = BuildMaterialModel(dialog.CourseId, dialog.SelectedFilePath);
+                TeacherMaterialModel model = await Task.Run(() => BuildMaterialModel(dialog.CourseId, dialog.SelectedFilePath));
                 model.Id = id;
-                Controller.UpdateMaterial(TeacherId, model);
+                await Task.Run(() => Controller.UpdateMaterial(TeacherId, model));
                 LoadCourseFilter();
                 await LoadDataAsync();
             }
@@ -117,7 +118,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             if (result != DialogResult.Yes)
                 return;
 
-            Controller.DeleteMaterial(TeacherId, id);
+            await Task.Run(() => Controller.DeleteMaterial(TeacherId, id));
             await LoadDataAsync();
         }
 

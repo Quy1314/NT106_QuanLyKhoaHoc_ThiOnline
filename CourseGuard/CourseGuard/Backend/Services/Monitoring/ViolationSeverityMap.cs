@@ -8,7 +8,8 @@ namespace CourseGuard.Backend.Services.Monitoring
             if (string.IsNullOrEmpty(value))
                 return "MEDIUM";
 
-            if (value.Contains("CONNECTION_LOST", System.StringComparison.OrdinalIgnoreCase))
+            if (value.Contains("CONNECTION_LOST", System.StringComparison.OrdinalIgnoreCase) ||
+                value is "MULTI_MONITOR" or "BLACKLISTED_APP" or "VM_DETECTION")
                 return "HIGH";
 
             if (value is "KEY_PRESS" or "WINDOW_MINIMIZE")

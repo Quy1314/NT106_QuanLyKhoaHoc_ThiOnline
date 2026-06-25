@@ -17,14 +17,14 @@ namespace CourseGuard.Frontend.Forms.Login
         private Label RegisterTitle;
         private Label lblRegUsername, lblRegFullName, lblRegEmail, lblRegPassword;
         private TextBox txtRegUsername, txtRegFullName, txtRegEmail, txtRegPassword;
-        private Button btnRegisterSubmit;
+        private CourseGuard.Frontend.Theme.NeonGradientButton btnRegisterSubmit;
         private LinkLabel lnkBackToLoginFromReg;
 
         private CourseGuard.Frontend.Theme.TransparentPanel ForgotPassPanel;
         private Label ForgotTitle;
         private Label lblForgotUsername, lblForgotEmail;
         private TextBox txtForgotUsername, txtForgotEmail;
-        private Button btnForgotSubmit;
+        private CourseGuard.Frontend.Theme.NeonGradientButton btnForgotSubmit;
         private LinkLabel lnkBackToLoginFromForgot;
 
         protected override void Dispose(bool disposing)
@@ -61,7 +61,7 @@ namespace CourseGuard.Frontend.Forms.Login
             txtRegEmail = new TextBox();
             lblRegPassword = new Label();
             txtRegPassword = new TextBox();
-            btnRegisterSubmit = new Button();
+            btnRegisterSubmit = new CourseGuard.Frontend.Theme.NeonGradientButton();
             lnkBackToLoginFromReg = new LinkLabel();
 
             // Forgot Pass Panel
@@ -71,7 +71,7 @@ namespace CourseGuard.Frontend.Forms.Login
             txtForgotUsername = new TextBox();
             lblForgotEmail = new Label();
             txtForgotEmail = new TextBox();
-            btnForgotSubmit = new Button();
+            btnForgotSubmit = new CourseGuard.Frontend.Theme.NeonGradientButton();
             lnkBackToLoginFromForgot = new LinkLabel();
 
             LoginPanel.SuspendLayout();

@@ -57,7 +57,13 @@ namespace CourseGuard.Backend.Security
                 bool isRWin = vkCode == 0x5C;
                 bool isAltF4 = (vkCode == 0x73 && IsKeyPressed(VK_MENU)); // F4 + Alt
 
-                if (isAltTab || isAltEsc || isCtrlEsc || isLWin || isRWin || isAltF4)
+                // Block copy-paste/cut shortcuts
+                bool isCtrlC = (vkCode == 0x43 && IsKeyPressed(VK_CONTROL)); // Ctrl + C
+                bool isCtrlV = (vkCode == 0x56 && IsKeyPressed(VK_CONTROL)); // Ctrl + V
+                bool isCtrlX = (vkCode == 0x58 && IsKeyPressed(VK_CONTROL)); // Ctrl + X
+                bool isShiftInsert = (vkCode == 0x2D && IsKeyPressed(VK_SHIFT)); // Shift + Insert
+
+                if (isAltTab || isAltEsc || isCtrlEsc || isLWin || isRWin || isAltF4 || isCtrlC || isCtrlV || isCtrlX || isShiftInsert)
                 {
                     OnCheatKeyPressed?.Invoke(null, EventArgs.Empty);
                     return (IntPtr)1; // Block the key
@@ -84,6 +90,7 @@ namespace CourseGuard.Backend.Security
         
         private const int VK_MENU = 0x12; // Alt
         private const int VK_CONTROL = 0x11; // Ctrl
+        private const int VK_SHIFT = 0x10; // Shift
         
         private static bool IsKeyPressed(int vkCode)
         {

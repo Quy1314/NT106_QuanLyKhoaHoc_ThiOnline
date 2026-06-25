@@ -56,7 +56,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         {
             if (CurrentString("Trạng thái").ToUpperInvariant() == "PENDING")
             {
-                Controller.ApproveEnrollment(TeacherId, CurrentInt("CourseId"), CurrentInt("StudentId"));
+                await Task.Run(() => Controller.ApproveEnrollment(TeacherId, CurrentInt("CourseId"), CurrentInt("StudentId")));
                 await LoadDataAsync();
             }
         }
@@ -66,7 +66,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             if (CurrentString("Trạng thái").ToUpperInvariant() == "PENDING"
                 && CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Từ chối yêu cầu ghi danh?", "Xác nhận", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
-                Controller.RejectEnrollment(TeacherId, CurrentInt("CourseId"), CurrentInt("StudentId"));
+                await Task.Run(() => Controller.RejectEnrollment(TeacherId, CurrentInt("CourseId"), CurrentInt("StudentId")));
                 await LoadDataAsync();
             }
         }

@@ -1,8 +1,13 @@
 using CourseGuard.Backend.Models;
+using CourseGuard.Backend.Security;
 using CourseGuard.Backend.Services.Classroom;
 using CourseGuard.Frontend.Extensions;
+using CourseGuard.Frontend.Forms.Classroom;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Frontend.UserControls.Classroom;
+using CourseGuard.Frontend.UserControls.Shared.Chat;
+using System.Drawing.Drawing2D;
 
 namespace CourseGuard.Frontend.Forms.Teacher
 {
@@ -15,17 +20,31 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private ListBox _eventsList = null!;
         private PictureBox _teacherPreview = null!;
         private FlowLayoutPanel _studentVideoGrid = null!;
+        private WebRtcClassroomHost? _webRtcHost;
         private Button _btnCamera = null!;
         private Button _btnMic = null!;
         private Button _btnShareScreen = null!;
         private Button _btnEndClass = null!;
         private Panel _teacherCameraPip = null!;
         private PictureBox _teacherCameraPipPreview = null!;
+        private Panel _screenShareLoadingOverlay = null!;
+        private Label _screenShareLoadingLabel = null!;
         private ListBox _chatList = null!;
         private TextBox _chatInput = null!;
         private Button _btnSendChat = null!;
+        private Button _btnToggleChat = null!;
+        private Panel _chatDrawerPanel = null!;
+        private ClassroomChatDialog? _chatDialog;
         private readonly Dictionary<int, PictureBox> _studentVideoBoxes = new();
         private readonly Dictionary<int, Label> _studentVideoLabels = new();
+        private readonly Dictionary<int, Label> _studentHandBadges = new();
+        private readonly Dictionary<int, StudentTileState> _studentTileStates = new();
+        private readonly Dictionary<int, StudentTileControls> _studentTileControls = new();
+        private readonly HashSet<int> _raisedHandStudentIds = new();
+        private readonly AvatarImageLoader _studentAvatarLoader = new();
+        private readonly CancellationTokenSource _studentTileCts = new();
+        private const int MaxVisibleStudentTiles = 10;
+        private Label _hiddenStudentsLabel = null!;
 
         private ClassroomCameraManager _cameraManager = null!;
         private ClassroomScreenShareManager _screenShareManager = null!;
@@ -35,12 +54,15 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private bool _isCameraOn;
         private bool _isMicOn = true;
         private bool _isSharingScreen;
+        private bool _isWebRtcMediaActive;
         private bool _hasActiveLiveStatus;
         private bool _hasAnnouncedClassroomOpen;
         private bool _isConfirmedToCloseClassroom;
         private bool _isClosingClassroom;
         private bool _hasCompletedCloseTeardown;
         private int _activeStudentScreenShareSenderId;
+        private bool _isChatVisible;
+        private bool _hasUnreadChat;
 
         public TeacherNativeClassroomForm(
             int sessionId,
@@ -76,6 +98,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                     _hasAnnouncedClassroomOpen = true;
                 }
                 SafeAddEvent("Classroom socket server đã sẵn sàng.");
+                await StartWebRtcClassroomAsync();
             }
             catch (Exception ex)
             {
@@ -99,11 +122,11 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 Padding = new Padding(18),
                 BackColor = AppColors.BgBase
             };
-            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
-            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 0));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 76));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 108));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
             Controls.Add(root);
 
             var stage = new RoundedPanel
@@ -114,6 +137,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 Margin = new Padding(0, 0, 14, 14)
             };
             root.Controls.Add(stage, 0, 0);
+            root.SetColumnSpan(stage, 2);
 
             _teacherPreview = new PictureBox
             {
@@ -135,6 +159,12 @@ namespace CourseGuard.Frontend.Forms.Teacher
             stage.Controls.Add(placeholder);
             placeholder.BringToFront();
             _teacherPreview.Tag = placeholder;
+
+            AttachWebRtcClassroomHost(stage);
+
+            _screenShareLoadingOverlay = CreateScreenShareLoadingOverlay();
+            stage.Controls.Add(_screenShareLoadingOverlay);
+            _screenShareLoadingOverlay.BringToFront();
 
             _teacherCameraPip = new Panel
             {
@@ -165,37 +195,53 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             var side = new RoundedPanel
             {
-                Dock = DockStyle.Fill,
+                Dock = DockStyle.None,
+                Width = 420,
                 BackColor = AppColors.BgCard,
                 Padding = new Padding(14),
-                Margin = new Padding(0, 0, 0, 14)
+                Margin = Padding.Empty
             };
-            root.Controls.Add(side, 1, 0);
+            _chatDrawerPanel = side;
+            root.Controls.Add(side, 0, 0);
+            root.SetRowSpan(side, 2);
+            side.Visible = false;
+            PositionChatDrawer(root);
+            root.SizeChanged += (_, _) => PositionChatDrawer(root);
+            side.BringToFront();
 
             var sideLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                RowCount = 6,
+                RowCount = 2,
                 ColumnCount = 1,
                 BackColor = Color.Transparent
             };
-            sideLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
-            sideLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 160));
             sideLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-            sideLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
-            sideLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-            sideLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
+            sideLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             side.Controls.Add(sideLayout);
 
-            var studentVideoTitle = new Label
+            // WebRTC now owns the media canvas. The old native "Camera học sinh"
+            // strip is intentionally kept off-screen so legacy signal cleanup paths
+            // can still update their backing controls without showing a duplicate UI.
+            var hiddenStudentVideoShell = new Panel
             {
-                Dock = DockStyle.Fill,
-                Text = "Camera học sinh",
-                ForeColor = AppColors.TextPrimary,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Font = MetaTheme.Fonts.SubtitleLg()
+                Visible = false,
+                Width = 1,
+                Height = 1
             };
-            sideLayout.Controls.Add(studentVideoTitle, 0, 0);
+
+            _hiddenStudentsLabel = new Label
+            {
+                Dock = DockStyle.Bottom,
+                Height = 20,
+                TextAlign = ContentAlignment.MiddleRight,
+                ForeColor = AppColors.TextSecondary,
+                BackColor = AppColors.BgInput,
+                Font = MetaTheme.Fonts.CaptionBold(),
+                Visible = false,
+                Padding = new Padding(0, 0, 8, 0)
+            };
+            hiddenStudentVideoShell.Controls.Add(_hiddenStudentsLabel);
 
             _studentVideoGrid = new FlowLayoutPanel
             {
@@ -205,29 +251,16 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 WrapContents = true,
                 BackColor = AppColors.BgInput,
                 Padding = new Padding(8),
-                Margin = new Padding(0, 0, 0, 8)
+                Margin = new Padding(0),
+                Visible = false
             };
-            sideLayout.Controls.Add(_studentVideoGrid, 0, 1);
-
-            var participantTitle = new Label
-            {
-                Dock = DockStyle.Fill,
-                Text = "Hoạt động lớp học",
-                ForeColor = AppColors.TextPrimary,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Font = MetaTheme.Fonts.BodyMdBold()
-            };
-            sideLayout.Controls.Add(participantTitle, 0, 2);
+            EnableDoubleBuffering(_studentVideoGrid);
+            hiddenStudentVideoShell.Controls.Add(_studentVideoGrid);
 
             _eventsList = new ListBox
             {
-                Dock = DockStyle.Fill,
-                BackColor = AppColors.BgInput,
-                ForeColor = AppColors.TextPrimary,
-                BorderStyle = BorderStyle.None,
-                Font = MetaTheme.Fonts.BodySm()
+                Visible = false
             };
-            sideLayout.Controls.Add(_eventsList, 0, 3);
 
             sideLayout.Controls.Add(new Label
             {
@@ -236,7 +269,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 ForeColor = AppColors.TextPrimary,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Font = MetaTheme.Fonts.BodyMdBold()
-            }, 0, 4);
+            }, 0, 0);
 
             var chatPanel = new TableLayoutPanel
             {
@@ -250,7 +283,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             chatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
             chatPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             chatPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
-            sideLayout.Controls.Add(chatPanel, 0, 5);
+            sideLayout.Controls.Add(chatPanel, 0, 1);
 
             _chatList = new ListBox
             {
@@ -304,6 +337,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 Margin = new Padding(0, 0, 14, 14)
             };
             root.Controls.Add(controlBar, 0, 1);
+            root.SetColumnSpan(controlBar, 2);
 
             var controlLayout = new TableLayoutPanel
             {
@@ -341,16 +375,21 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _btnCamera = CreateActionButton("Bật Camera", AppColors.AccentBlue);
             _btnMic = CreateActionButton("Tắt Mic", AppColors.Warning);
             _btnShareScreen = CreateActionButton("Share màn hình", Color.FromArgb(139, 92, 246));
+            _btnShareScreen.Width = 184;
+            _btnToggleChat = CreateActionButton("Chat lớp học", Color.FromArgb(88, 28, 135));
+            _btnToggleChat.Width = 168;
             _btnEndClass = CreateActionButton("Kết thúc lớp", AppColors.Danger);
 
             _btnCamera.Click += async (_, _) => await ToggleCameraAsync();
             _btnMic.Click += async (_, _) => await ToggleMicAsync();
             _btnShareScreen.Click += async (_, _) => await ToggleScreenShareAsync();
+            _btnToggleChat.Click += (_, _) => ToggleChatDialog();
             _btnEndClass.Click += async (_, _) => await RequestEndClassCloseAsync();
 
             buttons.Controls.Add(_btnCamera);
             buttons.Controls.Add(_btnMic);
             buttons.Controls.Add(_btnShareScreen);
+            buttons.Controls.Add(_btnToggleChat);
             buttons.Controls.Add(_btnEndClass);
 
             _statusLabel = new Label
@@ -360,8 +399,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 ForeColor = AppColors.TextPrimary,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Font = MetaTheme.Fonts.SubtitleLg(),
-                Padding = new Padding(14),
-                BackColor = AppColors.BgCard
+                Padding = Padding.Empty,
+                BackColor = AppColors.BgCard,
+                Visible = false
             };
             root.SetColumnSpan(_statusLabel, 2);
             root.Controls.Add(_statusLabel, 0, 2);
@@ -386,6 +426,284 @@ namespace CourseGuard.Frontend.Forms.Teacher
             button.FlatAppearance.BorderSize = 0;
             RoundedButtonHelper.Apply(button, 12);
             return button;
+        }
+
+        private void PositionChatDrawer(Control root)
+        {
+            if (_chatDrawerPanel == null) return;
+            int drawerWidth = Math.Min(460, Math.Max(380, root.ClientSize.Width / 3));
+            _chatDrawerPanel.Width = drawerWidth;
+            _chatDrawerPanel.Height = Math.Max(360, root.ClientSize.Height - 132);
+            _chatDrawerPanel.Left = Math.Max(0, root.ClientSize.Width - drawerWidth - 18);
+            _chatDrawerPanel.Top = 8;
+        }
+
+        private void ToggleChatDialog()
+        {
+            ClassroomChatDialog dialog = EnsureChatDialog();
+            if (dialog.IsOpen)
+            {
+                dialog.Hide();
+                _isChatVisible = false;
+                UpdateChatToggleButton();
+                return;
+            }
+
+            this.SuspendLayout();
+            try
+            {
+                PositionChatDialog(dialog);
+                _isChatVisible = true;
+                _hasUnreadChat = false;
+                dialog.Show(this);
+                dialog.BringToFront();
+                dialog.FocusComposer();
+                UpdateChatToggleButton();
+            }
+            finally
+            {
+                this.ResumeLayout(true);
+            }
+        }
+
+        private ClassroomChatDialog EnsureChatDialog()
+        {
+            if (_chatDialog == null || _chatDialog.IsDisposed)
+            {
+                _chatDialog = new ClassroomChatDialog("Chat lớp học - Giáo viên");
+                _chatDialog.SendRequested += SendChatMessageAsync;
+                _chatDialog.VisibleChanged += (_, _) =>
+                {
+                    _isChatVisible = _chatDialog.IsOpen;
+                    if (_isChatVisible) _hasUnreadChat = false;
+                    UpdateChatToggleButton();
+                };
+            }
+
+            return _chatDialog;
+        }
+
+        private void PositionChatDialog(Form dialog)
+        {
+            int width = Math.Min(560, Math.Max(460, Width / 3));
+            int height = Math.Min(Math.Max(560, Height - 80), Screen.FromControl(this).WorkingArea.Height - 80);
+            dialog.Size = new Size(width, height);
+            dialog.Location = new Point(Math.Max(0, Right - width - 24), Math.Max(0, Top + 48));
+        }
+
+        private void UpdateChatToggleButton()
+        {
+            if (_btnToggleChat == null) return;
+            _btnToggleChat.Text = _isChatVisible ? "Đóng chat" : (_hasUnreadChat ? "Chat lớp học • mới" : "Chat lớp học");
+            _btnToggleChat.BackColor = _hasUnreadChat && !_isChatVisible
+                ? Color.FromArgb(245, 158, 11)
+                : Color.FromArgb(88, 28, 135);
+        }
+
+        private void MarkUnreadChatIfHidden()
+        {
+            if (_isChatVisible) return;
+            _hasUnreadChat = true;
+            UpdateChatToggleButton();
+        }
+
+        private void AttachWebRtcClassroomHost(Control stage)
+        {
+            int currentUserId = UserSessionContext.CurrentUserId ?? 0;
+            string displayName = !string.IsNullOrWhiteSpace(UserSessionContext.CurrentFullName)
+                ? UserSessionContext.CurrentFullName
+                : (UserSessionContext.CurrentUsername ?? "Giáo viên");
+
+            _webRtcHost = new WebRtcClassroomHost(new WebRtcClassroomOptions
+            {
+                SessionId = _sessionId,
+                UserId = currentUserId,
+                Role = "teacher",
+                DisplayName = displayName,
+                AvatarPath = UserSessionContext.CurrentAvatarPath
+            })
+            {
+                Dock = DockStyle.Fill,
+                Visible = true
+            };
+
+            _webRtcHost.WebMessageReceived += (_, json) => SafeAddEvent("WebRTC: " + json);
+            _webRtcHost.WebRtcStateChanged += (_, e) => HandleWebRtcStateChanged(e);
+            _webRtcHost.ClassroomEventReceived += (_, e) => HandleWebRtcClassroomEvent(e);
+            stage.Controls.Add(_webRtcHost);
+            _webRtcHost.BringToFront();
+        }
+
+        private void HandleWebRtcStateChanged(WebRtcStateChangedEventArgs e)
+        {
+            this.InvokeIfRequired(() =>
+            {
+                string state = e.State.ToLowerInvariant();
+                bool shouldSuspendNativeMedia = state is "requesting-device" or "media-ready" or "started" or "connected";
+                bool shouldRestoreNativeFallback = state is "failed" or "left";
+
+                if (shouldSuspendNativeMedia)
+                {
+                    SuspendNativeMediaForWebRtc(state);
+                }
+                else if (shouldRestoreNativeFallback)
+                {
+                    RestoreNativeMediaFallback(e.Reason);
+                }
+                else if (state is "screen-share-connecting")
+                {
+                    _btnShareScreen.Enabled = false;
+                    _btnShareScreen.Text = "Đang kết nối...";
+                    _btnShareScreen.BackColor = Color.FromArgb(109, 40, 217);
+                    ShowScreenShareLoading("Đang kết nối màn hình chia sẻ...");
+                }
+                else if (state is "screen-share-loading")
+                {
+                    ShowScreenShareLoading("Đang tải màn hình chia sẻ...");
+                }
+                else if (state is "screen-share-track-ready")
+                {
+                    HideScreenShareLoading();
+                }
+                else if (state is "screen-share-started")
+                {
+                    _isSharingScreen = true;
+                    _btnShareScreen.Enabled = true;
+                    _btnShareScreen.BackColor = AppColors.Danger;
+                    UpdateClassroomPresentation(forceStatus: true);
+                }
+                else if (state is "screen-share-stopped" or "screen-share-failed")
+                {
+                    _isSharingScreen = false;
+                    _btnShareScreen.Enabled = true;
+                    _btnShareScreen.BackColor = Color.FromArgb(139, 92, 246);
+                    HideScreenShareLoading();
+                    UpdateClassroomPresentation(forceStatus: true);
+                }
+            });
+        }
+
+        private void HandleWebRtcClassroomEvent(WebRtcClassroomEventArgs e)
+        {
+            this.InvokeIfRequired(() =>
+            {
+                string eventName = e.EventName.ToLowerInvariant();
+                if (eventName == "screen-share-connecting")
+                {
+                    _btnShareScreen.Enabled = false;
+                    _btnShareScreen.Text = "Đang kết nối...";
+                    _btnShareScreen.BackColor = Color.FromArgb(109, 40, 217);
+                    ShowScreenShareLoading("Đang kết nối màn hình chia sẻ...");
+                    SafeAddEvent("Đang kết nối luồng share màn hình WebRTC.");
+                }
+                else if (eventName == "screen-share-loading")
+                {
+                    ShowScreenShareLoading("Đang tải màn hình chia sẻ...");
+                }
+                else if (eventName == "screen-share-track-ready")
+                {
+                    HideScreenShareLoading();
+                }
+                else if (eventName == "screen-share-started")
+                {
+                    _isSharingScreen = true;
+                    _btnShareScreen.Enabled = true;
+                    _btnShareScreen.BackColor = AppColors.Danger;
+                    UpdateClassroomPresentation(forceStatus: true);
+                    SafeAddEvent("Đã bắt đầu share màn hình WebRTC.");
+                }
+                else if (eventName is "screen-share-stopped" or "screen-share-failed")
+                {
+                    _isSharingScreen = false;
+                    _btnShareScreen.Enabled = true;
+                    _btnShareScreen.BackColor = Color.FromArgb(139, 92, 246);
+                    HideScreenShareLoading();
+                    UpdateClassroomPresentation(forceStatus: true);
+                    SafeAddEvent(eventName == "screen-share-failed"
+                        ? "Không thể share màn hình WebRTC: " + (e.Reason ?? "không rõ lỗi")
+                        : "Đã dừng share màn hình WebRTC.");
+                }
+                else if (eventName == "error")
+                {
+                    SafeAddEvent("WebRTC lỗi: " + (e.Reason ?? "không rõ lỗi"));
+                }
+            });
+        }
+
+        private void SuspendNativeMediaForWebRtc(string state)
+        {
+            _isWebRtcMediaActive = true;
+
+            if (_cameraManager.IsRunning)
+            {
+                StopCamera();
+            }
+
+            if (_screenShareManager.IsSharing)
+            {
+                StopScreenShare();
+            }
+
+            _btnCamera.Visible = true;
+            _btnCamera.Enabled = true;
+            _btnMic.Visible = true;
+            _btnMic.Enabled = true;
+            _participantStateLabel.Text = "WebRTC đang xử lý media. Nút native điều khiển trực tiếp camera/mic trên WebView2.";
+            SafeAddEvent($"WebRTC media active ({state}); TCP/UDP camera/screen-share fallback đã được tắt để tránh xung đột phần cứng.");
+            UpdateClassroomPresentation(forceStatus: true);
+        }
+
+        private void RestoreNativeMediaFallback(string? reason)
+        {
+            if (!_isWebRtcMediaActive)
+            {
+                return;
+            }
+
+            _isWebRtcMediaActive = false;
+            _btnCamera.Visible = true;
+            _btnCamera.Enabled = true;
+            _btnMic.Visible = true;
+            _btnMic.Enabled = true;
+            _btnCamera.BackColor = AppColors.AccentBlue;
+            _btnMic.BackColor = _isMicOn ? AppColors.Warning : AppColors.AccentBlue;
+            SafeAddEvent("WebRTC fallback: đã bật lại camera/mic native" + (string.IsNullOrWhiteSpace(reason) ? "." : $" ({reason})."));
+            UpdateClassroomPresentation(forceStatus: true);
+        }
+
+        private async Task StartWebRtcClassroomAsync()
+        {
+            if (_webRtcHost == null || IsDisposed)
+            {
+                return;
+            }
+
+            try
+            {
+                await _webRtcHost.StartAsync();
+                SafeAddEvent("WebRTC classroom đã khởi động.");
+            }
+            catch (Exception ex)
+            {
+                SafeAddEvent("WebRTC fallback: " + ex.Message);
+            }
+        }
+
+        private async Task LeaveWebRtcClassroomAsync()
+        {
+            if (_webRtcHost == null)
+            {
+                return;
+            }
+
+            try
+            {
+                await _webRtcHost.LeaveAsync();
+            }
+            catch
+            {
+                // WebRTC teardown is best-effort; TCP/UDP classroom shutdown continues.
+            }
         }
 
         private void WireServerEvents()
@@ -424,6 +742,42 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 afterPreviewUpdated: AfterTeacherCameraPreviewUpdated);
         }
 
+        private Panel CreateScreenShareLoadingOverlay()
+        {
+            var overlay = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(220, 15, 23, 42),
+                Visible = false
+            };
+
+            _screenShareLoadingLabel = new Label
+            {
+                Dock = DockStyle.Fill,
+                Text = "Đang tải màn hình chia sẻ...",
+                ForeColor = Color.FromArgb(226, 232, 240),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = new Font(AppFonts.Body.FontFamily, 18F, FontStyle.Bold),
+                BackColor = Color.Transparent
+            };
+            overlay.Controls.Add(_screenShareLoadingLabel);
+            return overlay;
+        }
+
+        private void ShowScreenShareLoading(string message)
+        {
+            if (_screenShareLoadingOverlay == null || _screenShareLoadingOverlay.IsDisposed) return;
+            _screenShareLoadingLabel.Text = message;
+            _screenShareLoadingOverlay.Visible = true;
+            _screenShareLoadingOverlay.BringToFront();
+        }
+
+        private void HideScreenShareLoading()
+        {
+            if (_screenShareLoadingOverlay == null || _screenShareLoadingOverlay.IsDisposed) return;
+            _screenShareLoadingOverlay.Visible = false;
+        }
+
         private void UpdateClassroomPresentation(bool forceStatus = false)
         {
             if (IsDisposed ||
@@ -449,6 +803,26 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 isSharingScreen: _isSharingScreen,
                 participantCount: _server.Clients.Count);
 
+            string detailText = view.DetailText;
+            string cameraActionText = view.CameraActionText;
+            string micActionText = view.MicActionText;
+
+            if (_isWebRtcMediaActive)
+            {
+                _btnCamera.Visible = true;
+                _btnCamera.Enabled = true;
+                _btnMic.Visible = true;
+                _btnMic.Enabled = true;
+                detailText = "WebRTC mesh đang hoạt động. Camera/mic/share được điều khiển bằng nút WinForms native.";
+            }
+            else
+            {
+                _btnCamera.Visible = true;
+                _btnCamera.Enabled = true;
+                _btnMic.Visible = true;
+                _btnMic.Enabled = true;
+            }
+
             if (forceStatus)
             {
                 ClearLiveStatus();
@@ -459,9 +833,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 _statusLabel.Text = view.StatusText;
             }
 
-            _participantStateLabel.Text = view.DetailText;
-            _btnCamera.Text = view.CameraActionText;
-            _btnMic.Text = view.MicActionText;
+            _participantStateLabel.Text = detailText;
+            _btnCamera.Text = cameraActionText;
+            _btnMic.Text = micActionText;
             _btnShareScreen.Text = view.ShareActionText;
         }
 
@@ -560,6 +934,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
         {
             if (signal.Type == ClassroomMessageType.VideoFrame && signal.SenderRole == "STUDENT")
             {
+                StudentTileState state = UpsertStudentTileState(signal);
+                state.IsCameraOn = true;
+                RefreshVisibleStudentTiles();
                 RenderStudentVideoFrame(signal);
                 return;
             }
@@ -576,9 +953,48 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 return;
             }
 
-            if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.CamOff)
+            if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.RaiseHand)
+            {
+                SafeSetStudentHandRaised(signal.SenderId, signal.SenderName, true);
+                return;
+            }
+
+            if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.LowerHand)
+            {
+                SafeSetStudentHandRaised(signal.SenderId, signal.SenderName, false);
+                return;
+            }
+
+            if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.JoinRoom)
+            {
+                UpsertStudentTileState(signal);
+                RefreshVisibleStudentTiles();
+                SafeAddEvent($"{signal.SenderName} đã vào lớp.");
+                return;
+            }
+
+            if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.LeaveRoom)
             {
                 SafeRemoveStudentVideo(signal.SenderId);
+                SafeAddEvent($"{signal.SenderName} đã rời lớp.");
+                return;
+            }
+
+            if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.CamOn)
+            {
+                StudentTileState state = UpsertStudentTileState(signal);
+                state.IsCameraOn = true;
+                RefreshVisibleStudentTiles();
+                return;
+            }
+
+            if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.CamOff)
+            {
+                StudentTileState state = UpsertStudentTileState(signal);
+                state.IsCameraOn = false;
+                state.HasAvatarModeImage = false;
+                RefreshVisibleStudentTiles();
+                return;
             }
             else if (signal.SenderRole == "STUDENT" && signal.Type == ClassroomMessageType.ScreenShareOn)
             {
@@ -600,7 +1016,14 @@ namespace CourseGuard.Frontend.Forms.Teacher
             if (string.IsNullOrWhiteSpace(message)) return;
 
             _chatInput.Clear();
-            AppendChatMessage("Giáo viên", message, true);
+            await SendChatMessageAsync(message);
+        }
+
+        private async Task SendChatMessageAsync(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message)) return;
+
+            AppendChatMessage("Giáo viên", message, true, markUnread: false);
 
             await _server.BroadcastAsync(new ClassroomSignalModel
             {
@@ -623,18 +1046,34 @@ namespace CourseGuard.Frontend.Forms.Teacher
             AppendChatMessage(signal.SenderName, message, signal.SenderRole == "TEACHER");
         }
 
-        private void AppendChatMessage(string senderName, string message, bool isTeacher)
+        private void AppendChatMessage(string senderName, string message, bool isTeacher, bool markUnread = true)
         {
             string label = isTeacher ? "GV" : "HS";
             this.InvokeIfRequired(() =>
             {
                 _chatList.Items.Add($"[{DateTime.Now:HH:mm}] {label} {senderName}: {message}");
                 _chatList.TopIndex = Math.Max(0, _chatList.Items.Count - 1);
+                EnsureChatDialog().AppendMessage(senderName, message, isTeacher);
+                if (markUnread) MarkUnreadChatIfHidden();
             });
         }
 
         private async Task ToggleScreenShareAsync()
         {
+            if (_isWebRtcMediaActive && _webRtcHost != null && !_webRtcHost.IsDisposed)
+            {
+                _btnShareScreen.Enabled = false;
+                _btnShareScreen.Text = _isSharingScreen ? "Đang dừng..." : "Đang kết nối...";
+                _btnShareScreen.BackColor = Color.FromArgb(109, 40, 217);
+                if (!_isSharingScreen)
+                {
+                    ShowScreenShareLoading("Đang kết nối màn hình chia sẻ...");
+                }
+
+                await _webRtcHost.ToggleScreenShareAsync();
+                return;
+            }
+
             if (_screenShareManager.IsSharing)
             {
                 StopScreenShare();
@@ -651,7 +1090,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _btnShareScreen.BackColor = AppColors.Danger;
             _isSharingScreen = true;
             UpdateClassroomPresentation();
-            HideCameraPlaceholder();
+            ShowNativePresentationSurface();
             SafeAddEvent($"Đang trình bày {picker.SelectedTitle}.");
             await BroadcastScreenShareStateAsync(ClassroomMessageType.ScreenShareOn);
 
@@ -672,6 +1111,16 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private async Task ToggleCameraAsync()
         {
+            if (_isWebRtcMediaActive && _webRtcHost != null && !_webRtcHost.IsDisposed)
+            {
+                _isCameraOn = !_isCameraOn;
+                _btnCamera.BackColor = _isCameraOn ? AppColors.Danger : AppColors.AccentBlue;
+                UpdateClassroomPresentation();
+                await _webRtcHost.SetCameraEnabledAsync(_isCameraOn);
+                SafeAddEvent(_isCameraOn ? "Đã bật camera WebRTC từ nút native." : "Đã tắt camera WebRTC từ nút native.");
+                return;
+            }
+
             if (_cameraManager.IsRunning)
             {
                 StopCamera();
@@ -719,6 +1168,16 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private async Task ToggleMicAsync()
         {
+            if (_isWebRtcMediaActive && _webRtcHost != null && !_webRtcHost.IsDisposed)
+            {
+                _isMicOn = !_isMicOn;
+                _btnMic.BackColor = _isMicOn ? AppColors.Warning : AppColors.AccentBlue;
+                UpdateClassroomPresentation();
+                await _webRtcHost.SetMicEnabledAsync(_isMicOn);
+                SafeAddEvent(_isMicOn ? "Đã bật mic WebRTC từ nút native." : "Đã tắt mic WebRTC từ nút native.");
+                return;
+            }
+
             _isMicOn = !_isMicOn;
             _btnMic.BackColor = _isMicOn ? AppColors.Warning : AppColors.AccentBlue;
             UpdateClassroomPresentation();
@@ -783,20 +1242,43 @@ namespace CourseGuard.Frontend.Forms.Teacher
                     return;
                 }
 
-                Image frame = ClassroomFrameHelper.DecodeFrame(base64);
+                if (!_studentTileControls.ContainsKey(signal.SenderId))
+                {
+                    return;
+                }
 
-                ClassroomFrameHelper.TryBeginReplaceImage(
-                    this,
-                    frame,
-                    () =>
+                int senderId = signal.SenderId;
+                _ = Task.Run(() =>
+                {
+                    try
                     {
-                        if (IsDisposed || _studentVideoGrid.IsDisposed || !_studentVideoGrid.IsHandleCreated)
-                        {
-                            throw new ObjectDisposedException(nameof(TeacherNativeClassroomForm));
-                        }
+                        Image frame = ClassroomFrameHelper.DecodeFrame(base64);
 
-                        return GetOrCreateStudentVideoBox(signal.SenderId, signal.SenderName);
-                    });
+                        ClassroomFrameHelper.TryBeginReplaceImage(
+                            this,
+                            frame,
+                            () =>
+                            {
+                                if (IsDisposed || _studentVideoGrid.IsDisposed || !_studentVideoGrid.IsHandleCreated)
+                                {
+                                    throw new ObjectDisposedException(nameof(TeacherNativeClassroomForm));
+                                }
+
+                                if (!_studentTileControls.TryGetValue(senderId, out StudentTileControls? controls))
+                                {
+                                    throw new ObjectDisposedException(nameof(StudentTileControls));
+                                }
+
+                                controls.Picture.SizeMode = PictureBoxSizeMode.Zoom;
+                                controls.CameraOffLabel.Visible = false;
+                                return controls.Picture;
+                            });
+                    }
+                    catch
+                    {
+                        // Drop corrupt student frames silently to keep teacher UI stable.
+                    }
+                });
             }
             catch
             {
@@ -806,32 +1288,38 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
         private void RenderIncomingScreenShare(ClassroomSignalModel signal)
         {
-            try
-            {
-                if (!signal.Payload.TryGetValue("imageBase64", out string? base64) || string.IsNullOrWhiteSpace(base64)) return;
-                Image frame = ClassroomFrameHelper.DecodeFrame(base64);
+            if (!signal.Payload.TryGetValue("imageBase64", out string? base64) || string.IsNullOrWhiteSpace(base64)) return;
+            int senderId = signal.SenderId;
+            string senderName = signal.SenderName;
+            string sourceTitle = signal.Payload.TryGetValue("sourceTitle", out string? title) ? title : "màn hình";
 
-                ClassroomFrameHelper.TryBeginReplaceImage(
-                    this,
-                    _teacherPreview,
-                    frame,
-                    () =>
-                    {
-                        if (IsDisposed || _teacherPreview.IsDisposed || _statusLabel.IsDisposed)
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    Image frame = ClassroomFrameHelper.DecodeFrame(base64);
+
+                    ClassroomFrameHelper.TryBeginReplaceImage(
+                        this,
+                        _teacherPreview,
+                        frame,
+                        () =>
                         {
-                            return;
-                        }
+                            if (IsDisposed || _teacherPreview.IsDisposed || _statusLabel.IsDisposed)
+                            {
+                                return;
+                            }
 
-                        _activeStudentScreenShareSenderId = signal.SenderId;
-                        HideCameraPlaceholder();
-                        string sourceTitle = signal.Payload.TryGetValue("sourceTitle", out string? title) ? title : "màn hình";
-                        SetLiveStatus($"\u0110ang xem {signal.SenderName} tr\u00ecnh b\u00e0y: {sourceTitle} - {DateTime.Now:HH:mm:ss}");
-                    });
-            }
-            catch
-            {
-                // Drop corrupt screen-share frames silently.
-            }
+                            _activeStudentScreenShareSenderId = senderId;
+                            HideCameraPlaceholder();
+                            SetLiveStatus($"\u0110ang xem {senderName} tr\u00ecnh b\u00e0y: {sourceTitle} - {DateTime.Now:HH:mm:ss}");
+                        });
+                }
+                catch
+                {
+                    // Drop corrupt screen-share frames silently.
+                }
+            });
         }
 
         private void SafeSetStagePlaceholder(string text)
@@ -899,50 +1387,429 @@ namespace CourseGuard.Frontend.Forms.Teacher
             });
         }
 
-        private PictureBox GetOrCreateStudentVideoBox(int studentId, string studentName)
+        private StudentTileControls CreateStudentTileControls(StudentTileState state)
         {
-            if (_studentVideoBoxes.TryGetValue(studentId, out PictureBox? existing))
-            {
-                if (_studentVideoLabels.TryGetValue(studentId, out Label? existingLabel))
-                {
-                    existingLabel.Text = string.IsNullOrWhiteSpace(studentName) ? $"Student #{studentId}" : studentName;
-                }
-                return existing;
-            }
-
             var tile = new Panel
             {
-                Width = 128,
-                Height = 104,
+                Width = 148,
+                Height = 118,
                 Margin = new Padding(0, 0, 8, 8),
-                BackColor = Color.FromArgb(13, 17, 27)
+                BackColor = state.IsHandRaised ? Color.FromArgb(245, 158, 11) : Color.FromArgb(13, 17, 27),
+                Padding = state.IsHandRaised ? new Padding(3) : Padding.Empty
             };
 
             var box = new PictureBox
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.Black,
+                BackColor = Color.FromArgb(248, 250, 252),
                 SizeMode = PictureBoxSizeMode.Zoom
             };
             tile.Controls.Add(box);
 
+            var cameraOffLabel = new Label
+            {
+                AutoSize = false,
+                Width = 76,
+                Height = 22,
+                Left = 8,
+                Top = 8,
+                Text = "CAM OFF",
+                TextAlign = ContentAlignment.MiddleCenter,
+                ForeColor = Color.FromArgb(226, 232, 240),
+                BackColor = Color.FromArgb(145, 15, 23, 42),
+                Font = MetaTheme.Fonts.CaptionBold(),
+                Visible = !state.IsCameraOn
+            };
+            tile.Controls.Add(cameraOffLabel);
+            cameraOffLabel.BringToFront();
+
             var label = new Label
             {
                 Dock = DockStyle.Bottom,
-                Height = 24,
-                Text = string.IsNullOrWhiteSpace(studentName) ? $"Student #{studentId}" : studentName,
+                Height = 26,
+                Text = GetStudentDisplayName(state),
                 ForeColor = Color.White,
-                BackColor = Color.FromArgb(180, 0, 0, 0),
+                BackColor = Color.FromArgb(190, 0, 0, 0),
                 TextAlign = ContentAlignment.MiddleCenter,
                 Font = MetaTheme.Fonts.CaptionBold()
             };
             tile.Controls.Add(label);
             label.BringToFront();
 
-            _studentVideoBoxes[studentId] = box;
-            _studentVideoLabels[studentId] = label;
+            var controls = new StudentTileControls
+            {
+                Tile = tile,
+                Picture = box,
+                NameLabel = label,
+                CameraOffLabel = cameraOffLabel
+            };
+
+            _studentVideoBoxes[state.StudentId] = box;
+            _studentVideoLabels[state.StudentId] = label;
             _studentVideoGrid.Controls.Add(tile);
-            return box;
+            RenderStudentAvatarMode(state, controls);
+            return controls;
+        }
+
+        private void SafeSetStudentHandRaised(int studentId, string studentName, bool isRaised)
+        {
+            if (studentId <= 0) return;
+
+            this.InvokeIfRequired(() =>
+            {
+                if (isRaised)
+                {
+                    _raisedHandStudentIds.Add(studentId);
+                    SafeAddEvent($"{studentName} đã giơ tay xin phát biểu.");
+                }
+                else
+                {
+                    _raisedHandStudentIds.Remove(studentId);
+                    SafeAddEvent($"{studentName} đã hạ tay.");
+                }
+
+                StudentTileState state = _studentTileStates.TryGetValue(studentId, out StudentTileState? existingState)
+                    ? existingState
+                    : new StudentTileState { StudentId = studentId, JoinedAt = DateTime.UtcNow };
+                state.DisplayName = string.IsNullOrWhiteSpace(studentName) ? state.DisplayName : studentName;
+                state.IsHandRaised = isRaised;
+                _studentTileStates[studentId] = state;
+
+                if (_studentVideoLabels.TryGetValue(studentId, out Label? label))
+                {
+                    label.Text = string.IsNullOrWhiteSpace(studentName) ? $"Student #{studentId}" : studentName;
+                }
+
+                ApplyStudentHandVisualState(studentId);
+                RefreshVisibleStudentTiles();
+            });
+        }
+
+        private IReadOnlyList<StudentTileState> GetVisibleStudentStates()
+        {
+            return _studentTileStates.Values
+                .OrderByDescending(s => s.IsHandRaised)
+                .ThenByDescending(s => s.IsCameraOn)
+                .ThenBy(s => s.JoinedAt)
+                .Take(MaxVisibleStudentTiles)
+                .ToList();
+        }
+
+        private void RefreshVisibleStudentTiles()
+        {
+            this.InvokeIfRequired(() =>
+            {
+                if (IsDisposed || _studentVideoGrid == null || _studentVideoGrid.IsDisposed)
+                {
+                    return;
+                }
+
+                IReadOnlyList<StudentTileState> visibleStates = GetVisibleStudentStates();
+                HashSet<int> visibleIds = visibleStates.Select(s => s.StudentId).ToHashSet();
+
+                _studentVideoGrid.SuspendLayout();
+                try
+                {
+                    foreach (int studentId in _studentTileControls.Keys.Where(id => !visibleIds.Contains(id)).ToList())
+                    {
+                        DisposeStudentTileControls(studentId);
+                    }
+
+                    for (int index = 0; index < visibleStates.Count; index++)
+                    {
+                        StudentTileState state = visibleStates[index];
+                        if (!_studentTileControls.ContainsKey(state.StudentId))
+                        {
+                            _studentTileControls[state.StudentId] = CreateStudentTileControls(state);
+                        }
+
+                        if (_studentTileControls.TryGetValue(state.StudentId, out StudentTileControls? controls))
+                        {
+                            controls.NameLabel.Text = GetStudentTileLabelText(state);
+                            controls.CameraOffLabel.Visible = !state.IsCameraOn;
+                            ApplyStudentHandVisualState(state.StudentId);
+                            if (!state.IsCameraOn && !state.HasAvatarModeImage)
+                            {
+                                RenderStudentAvatarMode(state, controls);
+                            }
+                            _studentVideoGrid.Controls.SetChildIndex(controls.Tile, Math.Min(index, _studentVideoGrid.Controls.Count - 1));
+                        }
+                    }
+
+                    int hiddenCount = Math.Max(0, _studentTileStates.Count - MaxVisibleStudentTiles);
+                    _hiddenStudentsLabel.Text = hiddenCount > 0 ? $"+{hiddenCount} học sinh khác đang trong lớp" : string.Empty;
+                    _hiddenStudentsLabel.Visible = hiddenCount > 0;
+                }
+                finally
+                {
+                    _studentVideoGrid.ResumeLayout(true);
+                }
+            });
+        }
+
+        private StudentTileState UpsertStudentTileState(ClassroomSignalModel signal)
+        {
+            if (!_studentTileStates.TryGetValue(signal.SenderId, out StudentTileState? state))
+            {
+                state = new StudentTileState
+                {
+                    StudentId = signal.SenderId,
+                    JoinedAt = DateTime.UtcNow
+                };
+                _studentTileStates[signal.SenderId] = state;
+            }
+
+            if (!string.IsNullOrWhiteSpace(signal.SenderName))
+            {
+                state.DisplayName = signal.SenderName;
+            }
+
+            if (signal.Payload.TryGetValue("avatarPath", out string? avatarPath))
+            {
+                string normalizedAvatarPath = avatarPath ?? string.Empty;
+                if (!string.Equals(state.AvatarPath, normalizedAvatarPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    DisposeCachedStudentAvatar(state);
+                    state.AvatarPath = normalizedAvatarPath;
+                    state.AvatarLoadAttempted = false;
+                    state.AvatarLoadSucceeded = false;
+                    state.AvatarLoadVersion++;
+                    state.HasAvatarModeImage = false;
+                }
+            }
+
+            return state;
+        }
+
+        private static string GetStudentDisplayName(StudentTileState state)
+        {
+            return string.IsNullOrWhiteSpace(state.DisplayName) ? $"Student #{state.StudentId}" : state.DisplayName;
+        }
+
+        private static string GetStudentTileLabelText(StudentTileState state)
+        {
+            string displayName = GetStudentDisplayName(state);
+            return state.IsHandRaised ? $"✋ {displayName}" : displayName;
+        }
+
+        private void RenderStudentAvatarMode(StudentTileState state, StudentTileControls controls)
+        {
+            state.HasAvatarModeImage = true;
+            controls.CameraOffLabel.Visible = !state.IsCameraOn;
+
+            if (state.CachedAvatarImage != null)
+            {
+                ReplaceStudentTileImage(controls.Picture, CreateCircularAvatarImage(state.CachedAvatarImage, controls.Picture.Width, controls.Picture.Height));
+                return;
+            }
+
+            Image fallback = CreateInitialsAvatarImage(GetStudentDisplayName(state), controls.Picture.Width, controls.Picture.Height);
+            ReplaceStudentTileImage(controls.Picture, fallback);
+
+            if (!string.IsNullOrWhiteSpace(state.AvatarPath) && !state.AvatarLoadAttempted)
+            {
+                state.AvatarLoadAttempted = true;
+                _ = LoadAndCacheStudentAvatarAsync(state.StudentId, state.AvatarPath, ++state.AvatarLoadVersion);
+            }
+        }
+
+        private async Task LoadAndCacheStudentAvatarAsync(int studentId, string avatarPath, int version)
+        {
+            Image? loadedAvatar = await _studentAvatarLoader.LoadAsync(avatarPath, _studentTileCts.Token).ConfigureAwait(false);
+            if (loadedAvatar == null)
+            {
+                return;
+            }
+
+            try
+            {
+                this.InvokeIfRequired(() =>
+                {
+                    if (IsDisposed
+                        || !_studentTileStates.TryGetValue(studentId, out StudentTileState? currentState)
+                        || currentState.AvatarLoadVersion != version)
+                    {
+                        loadedAvatar.Dispose();
+                        return;
+                    }
+
+                    DisposeCachedStudentAvatar(currentState);
+                    currentState.CachedAvatarImage = CloneImage(loadedAvatar);
+                    currentState.AvatarLoadSucceeded = true;
+                    loadedAvatar.Dispose();
+
+                    if (!currentState.IsCameraOn
+                        && _studentTileControls.TryGetValue(studentId, out StudentTileControls? controls))
+                    {
+                        ReplaceStudentTileImage(controls.Picture, CreateCircularAvatarImage(currentState.CachedAvatarImage, controls.Picture.Width, controls.Picture.Height));
+                        controls.CameraOffLabel.Visible = true;
+                    }
+                });
+            }
+            catch
+            {
+                loadedAvatar.Dispose();
+            }
+        }
+
+        private static void ReplaceStudentTileImage(PictureBox pictureBox, Image image)
+        {
+            Image? old = pictureBox.Image;
+            pictureBox.Image = image;
+            old?.Dispose();
+        }
+
+        private static Image CloneImage(Image source)
+        {
+            return new Bitmap(source);
+        }
+
+        private static void DisposeCachedStudentAvatar(StudentTileState state)
+        {
+            Image? cached = state.CachedAvatarImage;
+            state.CachedAvatarImage = null;
+            cached?.Dispose();
+        }
+
+        private static Image CreateInitialsAvatarImage(string displayName, int width, int height)
+        {
+            int safeWidth = Math.Max(120, width);
+            int safeHeight = Math.Max(90, height);
+            var bitmap = new Bitmap(safeWidth, safeHeight);
+            using Graphics graphics = Graphics.FromImage(bitmap);
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.Clear(Color.FromArgb(248, 250, 252));
+
+            using var vignette = new LinearGradientBrush(
+                new Rectangle(0, 0, safeWidth, safeHeight),
+                Color.FromArgb(248, 250, 252),
+                Color.FromArgb(241, 245, 249),
+                45F);
+            graphics.FillRectangle(vignette, 0, 0, safeWidth, safeHeight);
+
+            int circleSize = Math.Min(safeWidth, safeHeight) - 34;
+            var circleRect = new Rectangle((safeWidth - circleSize) / 2, (safeHeight - circleSize) / 2 - 4, circleSize, circleSize);
+            using var circleBrush = new SolidBrush(GetStableAvatarColor(displayName));
+            graphics.FillEllipse(circleBrush, circleRect);
+
+            string initials = GetInitials(displayName);
+            using var textBrush = new SolidBrush(Color.White);
+            using Font baseFont = MetaTheme.Fonts.BodyMd();
+            using var font = new Font(baseFont.FontFamily, Math.Max(20F, circleSize * 0.34F), FontStyle.Bold, GraphicsUnit.Pixel);
+            using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+            graphics.DrawString(initials, font, textBrush, circleRect, format);
+            return bitmap;
+        }
+
+        private static Image CreateCircularAvatarImage(Image source, int width, int height)
+        {
+            int safeWidth = Math.Max(120, width);
+            int safeHeight = Math.Max(90, height);
+            var bitmap = new Bitmap(safeWidth, safeHeight);
+            using Graphics graphics = Graphics.FromImage(bitmap);
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.Clear(Color.FromArgb(248, 250, 252));
+
+            int circleSize = Math.Min(safeWidth, safeHeight) - 30;
+            var circleRect = new Rectangle((safeWidth - circleSize) / 2, (safeHeight - circleSize) / 2 - 2, circleSize, circleSize);
+            using var path = new GraphicsPath();
+            path.AddEllipse(circleRect);
+            graphics.SetClip(path);
+            graphics.DrawImage(source, GetCoverRectangle(source.Size, circleRect));
+            graphics.ResetClip();
+
+            using var borderPen = new Pen(Color.FromArgb(226, 232, 240), 3F);
+            graphics.DrawEllipse(borderPen, circleRect);
+            return bitmap;
+        }
+
+        private static Rectangle GetCoverRectangle(Size sourceSize, Rectangle target)
+        {
+            if (sourceSize.Width <= 0 || sourceSize.Height <= 0)
+            {
+                return target;
+            }
+
+            float scale = Math.Max((float)target.Width / sourceSize.Width, (float)target.Height / sourceSize.Height);
+            int width = (int)Math.Ceiling(sourceSize.Width * scale);
+            int height = (int)Math.Ceiling(sourceSize.Height * scale);
+            return new Rectangle(target.Left + (target.Width - width) / 2, target.Top + (target.Height - height) / 2, width, height);
+        }
+
+        private static Color GetStableAvatarColor(string value)
+        {
+            Color[] palette =
+            {
+                Color.FromArgb(109, 40, 217),
+                Color.FromArgb(124, 58, 237),
+                Color.FromArgb(14, 165, 233),
+                Color.FromArgb(16, 185, 129),
+                Color.FromArgb(236, 72, 153),
+                Color.FromArgb(245, 158, 11)
+            };
+
+            int hash = string.IsNullOrWhiteSpace(value) ? 0 : value.Aggregate(17, (current, character) => current * 31 + character);
+            return palette[Math.Abs(hash) % palette.Length];
+        }
+
+        private static string GetInitials(string displayName)
+        {
+            if (string.IsNullOrWhiteSpace(displayName))
+            {
+                return "?";
+            }
+
+            string[] parts = displayName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 1)
+            {
+                return parts[0][0].ToString().ToUpperInvariant();
+            }
+
+            return string.Concat(parts.Take(2).Select(part => part[0])).ToUpperInvariant();
+        }
+
+        private void DisposeStudentTileControls(int studentId)
+        {
+            if (_studentTileControls.Remove(studentId, out StudentTileControls? controls))
+            {
+                _studentVideoGrid.Controls.Remove(controls.Tile);
+                controls.Dispose();
+            }
+
+            _studentVideoBoxes.Remove(studentId);
+            _studentVideoLabels.Remove(studentId);
+            _studentHandBadges.Remove(studentId);
+        }
+
+        private static void EnableDoubleBuffering(Control control)
+        {
+            typeof(Control)
+                .GetProperty("DoubleBuffered", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                ?.SetValue(control, true, null);
+        }
+
+        private void ApplyStudentHandVisualState(int studentId)
+        {
+            bool isRaised = _raisedHandStudentIds.Contains(studentId);
+
+            // Keep raise-hand feedback in the native participant chrome only.
+            // Do not draw a floating button/badge over the media tile; it can be
+            // mistaken for WebView/media UI and violates the dumb media canvas rule.
+
+            if (_studentTileControls.TryGetValue(studentId, out StudentTileControls? controls))
+            {
+                controls.Tile.Padding = isRaised ? new Padding(3) : Padding.Empty;
+                controls.Tile.BackColor = isRaised ? Color.FromArgb(245, 158, 11) : Color.FromArgb(13, 17, 27);
+
+                if (_studentTileStates.TryGetValue(studentId, out StudentTileState? state))
+                {
+                    controls.NameLabel.Text = GetStudentTileLabelText(state);
+                    controls.NameLabel.BackColor = isRaised
+                        ? Color.FromArgb(230, 120, 53, 15)
+                        : Color.FromArgb(190, 0, 0, 0);
+                }
+            }
         }
 
         private void SafeRemoveStudentVideo(int studentId)
@@ -950,22 +1817,16 @@ namespace CourseGuard.Frontend.Forms.Teacher
             if (studentId <= 0) return;
             this.InvokeIfRequired(() =>
             {
-                if (!_studentVideoBoxes.TryGetValue(studentId, out PictureBox? box))
+                if (_studentTileStates.Remove(studentId, out StudentTileState? removedState))
                 {
-                    return;
+                    DisposeCachedStudentAvatar(removedState);
                 }
+                DisposeStudentTileControls(studentId);
+                _raisedHandStudentIds.Remove(studentId);
 
-                Control? tile = box.Parent;
-                Image? old = box.Image;
-                box.Image = null;
-                old?.Dispose();
-                _studentVideoBoxes.Remove(studentId);
-                _studentVideoLabels.Remove(studentId);
-                if (tile != null)
-                {
-                    _studentVideoGrid.Controls.Remove(tile);
-                    tile.Dispose();
-                }
+                int hiddenCount = Math.Max(0, _studentTileStates.Count - MaxVisibleStudentTiles);
+                _hiddenStudentsLabel.Text = hiddenCount > 0 ? $"+{hiddenCount} học sinh khác đang trong lớp" : string.Empty;
+                _hiddenStudentsLabel.Visible = hiddenCount > 0;
             });
         }
 
@@ -983,7 +1844,27 @@ namespace CourseGuard.Frontend.Forms.Teacher
             Image? oldPip = _teacherCameraPipPreview.Image;
             _teacherCameraPipPreview.Image = null;
             oldPip?.Dispose();
+            _ = _webRtcHost?.StopScreenShareAsync();
+            RestoreWebRtcPresentationSurface();
             UpdateClassroomPresentation();
+        }
+
+        private void ShowNativePresentationSurface()
+        {
+            HideCameraPlaceholder();
+            _teacherPreview.Visible = true;
+            _teacherPreview.BringToFront();
+            _teacherCameraPip.BringToFront();
+        }
+
+        private void RestoreWebRtcPresentationSurface()
+        {
+            if (_webRtcHost != null && !_webRtcHost.IsDisposed)
+            {
+                _webRtcHost.Visible = true;
+                _webRtcHost.BringToFront();
+                _teacherCameraPip.BringToFront();
+            }
         }
 
         private async Task RequestEndClassCloseAsync()
@@ -1033,17 +1914,25 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 await _onClassroomClosedAsync();
             }
 
+            await LeaveWebRtcClassroomAsync();
             StopScreenShare();
             StopCamera();
-            foreach (PictureBox box in _studentVideoBoxes.Values)
+            foreach (int studentId in _studentTileControls.Keys.ToList())
             {
-                Image? old = box.Image;
-                box.Image = null;
-                old?.Dispose();
+                DisposeStudentTileControls(studentId);
             }
 
+            foreach (StudentTileState state in _studentTileStates.Values)
+            {
+                DisposeCachedStudentAvatar(state);
+            }
+            _studentTileStates.Clear();
             _studentVideoBoxes.Clear();
             _studentVideoLabels.Clear();
+            _studentHandBadges.Clear();
+            _raisedHandStudentIds.Clear();
+            _studentTileCts.Cancel();
+            _studentAvatarLoader.Dispose();
             _screenShareManager.Dispose();
             _cameraManager.Dispose();
             _isServerReady = false;
@@ -1089,6 +1978,37 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             await BeginCloseAfterConfirmationAsync();
         }
+        private sealed class StudentTileState
+        {
+            public int StudentId { get; init; }
+            public string DisplayName { get; set; } = string.Empty;
+            public string AvatarPath { get; set; } = string.Empty;
+            public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
+            public bool IsCameraOn { get; set; }
+            public bool IsHandRaised { get; set; }
+            public bool HasAvatarModeImage { get; set; }
+            public bool AvatarLoadAttempted { get; set; }
+            public bool AvatarLoadSucceeded { get; set; }
+            public Image? CachedAvatarImage { get; set; }
+            public int AvatarLoadVersion { get; set; }
+        }
+
+        private sealed class StudentTileControls : IDisposable
+        {
+            public Panel Tile { get; init; } = null!;
+            public PictureBox Picture { get; init; } = null!;
+            public Label NameLabel { get; init; } = null!;
+            public Label CameraOffLabel { get; init; } = null!;
+
+            public void Dispose()
+            {
+                Image? image = Picture.Image;
+                Picture.Image = null;
+                image?.Dispose();
+                Tile.Dispose();
+            }
+        }
+
         private sealed class ScreenSharePickerDialog : Form
         {
             public Rectangle SelectedBounds { get; private set; }

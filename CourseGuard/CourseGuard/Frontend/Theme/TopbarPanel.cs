@@ -305,24 +305,45 @@ namespace CourseGuard.Frontend.Theme
                 // Avatar (32x32)
                 rx -= 32;
                 Rectangle avatarRect = new Rectangle(rx, 14, 32, 32);
-                g.FillEllipse(accentBrush, avatarRect);
-                
-                // Initials
-                string initials = "YA";
-                if (!string.IsNullOrEmpty(_userName) && _userName.Contains(" "))
+                if (_avatarImage != null)
                 {
-                    var parts = _userName.Split(' ');
-                    initials = $"{parts[0][0]}{parts[1][0]}";
+                    DrawCircularImage(g, _avatarImage, avatarRect);
                 }
-                else if (!string.IsNullOrEmpty(_userName) && _userName.Length >= 2) 
+                else
                 {
-                    initials = _userName.Substring(0, 2);
+                    g.FillEllipse(accentBrush, avatarRect);
+                    
+                    // Initials
+                    string initials = "YA";
+                    if (!string.IsNullOrEmpty(_userName) && _userName.Contains(" "))
+                    {
+                        var parts = _userName.Split(' ');
+                        initials = $"{parts[0][0]}{parts[1][0]}";
+                    }
+                    else if (!string.IsNullOrEmpty(_userName) && _userName.Length >= 2) 
+                    {
+                        initials = _userName.Substring(0, 2);
+                    }
+                    
+                    using (SolidBrush whiteBrush = new SolidBrush(Color.White))
+                    using (Font initialFont = AppFonts.Semibold(9f))
+                    {
+                        g.DrawString(initials.ToUpper(), initialFont, whiteBrush, avatarRect, sfCenter);
+                    }
                 }
-                
-                using (SolidBrush whiteBrush = new SolidBrush(Color.White))
-                using (Font initialFont = AppFonts.Semibold(9f))
+
+                // Draw online status indicator dot
+                if (_isOnline)
                 {
-                    g.DrawString(initials.ToUpper(), initialFont, whiteBrush, avatarRect, sfCenter);
+                    int dotSize = 10;
+                    int dotX = avatarRect.Right - dotSize + 1;
+                    int dotY = avatarRect.Bottom - dotSize + 1;
+                    using (SolidBrush greenBrush = new SolidBrush(Color.FromArgb(34, 197, 94)))
+                    using (Pen borderPen = new Pen(AppColors.BgCard, 2f))
+                    {
+                        g.FillEllipse(greenBrush, dotX, dotY, dotSize, dotSize);
+                        g.DrawEllipse(borderPen, dotX - 1, dotY - 1, dotSize + 1, dotSize + 1);
+                    }
                 }
 
                 // Username
@@ -331,14 +352,8 @@ namespace CourseGuard.Frontend.Theme
                 rx -= (int)userW;
                 g.DrawString(_userName, AppFonts.Body, textPrimary, new RectangleF(rx, 14, userW, 32), sfCenter);
 
-                // Settings Icon
-                rx -= 20; // padding
-                rx -= 32; // settings width
-                Rectangle settingsRect = new Rectangle(rx, 14, 32, 32);
-                DrawGearIcon(g, settingsRect, AppColors.TextSecondary);
-
                 // Bell Icon
-                rx -= 10;
+                rx -= 20; // padding
                 rx -= 32;
                 Rectangle bellRect = new Rectangle(rx, 14, 32, 32);
                 DrawBellIcon(g, bellRect, AppColors.TextSecondary);
@@ -531,6 +546,20 @@ namespace CourseGuard.Frontend.Theme
             {
                 g.FillEllipse(accentBrush, avatarRect);
                 g.DrawString(GetInitials(), initialFont, whiteBrush, avatarRect, sfCenter);
+            }
+
+            // Draw online status indicator dot
+            if (_isOnline)
+            {
+                int dotSize = 10;
+                int dotX = avatarRect.Right - dotSize + 1;
+                int dotY = avatarRect.Bottom - dotSize + 1;
+                using (SolidBrush greenBrush = new SolidBrush(Color.FromArgb(34, 197, 94)))
+                using (Pen borderPen = new Pen(AppColors.BgCard, 2f))
+                {
+                    g.FillEllipse(greenBrush, dotX, dotY, dotSize, dotSize);
+                    g.DrawEllipse(borderPen, dotX - 1, dotY - 1, dotSize + 1, dotSize + 1);
+                }
             }
             using SolidBrush textPrimary = new SolidBrush(AppColors.TextPrimary);
             string displayName = compact && _userName.Length > 7 ? _userName.Substring(0, 7) : _userName;

@@ -310,8 +310,22 @@ namespace CourseGuard.Frontend.UserControls.Student
                 return;
 
             int studentId = UserSessionContext.CurrentUserId ?? 0;
-            if (_dbContext.HideStudentResult(studentId, attemptId))
-                await LoadDataAsync();
+            _hideResult.Enabled = false;
+            this.ShowSkeleton(SkeletonType.ResultTable);
+            try
+            {
+                bool success = await System.Threading.Tasks.Task.Run(() => _dbContext.HideStudentResult(studentId, attemptId));
+                if (success)
+                    await LoadDataAsync();
+            }
+            catch (Exception ex)
+            {
+                MetaTheme.ShowModernDialog("Lỗi ẩn kết quả: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                this.HideSkeleton();
+            }
         }
 
         private int CurrentInt(string columnName)

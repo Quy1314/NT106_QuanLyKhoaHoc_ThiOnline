@@ -64,7 +64,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             using var dialog = new TeacherExamDialog(Controller.GetCourses(TeacherId));
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                Controller.CreateExam(TeacherId, new TeacherExamModel
+                await Task.Run(() => Controller.CreateExam(TeacherId, new TeacherExamModel
                 {
                     CourseId = dialog.CourseId,
                     Title = dialog.ItemTitle,
@@ -74,7 +74,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     MaxAttempts = dialog.MaxAttempts,
                     MaxViolations = dialog.MaxViolations,
                     Status = WorkflowConstants.ExamStatus.Draft
-                });
+                }));
                 await LoadDataAsync();
             }
         }
@@ -101,7 +101,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             });
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                Controller.UpdateExam(TeacherId, new TeacherExamModel
+                await Task.Run(() => Controller.UpdateExam(TeacherId, new TeacherExamModel
                 {
                     Id = id,
                     CourseId = dialog.CourseId,
@@ -112,7 +112,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     MaxAttempts = dialog.MaxAttempts,
                     MaxViolations = dialog.MaxViolations,
                     Status = dialog.Status
-                });
+                }));
                 await LoadDataAsync();
             }
         }
@@ -122,7 +122,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             int id = CurrentInt(ColumnExamId);
             if (id > 0)
             {
-                Controller.DeleteExam(TeacherId, id);
+                await Task.Run(() => Controller.DeleteExam(TeacherId, id));
                 await LoadDataAsync();
             }
         }
@@ -197,7 +197,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             if (confirm != DialogResult.Yes)
                 return;
 
-            if (!Controller.CanActivateExam(TeacherId, exam.Id))
+            if (!await Task.Run(() => Controller.CanActivateExam(TeacherId, exam.Id)))
             {
                 MetaTheme.ShowModernDialog("Bài kiểm tra cần có ít nhất 1 câu hỏi trước khi kích hoạt.", "Chưa thể kích hoạt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 await LoadDataAsync();
@@ -205,7 +205,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 return;
             }
 
-            if (!Controller.ActivateExam(TeacherId, exam.Id))
+            if (!await Task.Run(() => Controller.ActivateExam(TeacherId, exam.Id)))
             {
                 MetaTheme.ShowModernDialog("Bài kiểm tra chỉ có thể kích hoạt khi còn ở trạng thái nháp và đã có ít nhất 1 câu hỏi.", "Chưa thể kích hoạt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 await LoadDataAsync();

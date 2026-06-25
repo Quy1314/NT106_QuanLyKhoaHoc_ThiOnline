@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -11,6 +12,7 @@ using CourseGuard.Backend.Services.Monitoring;
 using CourseGuard.Backend.Services.Storage;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Backend.Services.Realtime;
 
 namespace CourseGuard.Frontend.Forms.Teacher
 {
@@ -29,6 +31,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         
         private readonly ViolationRepository _violationRepo = new();
         private readonly SupabaseStorageService _storageService = new();
+        private ClientWebSocket? _ws;
 
         public MonitorPopupForm(int teacherId, int examId, int studentId, int attemptId)
         {
@@ -44,21 +47,136 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             SetupLayout();
 
-            TcpScreenMonitorService.Instance.FrameReceived += Service_FrameReceived;
-            TcpScreenMonitorService.Instance.StatusChanged += (_, e) => SetStatus(e.Status);
+            SupabaseRealtimeChatService.Instance.OnViolationChanged += OnViolationRealtimeChanged;
+            SupabaseRealtimeChatService.Instance.Start();
+
             FormClosing += (_, _) =>
             {
-                TcpScreenMonitorService.Instance.FrameReceived -= Service_FrameReceived;
+                if (_ws != null && _ws.State == WebSocketState.Open)
+                {
+                    try
+                    {
+                        string revertRateCommand = $"{_studentId}:3000";
+                        byte[] cmdBytes = System.Text.Encoding.UTF8.GetBytes(revertRateCommand);
+                        _ws.SendAsync(new ArraySegment<byte>(cmdBytes), WebSocketMessageType.Text, true, CancellationToken.None).GetAwaiter().GetResult();
+                    }
+                    catch
+                    {
+                        // Bỏ qua
+                    }
+                }
+
                 _cts.Cancel();
+                _ws?.Dispose();
                 _picture.Image?.Dispose();
+
+                SupabaseRealtimeChatService.Instance.OnViolationChanged -= OnViolationRealtimeChanged;
             };
+        }
+
+        private void OnViolationRealtimeChanged(object? sender, ViolationChangedEventArgs e)
+        {
+            if (e.AttemptId == _attemptId)
+            {
+                if (InvokeRequired)
+                {
+                    try
+                    {
+                        BeginInvoke(new Action(() => OnViolationRealtimeChanged(sender, e)));
+                    }
+                    catch
+                    {
+                    }
+                    return;
+                }
+
+                if (IsDisposed) return;
+                LoadViolationsAsync().FireAndForgetSafe(this);
+            }
         }
 
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
-            TcpScreenMonitorService.Instance.StartListening();
+            StartWebSocketReceiver().FireAndForgetSafe(this);
             LoadViolationsAsync().FireAndForgetSafe(this);
+        }
+
+        private async Task StartWebSocketReceiver()
+        {
+            CourseGuard.Backend.Config.AppEnvironment.LoadDotEnvIfExists();
+            string relayUrl = CourseGuard.Backend.Config.AppEnvironment.GetOptional("RELAY_WS_URL") ?? "ws://localhost:8080/relay";
+
+            while (!_cts.Token.IsCancellationRequested)
+            {
+                try
+                {
+                    _ws?.Dispose();
+                    _ws = new ClientWebSocket();
+
+                    string connectionUrl = $"{relayUrl}?role=teacher&examId={_examId}";
+                    SetStatus("Đang kết nối tới Cloud Relay...");
+                    await _ws.ConnectAsync(new Uri(connectionUrl), _cts.Token);
+                    SetStatus("Đã kết nối tới Cloud Relay. Đang chờ học sinh...");
+
+                    try
+                    {
+                        string requestRateCommand = $"{_studentId}:1000";
+                        byte[] cmdBytes = System.Text.Encoding.UTF8.GetBytes(requestRateCommand);
+                        await _ws.SendAsync(new ArraySegment<byte>(cmdBytes), WebSocketMessageType.Text, true, _cts.Token);
+                    }
+                    catch
+                    {
+                        // Bỏ qua lỗi gửi tín hiệu ban đầu
+                    }
+
+                    var buffer = new byte[1024 * 1024 * 5]; // 5MB buffer
+                    while (_ws.State == WebSocketState.Open && !_cts.Token.IsCancellationRequested)
+                    {
+                        var result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), _cts.Token);
+                        if (result.MessageType == WebSocketMessageType.Close)
+                            break;
+
+                        if (result.MessageType == WebSocketMessageType.Binary && result.Count > 0)
+                        {
+                            ProcessReceivedPacket(buffer, result.Count);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (_cts.Token.IsCancellationRequested) break;
+                    SetStatus($"Lỗi kết nối: {ex.Message}. Đang kết nối lại...");
+                    await Task.Delay(2000, _cts.Token);
+                }
+            }
+        }
+
+        private void ProcessReceivedPacket(byte[] packet, int count)
+        {
+            if (count < ScreenStreamProtocol.HeaderLength) return;
+
+            var header = new byte[ScreenStreamProtocol.HeaderLength];
+            Buffer.BlockCopy(packet, 0, header, 0, ScreenStreamProtocol.HeaderLength);
+
+            if (!ScreenStreamProtocol.TryReadHeader(header, out byte frameType, out int frameExamId, out int frameStudentId, out int frameAttemptId, out _, out int jpegLength))
+                return;
+
+            if (count - ScreenStreamProtocol.HeaderLength < jpegLength) return;
+
+            var jpegBytes = new byte[jpegLength];
+            Buffer.BlockCopy(packet, ScreenStreamProtocol.HeaderLength, jpegBytes, 0, jpegLength);
+
+            var args = new ScreenFrameReceivedEventArgs(frameType, frameExamId, frameStudentId, frameAttemptId, jpegBytes);
+            
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(() => Service_FrameReceived(this, args)));
+            }
+            else
+            {
+                Service_FrameReceived(this, args);
+            }
         }
 
         private void SetupLayout()

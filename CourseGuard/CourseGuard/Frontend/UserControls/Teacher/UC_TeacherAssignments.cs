@@ -42,7 +42,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                     model.FileContent = File.ReadAllBytes(dialog.SelectedFilePath);
                     model.ContentType = MaterialFilePolicy.ResolveMimeType(info.Name);
                 }
-                Controller.CreateAssignment(TeacherId, model);
+                await Task.Run(() => Controller.CreateAssignment(TeacherId, model));
                 await LoadDataAsync();
             }
         }
@@ -85,14 +85,14 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                         model.HasStoredContent = existing.HasStoredContent;
                     }
                 }
-                Controller.UpdateAssignment(TeacherId, model);
+                await Task.Run(() => Controller.UpdateAssignment(TeacherId, model));
                 await LoadDataAsync();
             }
         }
         protected override async Task DeleteAsync()
         {
             int id = CurrentInt("Id");
-            if (id > 0) { Controller.DeleteAssignment(TeacherId, id); await LoadDataAsync(); }
+            if (id > 0) { await Task.Run(() => Controller.DeleteAssignment(TeacherId, id)); await LoadDataAsync(); }
         }
     }
 }

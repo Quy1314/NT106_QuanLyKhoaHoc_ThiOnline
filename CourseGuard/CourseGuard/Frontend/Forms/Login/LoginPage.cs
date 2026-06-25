@@ -22,6 +22,30 @@ namespace CourseGuard.Frontend.Forms.Login
 {
     public partial class LoginPage : Form
     {
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+        private static extern int SendMessage(IntPtr hWnd, int msg, int wParam, [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string lParam);
+
+        private const int EM_SETCUEBANNER = 0x1501;
+
+        private void SetPlaceholder(TextBox textBox, string placeholderText)
+        {
+            if (textBox.IsHandleCreated)
+            {
+                SendMessage(textBox.Handle, EM_SETCUEBANNER, 1, placeholderText);
+            }
+            else
+            {
+                textBox.HandleCreated += (s, e) => {
+                    SendMessage(textBox.Handle, EM_SETCUEBANNER, 1, placeholderText);
+                };
+            }
+        }
+
+        private static readonly Color InputBgNormal = Color.FromArgb(40, 38, 40);
+        private static readonly Color InputBgFocused = Color.FromArgb(60, 58, 60);
+        private static readonly Color InputBorderNormal = Color.FromArgb(40, 255, 255, 255);
+        private static readonly Color InputBorderFocused = Color.FromArgb(120, 255, 255, 255);
+
         private static readonly Lazy<AuthController> SharedAuthController =
             new(() => new AuthController(new CourseGuardDbContext("")));
 
@@ -34,10 +58,21 @@ namespace CourseGuard.Frontend.Forms.Login
         private Label? _passIcon;
         private Label? _lblSubtitle;
 
-        private const string UsernamePlaceholder = "Tên đăng nhập";
-        private const string PasswordPlaceholder = "Mật khẩu";
-        private bool _usernamePlaceholderActive;
-        private bool _passwordPlaceholderActive;
+        // Register Input Shells
+        private Panel? _regUserShell;
+        private Panel? _regFullNameShell;
+        private Panel? _regEmailShell;
+        private Panel? _regPassShell;
+        private Label? _regUserIcon;
+        private Label? _regFullNameIcon;
+        private Label? _regEmailIcon;
+        private Label? _regPassIcon;
+
+        // Forgot Password Input Shells
+        private Panel? _forgotUserShell;
+        private Panel? _forgotEmailShell;
+        private Label? _forgotUserIcon;
+        private Label? _forgotEmailIcon;
 
         private readonly System.Windows.Forms.Timer _parallaxTimer = new() { Interval = 16 };
         private Point _lastMouse;
@@ -48,10 +83,6 @@ namespace CourseGuard.Frontend.Forms.Login
         {
             InitializeComponent();
             CustomizeUI(); // Apply modern UI styles
-
-            // Bo góc đồng bộ (10px) cho tất cả buttons
-            CourseGuard.Frontend.Theme.RoundedButtonHelper.Apply(10,
-                btnLogin, btnRegisterSubmit, btnForgotSubmit);
 
             this.Load += LoginPage_Load;
             this.Resize += LoginPage_Resize;
@@ -84,8 +115,8 @@ namespace CourseGuard.Frontend.Forms.Login
         {
             SuspendLayout();
 
-            // Form
-            BackColor = MetaTheme.Colors.FormBg;
+            // Form - Deep Dark backdrop matching bg
+            BackColor = Color.FromArgb(15, 17, 26);
             FormBorderStyle = FormBorderStyle.Sizable;
             DoubleBuffered = true;
             AcceptButton = btnLogin;
@@ -100,24 +131,24 @@ namespace CourseGuard.Frontend.Forms.Login
             }
 
             // Typography
-            var titleFont = FuturisticLoginKit.CreateUiFont(28f, FontStyle.Bold);
+            var titleFont = FuturisticLoginKit.CreateUiFont(18f, FontStyle.Regular); // Lato-like regular style
             var smallBold = FuturisticLoginKit.CreateUiFont(10.5f, FontStyle.Bold);
             var inputFont = FuturisticLoginKit.CreateUiFont(11.5f, FontStyle.Regular);
             var buttonFont = FuturisticLoginKit.CreateUiFont(11.5f, FontStyle.Bold);
 
-            // Title
-            LoginTitle.Text = "ĐĂNG NHẬP";
+            // Title - Clean white h3 header style
+            LoginTitle.Text = "Have an account?";
             LoginTitle.Font = titleFont;
-            LoginTitle.ForeColor = MetaTheme.Colors.TextPrimary;
+            LoginTitle.ForeColor = Color.White;
             LoginTitle.AutoSize = false;
             LoginTitle.TextAlign = ContentAlignment.MiddleCenter;
             LoginTitle.UseCompatibleTextRendering = false;
 
-            // Subtitle
+            // Subtitle (Hệ thống bảo mật...) - Set in elegant white-ish font
             _lblSubtitle ??= new Label();
             _lblSubtitle.Text = "Hệ thống bảo mật khóa học thông minh";
             _lblSubtitle.Font = FuturisticLoginKit.CreateUiFont(10f, FontStyle.Regular);
-            _lblSubtitle.ForeColor = MetaTheme.Colors.TextSecondary;
+            _lblSubtitle.ForeColor = Color.FromArgb(200, 255, 255, 255); // Opaque white-ish
             _lblSubtitle.TextAlign = ContentAlignment.MiddleCenter;
             _lblSubtitle.AutoSize = false;
             _lblSubtitle.BackColor = Color.Transparent;
@@ -127,27 +158,37 @@ namespace CourseGuard.Frontend.Forms.Login
                 LoginPanel.Controls.Add(_lblSubtitle);
             }
 
-            // Brand
-            LOGO.Text = "COURSEGUARD";
-            LOGO.Font = FuturisticLoginKit.CreateUiFont(10.5f, FontStyle.Bold);
-            LOGO.ForeColor = MetaTheme.Colors.Accent;
+            // Brand (Peach logo accent / Top title text)
+            LOGO.Text = "Welcome back mate!";
+            LOGO.Font = FuturisticLoginKit.CreateUiFont(26f, FontStyle.Bold);
+            LOGO.ForeColor = Color.White; // White top title matching website
             LOGO.BorderStyle = BorderStyle.None;
             LOGO.TextAlign = ContentAlignment.MiddleCenter;
             LOGO.AutoSize = false;
             LOGO.BackColor = Color.Transparent;
             LOGO.UseCompatibleTextRendering = false;
 
+            // Set native Windows placeholder text for all inputs (highly reliable, no character clipping)
+            SetPlaceholder(txtUsername, "Tên đăng nhập");
+            SetPlaceholder(txtPassword, "Mật khẩu");
+            SetPlaceholder(txtRegUsername, "Tên đăng nhập");
+            SetPlaceholder(txtRegFullName, "Họ và tên");
+            SetPlaceholder(txtRegEmail, "Địa chỉ Email");
+            SetPlaceholder(txtRegPassword, "Mật khẩu");
+            SetPlaceholder(txtForgotUsername, "Tên đăng nhập");
+            SetPlaceholder(txtForgotEmail, "Email khôi phục");
+
             // Labels (subtle) - Hide to match mockup exactly
             lblUsername.Text = "Tên đăng nhập";
             lblUsername.Font = smallBold;
-            lblUsername.ForeColor = MetaTheme.Colors.TextSecondary;
+            lblUsername.ForeColor = Color.FromArgb(200, 226, 232, 240);
             lblUsername.BackColor = Color.Transparent;
             lblUsername.Visible = false;
             lblUsername.UseCompatibleTextRendering = false;
 
             lblPassword.Text = "Mật khẩu";
             lblPassword.Font = smallBold;
-            lblPassword.ForeColor = MetaTheme.Colors.TextSecondary;
+            lblPassword.ForeColor = Color.FromArgb(200, 226, 232, 240);
             lblPassword.BackColor = Color.Transparent;
             lblPassword.Visible = false;
             lblPassword.UseCompatibleTextRendering = false;
@@ -157,47 +198,46 @@ namespace CourseGuard.Frontend.Forms.Login
             txtPassword.Font = inputFont;
             txtUsername.BorderStyle = BorderStyle.None;
             txtPassword.BorderStyle = BorderStyle.None;
-            txtUsername.BackColor = Color.FromArgb(24, 24, 32);
-            txtPassword.BackColor = Color.FromArgb(24, 24, 32);
-            txtUsername.ForeColor = MetaTheme.Colors.TextPrimary;
-            txtPassword.ForeColor = MetaTheme.Colors.TextPrimary;
+            txtUsername.BackColor = InputBgNormal; // Blended warm-grey base
+            txtPassword.BackColor = InputBgNormal;
+            txtUsername.ForeColor = Color.White;
+            txtPassword.ForeColor = Color.White;
 
             CreateInputShells();
 
             // Login button
             btnLogin.Text = "ĐĂNG NHẬP";
-            MetaTheme.StylePrimaryButton(btnLogin);
             btnLogin.Font = buttonFont;
-            btnLogin.ForeColor = ColorTranslator.FromHtml("#002022");
+            btnLogin.ForeColor = Color.Black;
 
             // Links/Other
             chkRemember.Text = "Ghi nhớ đăng nhập";
             chkRemember.Font = FuturisticLoginKit.CreateUiFont(9.5f, FontStyle.Regular);
-            chkRemember.ForeColor = MetaTheme.Colors.TextSecondary;
+            chkRemember.ForeColor = Color.White; // Clean white matching mockup
             chkRemember.BackColor = Color.Transparent;
             chkRemember.FlatStyle = FlatStyle.Flat;
             chkRemember.UseCompatibleTextRendering = false;
 
             linkLabel1.Text = "Quên mật khẩu?";
-            linkLabel1.LinkColor = ColorTranslator.FromHtml("#00D0E9");
-            linkLabel1.ActiveLinkColor = MetaTheme.Colors.AccentHover;
+            linkLabel1.LinkColor = Color.White; // White link
+            linkLabel1.ActiveLinkColor = Color.FromArgb(251, 206, 181); // Peach link on hover
             linkLabel1.VisitedLinkColor = linkLabel1.LinkColor;
             linkLabel1.BackColor = Color.Transparent;
             linkLabel1.UseCompatibleTextRendering = false;
 
-            lnkRegister.LinkColor = ColorTranslator.FromHtml("#00D0E9");
-            lnkRegister.ActiveLinkColor = MetaTheme.Colors.AccentHover;
+            lnkRegister.LinkColor = Color.FromArgb(251, 206, 181); // Peach register link
+            lnkRegister.ActiveLinkColor = Color.White;
             lnkRegister.VisitedLinkColor = lnkRegister.LinkColor;
             lnkRegister.Text = "Chưa có tài khoản? Đăng ký ngay";
-            lnkRegister.ForeColor = MetaTheme.Colors.TextSecondary;
-            lnkRegister.LinkArea = new LinkArea(19, 12); // "Đăng ký ngay" starts at index 19, length 12
+            lnkRegister.ForeColor = Color.FromArgb(200, 226, 232, 240);
+            lnkRegister.LinkArea = new LinkArea(19, 12);
             lnkRegister.BackColor = Color.Transparent;
             lnkRegister.UseCompatibleTextRendering = false;
 
             // Register Controls (keep existing logic, just style)
             RegisterTitle.Text = "ĐĂNG KÝ TÀI KHOẢN";
             RegisterTitle.Font = FuturisticLoginKit.CreateUiFont(22f, FontStyle.Bold);
-            RegisterTitle.ForeColor = MetaTheme.Colors.TextPrimary;
+            RegisterTitle.ForeColor = Color.White;
             RegisterTitle.BackColor = Color.Transparent;
             RegisterTitle.UseCompatibleTextRendering = false;
             lblRegUsername.Text = "Tên đăng nhập";
@@ -206,50 +246,56 @@ namespace CourseGuard.Frontend.Forms.Login
             lblRegPassword.Text = "Mật khẩu";
             txtRegPassword.UseSystemPasswordChar = true;
             lnkBackToLoginFromReg.Text = "Quay lại Đăng nhập";
-            lnkBackToLoginFromReg.LinkColor = MetaTheme.Colors.TextSecondary;
-            lnkBackToLoginFromReg.ActiveLinkColor = MetaTheme.Colors.AccentHover;
+            lnkBackToLoginFromReg.LinkColor = Color.FromArgb(251, 206, 181);
+            lnkBackToLoginFromReg.ActiveLinkColor = Color.White;
             lnkBackToLoginFromReg.VisitedLinkColor = lnkBackToLoginFromReg.LinkColor;
-            lnkBackToLoginFromReg.ForeColor = MetaTheme.Colors.TextSecondary;
+            lnkBackToLoginFromReg.ForeColor = Color.FromArgb(200, 226, 232, 240);
             lnkBackToLoginFromReg.LinkArea = new LinkArea(0, lnkBackToLoginFromReg.Text.Length);
             lnkBackToLoginFromReg.UseCompatibleTextRendering = false;
-            MetaTheme.StylePrimaryButton(btnRegisterSubmit);
-            btnRegisterSubmit.Font = FuturisticLoginKit.CreateUiFont(11f, FontStyle.Bold);
+            btnRegisterSubmit.Text = "ĐĂNG KÝ";
+            btnRegisterSubmit.Font = buttonFont;
+            btnRegisterSubmit.ForeColor = Color.Black;
 
             // Register panel eye-friendly contrast tuning
-            var fieldLabelColor = MetaTheme.Colors.TextSecondary;
+            var fieldLabelColor = Color.FromArgb(200, 226, 232, 240);
             foreach (var lbl in new[] { lblRegUsername, lblRegFullName, lblRegEmail, lblRegPassword })
             {
                 lbl.ForeColor = fieldLabelColor;
                 lbl.BackColor = Color.Transparent;
                 lbl.Font = FuturisticLoginKit.CreateUiFont(10.5f, FontStyle.Bold);
                 lbl.UseCompatibleTextRendering = false;
+                lbl.Visible = false; // Hide labels as they are replaced by native placeholders
             }
             foreach (var tb in new[] { txtRegUsername, txtRegFullName, txtRegEmail, txtRegPassword })
             {
                 tb.BorderStyle = BorderStyle.None;
-                tb.BackColor = MetaTheme.Colors.InputBg;
-                tb.ForeColor = MetaTheme.Colors.TextPrimary;
+                tb.BackColor = InputBgNormal;
+                tb.ForeColor = Color.White;
                 tb.Font = FuturisticLoginKit.CreateUiFont(11f, FontStyle.Regular);
             }
             lnkBackToLoginFromReg.BackColor = Color.Transparent;
+            lnkBackToLoginFromReg.AutoSize = true; // Auto-size to prevent text cutoff
 
             // Forgot Controls
             ForgotTitle.Text = "QUÊN MẬT KHẨU";
             ForgotTitle.Font = FuturisticLoginKit.CreateUiFont(22f, FontStyle.Bold);
-            ForgotTitle.ForeColor = MetaTheme.Colors.TextPrimary;
+            ForgotTitle.ForeColor = Color.White;
             ForgotTitle.UseCompatibleTextRendering = false;
             lblForgotUsername.Text = "Tên đăng nhập";
             lblForgotEmail.Text = "Email khôi phục";
+            lblForgotUsername.Visible = false; // Hide label
+            lblForgotEmail.Visible = false; // Hide label
             lnkBackToLoginFromForgot.Text = "Quay lại Đăng nhập";
-            lnkBackToLoginFromForgot.LinkColor = MetaTheme.Colors.TextSecondary;
-            lnkBackToLoginFromForgot.ActiveLinkColor = MetaTheme.Colors.AccentHover;
+            lnkBackToLoginFromForgot.LinkColor = Color.FromArgb(251, 206, 181);
+            lnkBackToLoginFromForgot.ActiveLinkColor = Color.White;
             lnkBackToLoginFromForgot.VisitedLinkColor = lnkBackToLoginFromForgot.LinkColor;
-            lnkBackToLoginFromForgot.ForeColor = MetaTheme.Colors.TextSecondary;
+            lnkBackToLoginFromForgot.ForeColor = Color.FromArgb(200, 226, 232, 240);
             lnkBackToLoginFromForgot.LinkArea = new LinkArea(0, lnkBackToLoginFromForgot.Text.Length);
             lnkBackToLoginFromForgot.UseCompatibleTextRendering = false;
+            lnkBackToLoginFromForgot.AutoSize = true; // Auto-size to prevent text cutoff
             btnForgotSubmit.Text = "GỬI YÊU CẦU";
-            MetaTheme.StylePrimaryButton(btnForgotSubmit);
-            btnForgotSubmit.Font = FuturisticLoginKit.CreateUiFont(11f, FontStyle.Bold);
+            btnForgotSubmit.Font = buttonFont;
+            btnForgotSubmit.ForeColor = Color.Black;
             ForgotTitle.BackColor = Color.Transparent;
             lblForgotUsername.ForeColor = fieldLabelColor;
             lblForgotEmail.ForeColor = fieldLabelColor;
@@ -261,10 +307,10 @@ namespace CourseGuard.Frontend.Forms.Login
             lblForgotEmail.UseCompatibleTextRendering = false;
             txtForgotUsername.BorderStyle = BorderStyle.None;
             txtForgotEmail.BorderStyle = BorderStyle.None;
-            txtForgotUsername.BackColor = MetaTheme.Colors.InputBg;
-            txtForgotEmail.BackColor = MetaTheme.Colors.InputBg;
-            txtForgotUsername.ForeColor = MetaTheme.Colors.TextPrimary;
-            txtForgotEmail.ForeColor = MetaTheme.Colors.TextPrimary;
+            txtForgotUsername.BackColor = InputBgNormal;
+            txtForgotEmail.BackColor = InputBgNormal;
+            txtForgotUsername.ForeColor = Color.White;
+            txtForgotEmail.ForeColor = Color.White;
             txtForgotUsername.Font = FuturisticLoginKit.CreateUiFont(11f, FontStyle.Regular);
             txtForgotEmail.Font = FuturisticLoginKit.CreateUiFont(11f, FontStyle.Regular);
             lnkBackToLoginFromForgot.BackColor = Color.Transparent;
@@ -285,8 +331,8 @@ namespace CourseGuard.Frontend.Forms.Login
             {
                 Size = new Size(560, 610),
                 CornerRadius = 32f,
-                GlassFill = Color.FromArgb(12, 255, 255, 255), // beautiful semi-transparent glass
-                BorderColor = Color.FromArgb(48, 0, 240, 255),  // Cyber Cyan glowing border
+                GlassFill = Color.Transparent, // fully transparent to dissolve into the background
+                BorderColor = Color.Transparent,  // borderless outline
             };
             if (!_background.Controls.Contains(_cardHost))
             {
@@ -391,23 +437,23 @@ namespace CourseGuard.Frontend.Forms.Login
             _usernameShell.Left = padding;
             _passwordShell.Left = padding;
 
-            txtUsername.Width = _usernameShell.Width - 60;
-            txtPassword.Width = _passwordShell.Width - 60;
+            txtUsername.Width = _usernameShell.Width - 76;
+            txtPassword.Width = _passwordShell.Width - 76;
 
             lblUsername.Left = padding;
             lblPassword.Left = padding;
 
             // Reposition Y coords to look good and prevent clipping
-            LOGO.Top = 20;
-            LOGO.Height = 22;
+            LOGO.Top = 5;
+            LOGO.Height = 50; // Fits 26f font cleanly, no sibling overlap
 
-            LoginTitle.Top = 46;
-            LoginTitle.Height = 55; // Sized appropriately for 28f font height + Vietnamese diacritics
+            LoginTitle.Top = 55; // Placed exactly below LOGO, disjoint coordinate
+            LoginTitle.Height = 35; // Fits 18f font cleanly, no sibling overlap
 
             if (_lblSubtitle != null)
             {
-                _lblSubtitle.Top = 104;
-                _lblSubtitle.Height = 22;
+                _lblSubtitle.Top = 90; // Placed exactly below LoginTitle, disjoint coordinate
+                _lblSubtitle.Height = 20;
                 _lblSubtitle.Width = LoginPanel.Width;
                 _lblSubtitle.Left = 0;
             }
@@ -416,8 +462,8 @@ namespace CourseGuard.Frontend.Forms.Login
             lblPassword.Visible = false;
 
             // Tighten input shells vertical position to match mockup (no username/password label gaps)
-            _usernameShell!.Top = 144;
-            _passwordShell!.Top = 204;
+            _usernameShell!.Top = 135; // Spaced below subtitle with 25px gap
+            _passwordShell!.Top = 195;
 
             // Re-arrange Checkbox and Forgot Password if they exist
             chkRemember.Top = _passwordShell.Bottom + 14;
@@ -440,32 +486,40 @@ namespace CourseGuard.Frontend.Forms.Login
             int regPadding = 40;
             int regFullWidth = RegisterPanel.Width - regPadding * 2;
             
-            RegisterTitle.Location = new Point(0, 20);
+            RegisterTitle.Location = new Point(0, 15);
             RegisterTitle.Width = RegisterPanel.Width;
-            RegisterTitle.Height = 55; // Sized for 22f font height + Vietnamese diacritics
+            RegisterTitle.Height = 45; // Sized for 22f font height + Vietnamese diacritics
             RegisterTitle.TextAlign = ContentAlignment.MiddleCenter;
             RegisterTitle.AutoSize = false;
 
-            lblRegUsername.Location = new Point(regPadding, 85);
-            txtRegUsername.Location = new Point(regPadding, 110);
-            txtRegUsername.Width = regFullWidth;
+            if (_regUserShell != null)
+            {
+                _regUserShell.Location = new Point(regPadding, 80);
+                _regUserShell.Width = regFullWidth;
+                _regUserShell.Height = 42;
+                txtRegUsername.Width = _regUserShell.Width - 76;
 
-            lblRegFullName.Location = new Point(regPadding, 150);
-            txtRegFullName.Location = new Point(regPadding, 175);
-            txtRegFullName.Width = regFullWidth;
+                _regFullNameShell!.Location = new Point(regPadding, 134);
+                _regFullNameShell.Width = regFullWidth;
+                _regFullNameShell.Height = 42;
+                txtRegFullName.Width = _regFullNameShell.Width - 76;
 
-            lblRegEmail.Location = new Point(regPadding, 215);
-            txtRegEmail.Location = new Point(regPadding, 240);
-            txtRegEmail.Width = regFullWidth;
+                _regEmailShell!.Location = new Point(regPadding, 188);
+                _regEmailShell.Width = regFullWidth;
+                _regEmailShell.Height = 42;
+                txtRegEmail.Width = _regEmailShell.Width - 76;
 
-            lblRegPassword.Location = new Point(regPadding, 280);
-            txtRegPassword.Location = new Point(regPadding, 305);
-            txtRegPassword.Width = regFullWidth;
+                _regPassShell!.Location = new Point(regPadding, 242);
+                _regPassShell.Width = regFullWidth;
+                _regPassShell.Height = 42;
+                txtRegPassword.Width = _regPassShell.Width - 76;
 
-            btnRegisterSubmit.Location = new Point(regPadding, 365);
-            btnRegisterSubmit.Width = regFullWidth;
+                btnRegisterSubmit.Location = new Point(regPadding, 304);
+                btnRegisterSubmit.Width = regFullWidth;
+                btnRegisterSubmit.Height = 46;
 
-            lnkBackToLoginFromReg.Location = new Point((RegisterPanel.Width - lnkBackToLoginFromReg.Width) / 2, 425);
+                lnkBackToLoginFromReg.Location = new Point((RegisterPanel.Width - lnkBackToLoginFromReg.Width) / 2, btnRegisterSubmit.Bottom + 12);
+            }
 
             // --- Forgot Panel Controls ---
             int forPadding = 40;
@@ -477,18 +531,24 @@ namespace CourseGuard.Frontend.Forms.Login
             ForgotTitle.TextAlign = ContentAlignment.MiddleCenter;
             ForgotTitle.AutoSize = false;
 
-            lblForgotUsername.Location = new Point(forPadding, 95);
-            txtForgotUsername.Location = new Point(forPadding, 120);
-            txtForgotUsername.Width = forFullWidth;
+            if (_forgotUserShell != null)
+            {
+                _forgotUserShell.Location = new Point(forPadding, 100);
+                _forgotUserShell.Width = forFullWidth;
+                _forgotUserShell.Height = 42;
+                txtForgotUsername.Width = _forgotUserShell.Width - 76;
 
-            lblForgotEmail.Location = new Point(forPadding, 170);
-            txtForgotEmail.Location = new Point(forPadding, 195);
-            txtForgotEmail.Width = forFullWidth;
+                _forgotEmailShell!.Location = new Point(forPadding, 154);
+                _forgotEmailShell.Width = forFullWidth;
+                _forgotEmailShell.Height = 42;
+                txtForgotEmail.Width = _forgotEmailShell.Width - 76;
 
-            btnForgotSubmit.Location = new Point(forPadding, 255);
-            btnForgotSubmit.Width = forFullWidth;
+                btnForgotSubmit.Location = new Point(forPadding, 218);
+                btnForgotSubmit.Width = forFullWidth;
+                btnForgotSubmit.Height = 46;
 
-            lnkBackToLoginFromForgot.Location = new Point((ForgotPassPanel.Width - lnkBackToLoginFromForgot.Width) / 2, 315);
+                lnkBackToLoginFromForgot.Location = new Point((ForgotPassPanel.Width - lnkBackToLoginFromForgot.Width) / 2, btnForgotSubmit.Bottom + 16);
+            }
 
             // Avoid paint artifacts when controls are repositioned.
             LoginPanel.Invalidate(true);
@@ -517,6 +577,7 @@ namespace CourseGuard.Frontend.Forms.Login
 
         private void CreateInputShells()
         {
+            // Login Panel Input Shells
             _usernameShell ??= new TransparentPanel();
             _passwordShell ??= new TransparentPanel();
             _userIcon ??= new Label();
@@ -540,45 +601,124 @@ namespace CourseGuard.Frontend.Forms.Login
             _passwordShell.Controls.Add(_passIcon);
             _passwordShell.Controls.Add(txtPassword);
 
-            txtUsername.Location = new Point(42, 10);
-            txtPassword.Location = new Point(42, 10);
-            txtUsername.Width = _usernameShell.Width - 60;
-            txtPassword.Width = _passwordShell.Width - 60;
+            txtUsername.Location = new Point(54, 14); // Shifted right by 8px and down by 1px to prevent overlapping and clipping
+            txtPassword.Location = new Point(54, 14);
+            txtUsername.Width = _usernameShell.Width - 76;
+            txtPassword.Width = _passwordShell.Width - 76;
 
             txtUsername.GotFocus += (_, _) => { 
                 _usernameShell.Invalidate(); 
-                txtUsername.BackColor = Color.FromArgb(32, 32, 40); 
+                txtUsername.BackColor = InputBgFocused; 
+                _userIcon.ForeColor = Color.FromArgb(251, 206, 181); // Peach accent
             };
             txtUsername.LostFocus += (_, _) => { 
                 _usernameShell.Invalidate(); 
-                txtUsername.BackColor = Color.FromArgb(24, 24, 32); 
+                txtUsername.BackColor = InputBgNormal; 
+                _userIcon.ForeColor = Color.FromArgb(220, 255, 255, 255); // White-ish
             };
             txtPassword.GotFocus += (_, _) => { 
                 _passwordShell.Invalidate(); 
-                txtPassword.BackColor = Color.FromArgb(32, 32, 40); 
+                txtPassword.BackColor = InputBgFocused; 
+                _passIcon.ForeColor = Color.FromArgb(251, 206, 181); // Peach accent
             };
             txtPassword.LostFocus += (_, _) => { 
                 _passwordShell.Invalidate(); 
-                txtPassword.BackColor = Color.FromArgb(24, 24, 32); 
+                txtPassword.BackColor = InputBgNormal; 
+                _passIcon.ForeColor = Color.FromArgb(220, 255, 255, 255);
             };
 
-            txtUsername.Enter -= TxtUsername_Enter;
-            txtUsername.Leave -= TxtUsername_Leave;
-            txtPassword.Enter -= TxtPassword_Enter;
-            txtPassword.Leave -= TxtPassword_Leave;
-            txtUsername.Enter += TxtUsername_Enter;
-            txtUsername.Leave += TxtUsername_Leave;
-            txtPassword.Enter += TxtPassword_Enter;
-            txtPassword.Leave += TxtPassword_Leave;
+            // Register Panel Input Shells
+            _regUserShell ??= new TransparentPanel();
+            _regFullNameShell ??= new TransparentPanel();
+            _regEmailShell ??= new TransparentPanel();
+            _regPassShell ??= new TransparentPanel();
 
-            ApplyUsernamePlaceholder();
-            ApplyPasswordPlaceholder();
+            _regUserIcon ??= new Label();
+            _regFullNameIcon ??= new Label();
+            _regEmailIcon ??= new Label();
+            _regPassIcon ??= new Label();
+
+            BuildInputShell(_regUserShell, _regUserIcon, txtRegUsername, "\uE77B");
+            BuildInputShell(_regFullNameShell, _regFullNameIcon, txtRegFullName, "\uE70F"); // Edit icon
+            BuildInputShell(_regEmailShell, _regEmailIcon, txtRegEmail, "\uE715"); // Mail icon
+            BuildInputShell(_regPassShell, _regPassIcon, txtRegPassword, "\uE72E");
+
+            if (!RegisterPanel.Controls.Contains(_regUserShell)) RegisterPanel.Controls.Add(_regUserShell);
+            if (!RegisterPanel.Controls.Contains(_regFullNameShell)) RegisterPanel.Controls.Add(_regFullNameShell);
+            if (!RegisterPanel.Controls.Contains(_regEmailShell)) RegisterPanel.Controls.Add(_regEmailShell);
+            if (!RegisterPanel.Controls.Contains(_regPassShell)) RegisterPanel.Controls.Add(_regPassShell);
+
+            if (RegisterPanel.Controls.Contains(txtRegUsername)) RegisterPanel.Controls.Remove(txtRegUsername);
+            if (RegisterPanel.Controls.Contains(txtRegFullName)) RegisterPanel.Controls.Remove(txtRegFullName);
+            if (RegisterPanel.Controls.Contains(txtRegEmail)) RegisterPanel.Controls.Remove(txtRegEmail);
+            if (RegisterPanel.Controls.Contains(txtRegPassword)) RegisterPanel.Controls.Remove(txtRegPassword);
+
+            _regUserShell.Controls.Clear();
+            _regUserShell.Controls.Add(_regUserIcon);
+            _regUserShell.Controls.Add(txtRegUsername);
+
+            _regFullNameShell.Controls.Clear();
+            _regFullNameShell.Controls.Add(_regFullNameIcon);
+            _regFullNameShell.Controls.Add(txtRegFullName);
+
+            _regEmailShell.Controls.Clear();
+            _regEmailShell.Controls.Add(_regEmailIcon);
+            _regEmailShell.Controls.Add(txtRegEmail);
+
+            _regPassShell.Controls.Clear();
+            _regPassShell.Controls.Add(_regPassIcon);
+            _regPassShell.Controls.Add(txtRegPassword);
+
+            txtRegUsername.Location = new Point(54, 14);
+            txtRegFullName.Location = new Point(54, 14);
+            txtRegEmail.Location = new Point(54, 14);
+            txtRegPassword.Location = new Point(54, 14);
+
+            txtRegUsername.GotFocus += (_, _) => { _regUserShell.Invalidate(); txtRegUsername.BackColor = InputBgFocused; _regUserIcon.ForeColor = Color.FromArgb(251, 206, 181); };
+            txtRegUsername.LostFocus += (_, _) => { _regUserShell.Invalidate(); txtRegUsername.BackColor = InputBgNormal; _regUserIcon.ForeColor = Color.FromArgb(220, 255, 255, 255); };
+            txtRegFullName.GotFocus += (_, _) => { _regFullNameShell.Invalidate(); txtRegFullName.BackColor = InputBgFocused; _regFullNameIcon.ForeColor = Color.FromArgb(251, 206, 181); };
+            txtRegFullName.LostFocus += (_, _) => { _regFullNameShell.Invalidate(); txtRegFullName.BackColor = InputBgNormal; _regFullNameIcon.ForeColor = Color.FromArgb(220, 255, 255, 255); };
+            txtRegEmail.GotFocus += (_, _) => { _regEmailShell.Invalidate(); txtRegEmail.BackColor = InputBgFocused; _regEmailIcon.ForeColor = Color.FromArgb(251, 206, 181); };
+            txtRegEmail.LostFocus += (_, _) => { _regEmailShell.Invalidate(); txtRegEmail.BackColor = InputBgNormal; _regEmailIcon.ForeColor = Color.FromArgb(220, 255, 255, 255); };
+            txtRegPassword.GotFocus += (_, _) => { _regPassShell.Invalidate(); txtRegPassword.BackColor = InputBgFocused; _regPassIcon.ForeColor = Color.FromArgb(251, 206, 181); };
+            txtRegPassword.LostFocus += (_, _) => { _regPassShell.Invalidate(); txtRegPassword.BackColor = InputBgNormal; _regPassIcon.ForeColor = Color.FromArgb(220, 255, 255, 255); };
+
+            // Forgot Panel Input Shells
+            _forgotUserShell ??= new TransparentPanel();
+            _forgotEmailShell ??= new TransparentPanel();
+            _forgotUserIcon ??= new Label();
+            _forgotEmailIcon ??= new Label();
+
+            BuildInputShell(_forgotUserShell, _forgotUserIcon, txtForgotUsername, "\uE77B");
+            BuildInputShell(_forgotEmailShell, _forgotEmailIcon, txtForgotEmail, "\uE715");
+
+            if (!ForgotPassPanel.Controls.Contains(_forgotUserShell)) ForgotPassPanel.Controls.Add(_forgotUserShell);
+            if (!ForgotPassPanel.Controls.Contains(_forgotEmailShell)) ForgotPassPanel.Controls.Add(_forgotEmailShell);
+
+            if (ForgotPassPanel.Controls.Contains(txtForgotUsername)) ForgotPassPanel.Controls.Remove(txtForgotUsername);
+            if (ForgotPassPanel.Controls.Contains(txtForgotEmail)) ForgotPassPanel.Controls.Remove(txtForgotEmail);
+
+            _forgotUserShell.Controls.Clear();
+            _forgotUserShell.Controls.Add(_forgotUserIcon);
+            _forgotUserShell.Controls.Add(txtForgotUsername);
+
+            _forgotEmailShell.Controls.Clear();
+            _forgotEmailShell.Controls.Add(_forgotEmailIcon);
+            _forgotEmailShell.Controls.Add(txtForgotEmail);
+
+            txtForgotUsername.Location = new Point(54, 14);
+            txtForgotEmail.Location = new Point(54, 14);
+
+            txtForgotUsername.GotFocus += (_, _) => { _forgotUserShell.Invalidate(); txtForgotUsername.BackColor = InputBgFocused; _forgotUserIcon.ForeColor = Color.FromArgb(251, 206, 181); };
+            txtForgotUsername.LostFocus += (_, _) => { _forgotUserShell.Invalidate(); txtForgotUsername.BackColor = InputBgNormal; _forgotUserIcon.ForeColor = Color.FromArgb(220, 255, 255, 255); };
+            txtForgotEmail.GotFocus += (_, _) => { _forgotEmailShell.Invalidate(); txtForgotEmail.BackColor = InputBgFocused; _forgotEmailIcon.ForeColor = Color.FromArgb(251, 206, 181); };
+            txtForgotEmail.LostFocus += (_, _) => { _forgotEmailShell.Invalidate(); txtForgotEmail.BackColor = InputBgNormal; _forgotEmailIcon.ForeColor = Color.FromArgb(220, 255, 255, 255); };
         }
 
         private void BuildInputShell(Panel shell, Label icon, TextBox box, string glyph)
         {
             shell.BackColor = Color.Transparent;
-            shell.Size = new Size(320, 44);
+            shell.Size = new Size(320, 50); // Height 50 matching login-form-20
             shell.Left = 34;
             shell.Paint -= InputShell_Paint;
             shell.Paint += InputShell_Paint;
@@ -586,69 +726,21 @@ namespace CourseGuard.Frontend.Forms.Login
             shell.Click += (_, _) => box.Focus();
 
             icon.Text = glyph;
-            icon.Font = new Font("Segoe MDL2 Assets", 16f, FontStyle.Regular);
-            icon.ForeColor = MetaTheme.Colors.TextSecondary;
+            icon.Font = new Font("Segoe MDL2 Assets", 14f, FontStyle.Regular);
+            icon.ForeColor = Color.FromArgb(220, 255, 255, 255);
             icon.AutoSize = false;
             icon.Size = new Size(34, 44);
-            icon.Location = new Point(10, 0);
+            icon.Location = new Point(14, 3);
             icon.TextAlign = ContentAlignment.MiddleCenter;
             icon.BackColor = Color.Transparent;
             icon.Click += (_, _) => box.Focus();
 
             box.BorderStyle = BorderStyle.None;
-            box.BackColor = Color.FromArgb(24, 24, 32);
-            box.ForeColor = MetaTheme.Colors.TextPrimary;
+            box.BackColor = InputBgNormal;
+            box.ForeColor = Color.White;
         }
 
-        private void ApplyUsernamePlaceholder()
-        {
-            if (!string.IsNullOrWhiteSpace(txtUsername.Text)) return;
-            _usernamePlaceholderActive = true;
-            txtUsername.Text = UsernamePlaceholder;
-            txtUsername.ForeColor = MetaTheme.Colors.TextMuted;
-        }
-
-        private void ApplyPasswordPlaceholder()
-        {
-            if (!string.IsNullOrWhiteSpace(txtPassword.Text)) return;
-            _passwordPlaceholderActive = true;
-            txtPassword.UseSystemPasswordChar = false;
-            txtPassword.Text = PasswordPlaceholder;
-            txtPassword.ForeColor = MetaTheme.Colors.TextMuted;
-        }
-
-        private void TxtUsername_Enter(object? sender, EventArgs e)
-        {
-            if (!_usernamePlaceholderActive) return;
-            _usernamePlaceholderActive = false;
-            txtUsername.Text = string.Empty;
-            txtUsername.ForeColor = MetaTheme.Colors.TextPrimary;
-        }
-
-        private void TxtUsername_Leave(object? sender, EventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(txtUsername.Text))
-            {
-                ApplyUsernamePlaceholder();
-            }
-        }
-
-        private void TxtPassword_Enter(object? sender, EventArgs e)
-        {
-            if (!_passwordPlaceholderActive) return;
-            _passwordPlaceholderActive = false;
-            txtPassword.Text = string.Empty;
-            txtPassword.ForeColor = MetaTheme.Colors.TextPrimary;
-            txtPassword.UseSystemPasswordChar = true;
-        }
-
-        private void TxtPassword_Leave(object? sender, EventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(txtPassword.Text))
-            {
-                ApplyPasswordPlaceholder();
-            }
-        }
+        // Native cue banner placeholders used instead of custom event-based ones
 
         private void InputShell_Paint(object? sender, PaintEventArgs e)
         {
@@ -657,28 +749,23 @@ namespace CourseGuard.Frontend.Forms.Login
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             var rect = new RectangleF(0.5f, 0.5f, shell.Width - 1f, shell.Height - 1f);
-            using var path = FuturisticLoginKit.CreateRoundedRect(rect, 18f);
+            float radius = (shell.Height - 1f) / 2f; // make it a capsule!
+            using var path = FuturisticLoginKit.CreateRoundedRect(rect, radius);
 
             bool focused = shell.ContainsFocus;
-            var fill = focused ? Color.FromArgb(44, 255, 255, 255) : Color.FromArgb(28, 255, 255, 255);
+            var fill = focused ? InputBgFocused : InputBgNormal;
             using (var b = new SolidBrush(fill))
                 g.FillPath(b, path);
 
-            // glow border on focus
-            if (focused)
+            var borderCol = focused ? InputBorderFocused : InputBorderNormal;
+            using (var borderPen = new Pen(borderCol, 1.2f))
             {
-                using var glowPen = new Pen(MetaTheme.Colors.Accent, 1.4f);
-                g.DrawPath(glowPen, path);
-            }
-            else
-            {
-                using var pen = new Pen(Color.FromArgb(95, 255, 255, 255), 1.1f);
-                g.DrawPath(pen, path);
+                g.DrawPath(borderPen, path);
             }
         }
 
 
-        private void btnRegisterSubmit_Click(object? sender, EventArgs e)
+        private async void btnRegisterSubmit_Click(object? sender, EventArgs e)
         {
             string user = txtRegUsername.Text.Trim();
             string name = txtRegFullName.Text.Trim();
@@ -698,20 +785,28 @@ namespace CourseGuard.Frontend.Forms.Login
                 Email = email
             };
             
-            bool success = AuthService.RegisterRequest(newUser, pass);
+            SetLoginUiBusy(true);
+            try
+            {
+                bool success = await Task.Run(() => AuthService.RegisterRequest(newUser, pass));
 
-            if (success)
-            {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Yêu cầu đăng ký đã được gửi tới Admin chờ phê duyệt", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                ClearRegisterInputs();
-                ShowPanel(LoginPanel);
+                if (success)
+                {
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Yêu cầu đăng ký đã được gửi tới Admin chờ phê duyệt", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    ClearRegisterInputs();
+                    ShowPanel(LoginPanel);
+                }
+                else
+                {
+                    string detail = string.IsNullOrWhiteSpace(AuthService.LastErrorMessage)
+                        ? "Đăng ký thất bại. Tên đăng nhập có thể đã tồn tại."
+                        : AuthService.LastErrorMessage;
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(detail, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
             }
-            else
+            finally
             {
-                string detail = string.IsNullOrWhiteSpace(AuthService.LastErrorMessage)
-                    ? "Đăng ký thất bại. Tên đăng nhập có thể đã tồn tại."
-                    : AuthService.LastErrorMessage;
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(detail, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                SetLoginUiBusy(false);
             }
         }
 
@@ -723,7 +818,7 @@ namespace CourseGuard.Frontend.Forms.Login
             txtRegPassword.Clear();
         }
 
-        private void btnForgotSubmit_Click(object? sender, EventArgs e)
+        private async void btnForgotSubmit_Click(object? sender, EventArgs e)
         {
             string user = txtForgotUsername.Text.Trim();
             string email = txtForgotEmail.Text.Trim();
@@ -734,25 +829,33 @@ namespace CourseGuard.Frontend.Forms.Login
                 return;
             }
 
-            bool success = AuthService.ForgotPasswordRequest(user, email);
+            SetLoginUiBusy(true);
+            try
+            {
+                bool success = await Task.Run(() => AuthService.ForgotPasswordRequest(user, email));
 
-            if (success)
-            {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Yêu cầu cấp lại mật khẩu đã được báo cáo lên Admin", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                txtForgotUsername.Clear();
-                txtForgotEmail.Clear();
-                ShowPanel(LoginPanel);
+                if (success)
+                {
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Yêu cầu cấp lại mật khẩu đã được tiếp nhận. Vui lòng liên hệ Admin để duyệt hoặc kiểm tra hòm thư của bạn nếu thông tin chính xác.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    txtForgotUsername.Clear();
+                    txtForgotEmail.Clear();
+                    ShowPanel(LoginPanel);
+                }
+                else
+                {
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Thông tin không chính xác hoặc không tồn tại.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
-            else
+            finally
             {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Thông tin không chính xác hoặc không tồn tại.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetLoginUiBusy(false);
             }
         }
 
         private async void btnLogin_Click(object sender, EventArgs e)
         {
-            string username = _usernamePlaceholderActive ? string.Empty : txtUsername.Text.Trim();
-            string password = _passwordPlaceholderActive ? string.Empty : txtPassword.Text.Trim();
+            string username = txtUsername.Text.Trim();
+            string password = txtPassword.Text.Trim();
 
             if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
             {
@@ -767,8 +870,28 @@ namespace CourseGuard.Frontend.Forms.Login
                 Stopwatch stopwatch = Stopwatch.StartNew();
                 LogLoginTiming("start login", stopwatch);
 
-                LoginResultModel loginResult = await AuthService.LoginAsync(username, password);
+                LoginResultModel loginResult = await Task.Run(() => AuthService.LoginAsync(username, password, Environment.MachineName));
                 LogLoginTiming("auth response", stopwatch);
+
+                if (loginResult.ErrorCode == LoginErrorCodes.DeviceBlocked)
+                {
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(
+                        "Thiết bị truy cập của bạn đã bị khóa bởi Quản trị viên (Admin).\nVui lòng liên hệ Admin để mở khóa thiết bị.",
+                        "Thiết bị bị khóa",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                    return;
+                }
+
+                if (loginResult.ErrorCode == LoginErrorCodes.AccountLocked)
+                {
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(
+                        "Tài khoản tạm thời bị khóa do nhập sai mật khẩu quá nhiều lần.",
+                        "Tài khoản bị khóa",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
 
                 if (loginResult.ErrorCode == LoginErrorCodes.TempPasswordExpired)
                 {
@@ -785,6 +908,18 @@ namespace CourseGuard.Frontend.Forms.Login
                 {
                     CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Tên đăng nhập hoặc mật khẩu không đúng!", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
+                }
+
+                if (loginResult.IsMfaRequired)
+                {
+                    using (var otpDialog = new MfaOtpDialog(user.Id, AuthService))
+                    {
+                        if (otpDialog.ShowDialog() != DialogResult.OK)
+                        {
+                            return;
+                        }
+                    }
+                    loginResult = AuthService.CompleteMfaLogin(user);
                 }
 
                 Task<string> ipAddressTask = GetLocalIPAddressAsync();
@@ -873,7 +1008,7 @@ namespace CourseGuard.Frontend.Forms.Login
         {
             try
             {
-                Task updateDeviceTask = AuthService.UpdateLoginInfoAsync(user.Id, user.Username, ipAddress);
+                Task updateDeviceTask = AuthService.UpdateLoginInfoAsync(user.Id, Environment.MachineName, ipAddress);
                 Task logLoginTask = AuthService.LogUserActivityAsync(user.Id, "LOGIN", $"Login success: {user.Username}", ipAddress);
                 await Task.WhenAll(updateDeviceTask, logLoginTask);
             }

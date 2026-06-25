@@ -13,6 +13,7 @@ using CourseGuard.Frontend.Forms.Teacher;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 using CourseGuard.Frontend.UserControls.Shared.Chat;
+using CourseGuard.Backend.Services.Realtime;
 
 namespace CourseGuard.Frontend.UserControls.Teacher
 {
@@ -21,7 +22,6 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private readonly int _teacherId;
         private readonly ChatController _chat = new(new CourseGuardDbContext(""));
         private readonly List<ChatCourseModel> _courses = new();
-        private readonly System.Windows.Forms.Timer _pollTimer = new() { Interval = 3000 };
         private readonly ListBox _courseList = new();
         private readonly ChatMessageListControl _messageList = new();
         private readonly TextBox _input = new();
@@ -81,18 +81,44 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _imagePreviewStrip.ImagesChanged += (_, _) => UpdateImagePreviewVisibility();
             _imagePreviewStrip.RequestInputFocus += (_, _) => _input.Focus();
 
-            _pollTimer.Tick += async (_, _) => await RefreshMessagesAsync();
+            SupabaseRealtimeChatService.Instance.OnChatChanged += OnChatRealtimeChanged;
+            SupabaseRealtimeChatService.Instance.Start();
+
             Load += async (_, _) =>
             {
                 await LoadCoursesAsync();
-                _pollTimer.Start();
             };
             Disposed += (_, _) =>
             {
                 _uiAlive = false;
-                _pollTimer.Stop();
-                _pollTimer.Dispose();
+                SupabaseRealtimeChatService.Instance.OnChatChanged -= OnChatRealtimeChanged;
             };
+        }
+
+        private void OnChatRealtimeChanged(object? sender, ChatChangedEventArgs e)
+        {
+            if (e.CourseId == _selectedCourseId)
+            {
+                if (InvokeRequired)
+                {
+                    try
+                    {
+                        BeginInvoke(new Action(() => OnChatRealtimeChanged(sender, e)));
+                    }
+                    catch
+                    {
+                        // Control có thể đã bị hủy bỏ
+                    }
+                    return;
+                }
+
+                if (!_uiAlive || IsDisposed)
+                {
+                    return;
+                }
+
+                RefreshMessagesAsync().FireAndForgetSafe(this);
+            }
         }
 
         private void BuildLayout()
@@ -374,11 +400,33 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 {
                     _messageList.AppendMessages(messages, _teacherId);
                 }
+
+                MarkDisplayedMessagesReadAsync(courseId).FireAndForgetSafe(this);
             }
             finally
             {
                 _isLoadingMessages = false;
             }
+        }
+
+        private Task MarkDisplayedMessagesReadAsync(int courseId)
+        {
+            int userId = _teacherId;
+            if (userId <= 0 || courseId <= 0)
+            {
+                return Task.CompletedTask;
+            }
+
+            return Task.Run(() =>
+            {
+                try
+                {
+                    _chat.MarkCourseRead(userId, courseId);
+                }
+                catch
+                {
+                }
+            });
         }
 
         private async Task LoadOlderMessagesAsync()

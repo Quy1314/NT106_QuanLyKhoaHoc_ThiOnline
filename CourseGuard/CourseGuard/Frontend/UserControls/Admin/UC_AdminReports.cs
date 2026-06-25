@@ -45,9 +45,8 @@ namespace CourseGuard.Frontend.UserControls.Admin
             cboReportType.Items.Clear();
             cboReportType.Items.Add("Danh sách học viên");
             cboReportType.Items.Add("Danh sách giảng viên");
-            // Placeholder for future:
-            // cboReportType.Items.Add("Danh sách vi phạm");
-            // cboReportType.Items.Add("Danh sách đăng nhập");
+            cboReportType.Items.Add("Danh sách vi phạm");
+            cboReportType.Items.Add("Danh sách đăng nhập");
 
             cboReportType.SelectedIndex = 0; 
         }
@@ -100,11 +99,27 @@ namespace CourseGuard.Frontend.UserControls.Admin
                     AND u.CREATED_AT BETWEEN @start AND @end
                     ORDER BY u.CREATED_AT DESC";
             }
-            // Future implementation for "Danh sách vi phạm" and "Danh sách đăng nhập"
-             /*
-            else if (reportType == "Danh sách vi phạm") { ... }
-            else if (reportType == "Danh sách đăng nhập") { ... }
-             */
+            else if (reportType == "Danh sách vi phạm")
+            {
+                query = @"
+                    SELECT v.ID, u.USERNAME, u.FULL_NAME, e.TITLE AS EXAM_TITLE, v.TYPE AS VIOLATION_TYPE, v.CREATED_AT
+                    FROM VIOLATIONS v
+                    JOIN USERS u ON v.USER_ID = u.ID
+                    LEFT JOIN EXAM_ATTEMPTS ea ON v.EXAM_ATTEMPT_ID = ea.ID
+                    LEFT JOIN EXAMS e ON ea.EXAM_ID = e.ID
+                    WHERE v.CREATED_AT BETWEEN @start AND @end
+                    ORDER BY v.CREATED_AT DESC";
+            }
+            else if (reportType == "Danh sách đăng nhập")
+            {
+                query = @"
+                    SELECT a.ID, COALESCE(u.USERNAME, 'SYSTEM') AS USERNAME, a.ACTION, a.DETAILS, a.IP_ADDRESS, a.CREATED_AT
+                    FROM AUDIT_LOGS a
+                    LEFT JOIN USERS u ON a.USER_ID = u.ID
+                    WHERE a.ACTION = 'LOGIN'
+                    AND a.CREATED_AT BETWEEN @start AND @end
+                    ORDER BY a.CREATED_AT DESC";
+            }
             else
             {
                 // Fallback or empty
@@ -140,15 +155,96 @@ namespace CourseGuard.Frontend.UserControls.Admin
             ExportToTextFile(",", "CSV File (*.csv)|*.csv");
         }
 
-        // Export to Excel (Using CSV format but opening as Excel)
-        private void BtnExportExcel_Click(object? sender, EventArgs e)
+        // Export to Excel using MiniExcel (Generates professional .xlsx file in background thread)
+        private async void BtnExportExcel_Click(object? sender, EventArgs e)
         {
-            // Providing Tab-delimited or generic CSV usually works for Excel
-            ExportToTextFile("\t", "Excel File (*.xls)|*.xls"); 
-            // Note: Saving as .xls with tab delimiter handles basic data well. Use .csv for strict CSV.
+            if (dataGridView1.Rows.Count == 0)
+            {
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Không có dữ liệu để xuất.");
+                return;
+            }
+
+            SaveFileDialog sfd = new SaveFileDialog();
+            sfd.Filter = "Excel Workbook (*.xlsx)|*.xlsx";
+            sfd.FileName = "Report_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
+            if (sfd.ShowDialog() == DialogResult.OK)
+            {
+                this.ShowSkeleton(SkeletonType.FormWithTable);
+                try
+                {
+                    string filePath = sfd.FileName;
+
+                    // 1. Prepare DataTable on UI thread (safe and thread-safe)
+                    DataTable? dtToExport = null;
+                    if (dataGridView1.DataSource is DataTable dt)
+                    {
+                        dtToExport = dt.Copy(); // Copy to be safe from cross-thread access during serialization
+                        for (int i = 0; i < dataGridView1.Columns.Count; i++)
+                        {
+                            string colName = dataGridView1.Columns[i].DataPropertyName;
+                            if (!string.IsNullOrEmpty(colName) && dtToExport.Columns.Contains(colName))
+                            {
+                                var col = dtToExport.Columns[colName];
+                                if (col != null)
+                                {
+                                    col.ColumnName = dataGridView1.Columns[i].HeaderText;
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Build DataTable from DataGridView rows/columns manually if not bound to a DataTable
+                        dtToExport = new DataTable();
+                        for (int i = 0; i < dataGridView1.Columns.Count; i++)
+                        {
+                            dtToExport.Columns.Add(dataGridView1.Columns[i].HeaderText);
+                        }
+
+                        foreach (DataGridViewRow row in dataGridView1.Rows)
+                        {
+                            if (!row.IsNewRow)
+                            {
+                                var cells = new object[dataGridView1.Columns.Count];
+                                for (int i = 0; i < dataGridView1.Columns.Count; i++)
+                                {
+                                    cells[i] = row.Cells[i].Value ?? DBNull.Value;
+                                }
+                                dtToExport.Rows.Add(cells);
+                            }
+                        }
+                    }
+
+                    // 2. Save in background thread using MiniExcel
+                    await Task.Run(() =>
+                    {
+                        MiniExcelLibs.MiniExcel.SaveAs(filePath, dtToExport, overwriteFile: true);
+                    });
+
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Xuất file Excel thành công!");
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = filePath,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch { /* Ignore if no default app */ }
+                }
+                catch (Exception ex)
+                {
+                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi xuất file Excel: " + ex.Message);
+                }
+                finally
+                {
+                    this.HideSkeleton();
+                }
+            }
         }
 
-        private void ExportToTextFile(string separator, string filter)
+        private async void ExportToTextFile(string separator, string filter)
         {
             if (dataGridView1.Rows.Count == 0)
             {
@@ -162,46 +258,70 @@ namespace CourseGuard.Frontend.UserControls.Admin
             
             if (sfd.ShowDialog() == DialogResult.OK)
             {
+                this.ShowSkeleton(SkeletonType.FormWithTable);
                 try
                 {
-                    StringBuilder sb = new StringBuilder();
-
-                    // Headers
+                    // 1. Extract data from UI on UI thread (safe and fast)
+                    var headers = new List<string>();
                     for (int i = 0; i < dataGridView1.Columns.Count; i++)
                     {
-                        sb.Append(dataGridView1.Columns[i].HeaderText);
-                        if (i < dataGridView1.Columns.Count - 1) sb.Append(separator);
+                        headers.Add(dataGridView1.Columns[i].HeaderText);
                     }
-                    sb.AppendLine();
 
-                    // Rows
+                    var rowData = new List<string[]>();
                     foreach (DataGridViewRow row in dataGridView1.Rows)
                     {
                         if (!row.IsNewRow)
                         {
+                            var cells = new string[dataGridView1.Columns.Count];
                             for (int i = 0; i < dataGridView1.Columns.Count; i++)
                             {
-                                string value = row.Cells[i].Value?.ToString() ?? "";
-                                // Escape if necessary (basic)
-                                value = value.Replace("\n", " ").Replace("\r", " ");
+                                cells[i] = row.Cells[i].Value?.ToString() ?? "";
+                            }
+                            rowData.Add(cells);
+                        }
+                    }
+
+                    string filePath = sfd.FileName;
+
+                    // 2. Perform string building and file writing on background thread
+                    await System.Threading.Tasks.Task.Run(() =>
+                    {
+                        StringBuilder sb = new StringBuilder();
+
+                        // Headers
+                        for (int i = 0; i < headers.Count; i++)
+                        {
+                            sb.Append(headers[i]);
+                            if (i < headers.Count - 1) sb.Append(separator);
+                        }
+                        sb.AppendLine();
+
+                        // Rows
+                        foreach (var cells in rowData)
+                        {
+                            for (int i = 0; i < cells.Length; i++)
+                            {
+                                string value = cells[i].Replace("\n", " ").Replace("\r", " ");
                                 if (value.Contains(separator))
                                 {
                                     value = "\"" + value + "\"";
                                 }
                                 sb.Append(value);
-                                if (i < dataGridView1.Columns.Count - 1) sb.Append(separator);
+                                if (i < cells.Length - 1) sb.Append(separator);
                             }
                             sb.AppendLine();
                         }
-                    }
 
-                    File.WriteAllText(sfd.FileName, sb.ToString(), Encoding.UTF8);
+                        File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
+                    });
+
                     CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Xuất file thành công!");
                     try
                     {
                         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                         {
-                            FileName = sfd.FileName,
+                            FileName = filePath,
                             UseShellExecute = true
                         });
                     }
@@ -210,6 +330,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 catch (Exception ex)
                 {
                     CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi xuất file: " + ex.Message);
+                }
+                finally
+                {
+                    this.HideSkeleton();
                 }
             }
         }

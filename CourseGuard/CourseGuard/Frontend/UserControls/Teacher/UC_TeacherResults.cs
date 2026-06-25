@@ -121,11 +121,11 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             if (dialog.ShowDialog(FindForm()) != DialogResult.OK)
                 return;
 
-            bool updated = Controller.UpdateScore(TeacherId, new TeacherScoreModel
+            bool updated = await Task.Run(() => Controller.UpdateScore(TeacherId, new TeacherScoreModel
             {
                 AttemptId = attemptId,
                 Score = dialog.Score
-            });
+            }));
 
             if (!updated)
             {

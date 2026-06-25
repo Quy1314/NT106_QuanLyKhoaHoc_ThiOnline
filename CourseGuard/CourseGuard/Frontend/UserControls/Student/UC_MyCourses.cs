@@ -410,7 +410,7 @@ namespace CourseGuard.Frontend.UserControls.Student
         }
 
         // ── Hủy / Rút khỏi khóa học ─────────────────────────────────────
-        private void BtnDrop_Click(object? sender, EventArgs e)
+        private async void BtnDrop_Click(object? sender, EventArgs e)
         {
             if (dgvMyCourses.CurrentRow == null || dgvMyCourses.CurrentRow.IsNewRow)
             {
@@ -440,8 +440,21 @@ namespace CourseGuard.Frontend.UserControls.Student
             if (result != DialogResult.Yes) return;
 
             int studentId = _studentId;
-            string message = _controller.DropCourse(courseId, studentId);
-            MetaTheme.ShowModernDialog(message, "Kết quả", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            btnDrop.Enabled = false;
+            this.ShowSkeleton(SkeletonType.TableWithToolbarAndDetailPanel);
+            try
+            {
+                string message = await System.Threading.Tasks.Task.Run(() => _controller.DropCourse(courseId, studentId));
+                MetaTheme.ShowModernDialog(message, "Kết quả", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MetaTheme.ShowModernDialog("Lỗi hủy/rút khóa học: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                this.HideSkeleton();
+            }
 
             // Reload
             _ = LoadEnrollments();

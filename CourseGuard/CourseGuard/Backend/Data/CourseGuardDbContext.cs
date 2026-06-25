@@ -41,7 +41,11 @@ namespace CourseGuard.Backend.Data
         {
             const string sql = @"
                 ALTER TABLE users
-                    ADD COLUMN IF NOT EXISTS temp_password_expires_at TIMESTAMP;
+                    ADD COLUMN IF NOT EXISTS temp_password_expires_at TIMESTAMP,
+                    ADD COLUMN IF NOT EXISTS failed_attempts INT DEFAULT 0,
+                    ADD COLUMN IF NOT EXISTS lockout_until TIMESTAMP,
+                    ADD COLUMN IF NOT EXISTS mfa_otp VARCHAR(10),
+                    ADD COLUMN IF NOT EXISTS mfa_otp_expires_at TIMESTAMP;
 
                 CREATE INDEX IF NOT EXISTS idx_users_temp_password_expires_at
                     ON users (temp_password_expires_at)
@@ -53,7 +57,7 @@ namespace CourseGuard.Backend.Data
 
         private static UserModel ReadUser(NpgsqlDataReader reader, int tempPasswordExpiresAtIndex, int? avatarPathIndex = null)
         {
-            return new UserModel
+            var user = new UserModel
             {
                 Id = reader.GetInt32(0),
                 Username = reader.GetString(1),
@@ -67,6 +71,16 @@ namespace CourseGuard.Backend.Data
                     ? reader.GetString(avatarPathIndex.Value)
                     : string.Empty
             };
+
+            if (reader.FieldCount > 9)
+            {
+                user.FailedAttempts = reader.IsDBNull(9) ? 0 : reader.GetInt32(9);
+                user.LockoutUntil = reader.IsDBNull(10) ? null : reader.GetDateTime(10);
+                user.MfaOtp = reader.IsDBNull(11) ? null : reader.GetString(11);
+                user.MfaOtpExpiresAt = reader.IsDBNull(12) ? null : reader.GetDateTime(12);
+            }
+
+            return user;
         }
 
         public void EnsureCourseWorkflowSchema()
@@ -94,7 +108,8 @@ namespace CourseGuard.Backend.Data
 
             string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status,
                                     u.temp_password_expires_at,
-                                    COALESCE(sp.avatar_path, tp.avatar_path, '') AS avatar_path
+                                    COALESCE(sp.avatar_path, tp.avatar_path, '') AS avatar_path,
+                                    u.failed_attempts, u.lockout_until, u.mfa_otp, u.mfa_otp_expires_at
                              FROM USERS u
                              JOIN ROLES r ON u.role_id = r.id
                              LEFT JOIN student_profiles sp ON sp.user_id = u.id
@@ -120,7 +135,8 @@ namespace CourseGuard.Backend.Data
 
             const string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status,
                                     u.temp_password_expires_at,
-                                    COALESCE(sp.avatar_path, tp.avatar_path, '') AS avatar_path
+                                    COALESCE(sp.avatar_path, tp.avatar_path, '') AS avatar_path,
+                                    u.failed_attempts, u.lockout_until, u.mfa_otp, u.mfa_otp_expires_at
                              FROM USERS u
                              JOIN ROLES r ON u.role_id = r.id
                              LEFT JOIN student_profiles sp ON sp.user_id = u.id
@@ -198,6 +214,135 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@id", userId);
 
             command.ExecuteNonQuery();
+        }
+
+        public void IncrementFailedAttempts(int userId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureUserSecuritySchema(connection);
+
+            // Get current failed attempts
+            int currentAttempts = 0;
+            const string selectSql = "SELECT failed_attempts FROM Users WHERE id = @id";
+            using (var selectCmd = new NpgsqlCommand(selectSql, connection))
+            {
+                selectCmd.Parameters.AddWithValue("@id", userId);
+                var result = selectCmd.ExecuteScalar();
+                if (result != null && result != DBNull.Value)
+                {
+                    currentAttempts = Convert.ToInt32(result);
+                }
+            }
+
+            currentAttempts++;
+            
+            int limit = 5;
+            string? limitStr = Environment.GetEnvironmentVariable("BRUTE_FORCE_LIMIT");
+            if (int.TryParse(limitStr, out int l)) limit = l;
+
+            int lockoutMinutes = 15;
+            string? lockoutStr = Environment.GetEnvironmentVariable("BRUTE_FORCE_LOCKOUT_MINUTES");
+            if (int.TryParse(lockoutStr, out int lm)) lockoutMinutes = lm;
+
+            DateTime? lockoutUntil = null;
+            if (currentAttempts >= limit)
+            {
+                lockoutUntil = DateTime.Now.AddMinutes(lockoutMinutes);
+            }
+
+            const string updateSql = @"
+                UPDATE Users
+                SET failed_attempts = @failed_attempts,
+                    lockout_until = @lockout_until
+                WHERE id = @id";
+
+            using var command = new NpgsqlCommand(updateSql, connection);
+            command.Parameters.AddWithValue("@failed_attempts", currentAttempts);
+            command.Parameters.AddWithValue("@lockout_until", (object?)lockoutUntil ?? DBNull.Value);
+            command.Parameters.AddWithValue("@id", userId);
+            command.ExecuteNonQuery();
+        }
+
+        public void ResetFailedAttempts(int userId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureUserSecuritySchema(connection);
+
+            const string sql = @"
+                UPDATE Users
+                SET failed_attempts = 0,
+                    lockout_until = NULL
+                WHERE id = @id";
+
+            using var command = new NpgsqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@id", userId);
+            command.ExecuteNonQuery();
+        }
+
+        public void SaveMfaOtp(int userId, string otp, DateTime expiresAt)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureUserSecuritySchema(connection);
+
+            const string sql = @"
+                UPDATE Users
+                SET mfa_otp = @mfa_otp,
+                    mfa_otp_expires_at = @mfa_otp_expires_at
+                WHERE id = @id";
+
+            using var command = new NpgsqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@mfa_otp", otp);
+            command.Parameters.AddWithValue("@mfa_otp_expires_at", expiresAt);
+            command.Parameters.AddWithValue("@id", userId);
+            command.ExecuteNonQuery();
+        }
+
+        public bool VerifyMfaOtp(int userId, string otp)
+        {
+            if (string.IsNullOrWhiteSpace(otp)) return false;
+
+            using var connection = CreateConnection();
+            connection.Open();
+            EnsureUserSecuritySchema(connection);
+
+            const string sql = @"
+                SELECT mfa_otp, mfa_otp_expires_at
+                FROM Users
+                WHERE id = @id";
+
+            using var command = new NpgsqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@id", userId);
+
+            using var reader = command.ExecuteReader();
+            if (reader.Read())
+            {
+                string? storedOtp = reader.IsDBNull(0) ? null : reader.GetString(0);
+                DateTime? expiresAt = reader.IsDBNull(1) ? null : reader.GetDateTime(1);
+
+                if (storedOtp != null && expiresAt.HasValue && 
+                    string.Equals(storedOtp.Trim(), otp.Trim(), StringComparison.Ordinal) &&
+                    expiresAt.Value > DateTime.Now)
+                {
+                    reader.Close();
+
+                    // Clear OTP after successful verification to prevent reuse
+                    const string clearSql = @"
+                        UPDATE Users
+                        SET mfa_otp = NULL,
+                            mfa_otp_expires_at = NULL
+                        WHERE id = @id";
+                    using var clearCommand = new NpgsqlCommand(clearSql, connection);
+                    clearCommand.Parameters.AddWithValue("@id", userId);
+                    clearCommand.ExecuteNonQuery();
+
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void EnsureStudentProfileSchema(NpgsqlConnection connection)
@@ -2010,7 +2155,9 @@ namespace CourseGuard.Backend.Data
             EnsureUserSecuritySchema(connection);
 
             string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status,
-                                    u.temp_password_expires_at
+                                    u.temp_password_expires_at,
+                                    '' AS avatar_path,
+                                    u.failed_attempts, u.lockout_until, u.mfa_otp, u.mfa_otp_expires_at
                             FROM USERS u 
                             JOIN ROLES r ON u.role_id = r.id 
                             WHERE LOWER(u.username) = LOWER(@username) AND u.email = @email";
@@ -2021,7 +2168,7 @@ namespace CourseGuard.Backend.Data
             using var reader = command.ExecuteReader();
             if (reader.Read())
             {
-                return ReadUser(reader, tempPasswordExpiresAtIndex: 7);
+                return ReadUser(reader, tempPasswordExpiresAtIndex: 7, avatarPathIndex: 8);
             }
 
             return null;
@@ -2034,7 +2181,9 @@ namespace CourseGuard.Backend.Data
             EnsureUserSecuritySchema(connection);
 
             const string query = @"SELECT u.id, u.username, u.password_hash, u.full_name, u.email, r.name as role, u.status,
-                                   u.temp_password_expires_at
+                                   u.temp_password_expires_at,
+                                   '' AS avatar_path,
+                                   u.failed_attempts, u.lockout_until, u.mfa_otp, u.mfa_otp_expires_at
                                    FROM USERS u
                                    JOIN ROLES r ON u.role_id = r.id
                                    WHERE u.id = @id";
@@ -2045,7 +2194,7 @@ namespace CourseGuard.Backend.Data
             using var reader = command.ExecuteReader();
             if (reader.Read())
             {
-                return ReadUser(reader, tempPasswordExpiresAtIndex: 7);
+                return ReadUser(reader, tempPasswordExpiresAtIndex: 7, avatarPathIndex: 8);
             }
 
             return null;
@@ -2797,6 +2946,28 @@ namespace CourseGuard.Backend.Data
 
             using var cmd = new NpgsqlCommand(sql, connection);
             cmd.ExecuteNonQuery();
+
+            try
+            {
+                const string publicationSql = @"
+                    DO $$
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM pg_publication_tables 
+                                WHERE pubname = 'supabase_realtime' AND tablename = 'messages'
+                            ) THEN
+                                ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+                            END IF;
+                        END IF;
+                    END $$;";
+                using var pubCmd = new NpgsqlCommand(publicationSql, connection);
+                pubCmd.ExecuteNonQuery();
+            }
+            catch
+            {
+                // Bỏ qua lỗi phân quyền trong môi trường DB bị hạn chế
+            }
         }
 
         public List<ChatCourseModel> GetChatCoursesForUser(int userId)
@@ -4144,7 +4315,7 @@ namespace CourseGuard.Backend.Data
                 TotalUsers = ScalarInt("SELECT COUNT(*) FROM USERS"),
                 ActiveCourses = ScalarInt("SELECT COUNT(*) FROM COURSES WHERE UPPER(COALESCE(STATUS, '')) = 'ACTIVE'"),
                 PendingRequests = ScalarInt("SELECT COUNT(*) FROM USERS WHERE UPPER(COALESCE(STATUS, '')) = 'PENDING'"),
-                TodayLogins = ScalarInt("SELECT COUNT(*) FROM AUDIT_LOGS WHERE ACTION = 'LOGIN' AND CREATED_AT::date = CURRENT_DATE")
+                TodayLogins = ScalarInt("SELECT COUNT(*) FROM AUDIT_LOGS WHERE ACTION = 'LOGIN' AND CREATED_AT >= CURRENT_DATE AND CREATED_AT < CURRENT_DATE + INTERVAL '1 day'")
             };
         }
 
@@ -5202,6 +5373,80 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@meeting_link", string.IsNullOrWhiteSpace(meetingLink) ? (object)DBNull.Value : meetingLink);
 
             return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+        }
+
+        public List<Models.DeviceModel> GetActiveDevices()
+        {
+            var list = new List<Models.DeviceModel>();
+            using var connection = CreateConnection();
+            connection.Open();
+            const string query = @"
+                SELECT d.id, d.user_id, u.username, u.full_name, d.device_name, d.ip_address, d.status, d.last_active
+                FROM DEVICES d
+                JOIN USERS u ON d.user_id = u.id
+                ORDER BY d.last_active DESC";
+            using var command = new NpgsqlCommand(query, connection);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                list.Add(new Models.DeviceModel
+                {
+                    Id = reader.GetInt32(0),
+                    UserId = reader.GetInt32(1),
+                    Username = reader.GetString(2),
+                    UserFullName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                    DeviceName = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                    IpAddress = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
+                    Status = reader.IsDBNull(6) ? "ACTIVE" : reader.GetString(6),
+                    LastActive = reader.GetDateTime(7)
+                });
+            }
+            return list;
+        }
+
+        public bool UpdateDeviceStatus(int deviceId, string status)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            const string query = "UPDATE DEVICES SET status = @status WHERE id = @id";
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@status", status);
+            command.Parameters.AddWithValue("@id", deviceId);
+            return command.ExecuteNonQuery() > 0;
+        }
+
+        public bool DeleteDevice(int deviceId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            const string query = "DELETE FROM DEVICES WHERE id = @id";
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@id", deviceId);
+            return command.ExecuteNonQuery() > 0;
+        }
+
+        public bool IsDeviceBlocked(int userId, string deviceName)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            const string query = "SELECT 1 FROM DEVICES WHERE user_id = @user_id AND device_name = @device_name AND UPPER(status) = 'BLOCKED'";
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            command.Parameters.AddWithValue("@device_name", deviceName);
+            var result = command.ExecuteScalar();
+            return result != null;
+        }
+
+        public async Task<bool> IsDeviceBlockedAsync(int userId, string deviceName, CancellationToken cancellationToken = default)
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            const string query = "SELECT 1 FROM DEVICES WHERE user_id = @user_id AND device_name = @device_name AND UPPER(status) = 'BLOCKED'";
+            await using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@user_id", userId);
+            command.Parameters.AddWithValue("@device_name", deviceName);
+            var result = await command.ExecuteScalarAsync(cancellationToken);
+            return result != null;
         }
     }
 }

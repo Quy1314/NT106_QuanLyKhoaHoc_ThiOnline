@@ -17,9 +17,6 @@ namespace CourseGuard.Frontend.UserControls.Student
         {
             this.lblTitle = new System.Windows.Forms.Label();
             this.cboTimeFilter = new System.Windows.Forms.ComboBox();
-            this.dgvSchedule = new System.Windows.Forms.DataGridView();
-            this.btnJoinOnline = new System.Windows.Forms.Button();
-            ((System.ComponentModel.ISupportInitialize)(this.dgvSchedule)).BeginInit();
             this.SuspendLayout();
             // 
             // lblTitle
@@ -39,54 +36,23 @@ namespace CourseGuard.Frontend.UserControls.Student
             this.cboTimeFilter.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.SubtitleMd();
             this.cboTimeFilter.FormattingEnabled = true;
             this.cboTimeFilter.Items.AddRange(new object[] {
+            "Hôm nay",
             "Tuần này",
-            "Tháng này",
-            "Tất cả"});
+            "Tháng này"});
             this.cboTimeFilter.Location = new System.Drawing.Point(20, 70);
             this.cboTimeFilter.Name = "cboTimeFilter";
             this.cboTimeFilter.Size = new System.Drawing.Size(200, 33);
             this.cboTimeFilter.TabIndex = 1;
-            // 
-            // btnJoinOnline
-            // 
-            this.btnJoinOnline.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnJoinOnline.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(37)))), ((int)(((byte)(99)))), ((int)(((byte)(235)))));
-            this.btnJoinOnline.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnJoinOnline.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
-            this.btnJoinOnline.ForeColor = System.Drawing.Color.White;
-            this.btnJoinOnline.Location = new System.Drawing.Point(730, 68);
-            this.btnJoinOnline.Name = "btnJoinOnline";
-            this.btnJoinOnline.Size = new System.Drawing.Size(150, 35);
-            this.btnJoinOnline.TabIndex = 2;
-            this.btnJoinOnline.Text = "Tham gia Online";
-            this.btnJoinOnline.UseVisualStyleBackColor = false;
-            // 
-            // dgvSchedule
-            // 
-            this.dgvSchedule.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.dgvSchedule.BackgroundColor = System.Drawing.Color.White;
-            this.dgvSchedule.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.dgvSchedule.Location = new System.Drawing.Point(20, 120);
-            this.dgvSchedule.Name = "dgvSchedule";
-            this.dgvSchedule.RowHeadersWidth = 51;
-            this.dgvSchedule.RowTemplate.Height = 29;
-            this.dgvSchedule.Size = new System.Drawing.Size(860, 420);
-            this.dgvSchedule.TabIndex = 3;
             // 
             // UC_Schedule
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 20F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(242)))), ((int)(((byte)(244)))), ((int)(((byte)(248)))));
-            this.Controls.Add(this.dgvSchedule);
-            this.Controls.Add(this.btnJoinOnline);
             this.Controls.Add(this.cboTimeFilter);
             this.Controls.Add(this.lblTitle);
             this.Name = "UC_Schedule";
             this.Size = new System.Drawing.Size(900, 560);
-            ((System.ComponentModel.ISupportInitialize)(this.dgvSchedule)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -94,7 +60,5 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         private System.Windows.Forms.Label lblTitle;
         private System.Windows.Forms.ComboBox cboTimeFilter;
-        private System.Windows.Forms.DataGridView dgvSchedule;
-        private System.Windows.Forms.Button btnJoinOnline;
     }
 }

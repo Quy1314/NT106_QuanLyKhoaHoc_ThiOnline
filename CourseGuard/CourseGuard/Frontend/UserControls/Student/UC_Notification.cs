@@ -247,7 +247,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                     return;
 
                 row.Cells["IsRead"].Value = true;
-                row.Cells["Tráº¡ng thÃ¡i"].Value = "ÄÃ£ Ä‘á»c";
+                row.Cells["Trạng thái"].Value = "Đã đọc";
                 row.DataGridView?.InvalidateRow(row.Index);
                 UpdateCachedNotificationRow(notificationId);
 
@@ -271,7 +271,7 @@ namespace CourseGuard.Frontend.UserControls.Student
                     continue;
 
                 dataRow["IsRead"] = true;
-                dataRow["Tráº¡ng thÃ¡i"] = "ÄÃ£ Ä‘á»c";
+                dataRow["Trạng thái"] = "Đã đọc";
                 break;
             }
         }
