@@ -26,6 +26,7 @@ using CourseGuard.Backend.Services;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.UserControls.Student;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Backend.Services.Realtime;
 
 namespace CourseGuard.Frontend.Forms.Student
 {
@@ -93,6 +94,8 @@ namespace CourseGuard.Frontend.Forms.Student
             });
             _sidebar.NavItemClicked += Sidebar_NavItemClicked;
             LoadChatUnreadCountAsync().FireAndForgetSafe(this);
+            SupabaseRealtimeChatService.Instance.OnChatChanged += OnChatRealtimeChanged;
+            SupabaseRealtimeChatService.Instance.Start();
 
             // Right container holds Topbar(Top) + mainboard(Fill)
             _rightPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 8, 12, 0) };
@@ -421,6 +424,14 @@ namespace CourseGuard.Frontend.Forms.Student
                 FocusProfileSecuritySection();
         }
 
+        private void OnChatRealtimeChanged(object? sender, ChatChangedEventArgs e)
+        {
+            if (_currentPageName != ChatPage && e.SenderId != (currentUser?.Id ?? 0))
+            {
+                LoadChatUnreadCountAsync().FireAndForgetSafe(this);
+            }
+        }
+
         private async Task LoadChatUnreadCountAsync()
         {
             int loadVersion = _chatUnreadLoadVersion;
@@ -581,6 +592,8 @@ namespace CourseGuard.Frontend.Forms.Student
                 return;
             }
             _reminderService?.Dispose();
+            SupabaseRealtimeChatService.Instance.OnChatChanged -= OnChatRealtimeChanged;
+            SupabaseRealtimeChatService.Instance.Stop();
             base.OnFormClosing(e);
         }
 

@@ -12,6 +12,7 @@ using CourseGuard.Backend.Security;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
 using CourseGuard.Frontend.UserControls.Teacher;
+using CourseGuard.Backend.Services.Realtime;
 
 namespace CourseGuard.Frontend.Forms.Teacher
 {
@@ -34,6 +35,8 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private string _currentPageName = OverviewPage;
         private bool _isForceChangePasswordActive;
         private Panel? _forceChangePasswordBanner;
+        private readonly ChatController _chatController;
+        private int _chatUnreadLoadVersion;
 
         public TeacherDashboard() : this(new UserModel { Id = 0, Username = "teacher", FullName = "Teacher" }, focusSecurityOnStart: false)
         {
@@ -44,6 +47,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _currentUser = user ?? new UserModel { Id = 0, Username = "teacher", FullName = "Teacher" };
             _teacherId = _currentUser.Id;
             _teacherController = new TeacherController(_dbContext);
+            _chatController = new ChatController(_dbContext);
             
             TeacherProfileModel? profile = SafeGetProfile(_teacherId);
             _teacherName = GetDisplayName(_currentUser, profile);
@@ -104,6 +108,9 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 new SidebarNavItem("Hồ sơ", "user")
             });
             _sidebar.NavItemClicked += Sidebar_NavItemClicked;
+            LoadChatUnreadCountAsync().FireAndForgetSafe(this);
+            SupabaseRealtimeChatService.Instance.OnChatChanged += OnChatRealtimeChanged;
+            SupabaseRealtimeChatService.Instance.Start();
 
             _rightPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 8, 12, 0) };
             _topbar = new TopbarPanel
@@ -331,7 +338,20 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _currentPageName = pageName;
             _sidebar.SetActiveByName(pageName);
             _topbar.PageTitle = pageName == ProfilePage ? ProfileTitle : pageName;
+
+            bool isChatPage = pageName == "Tin nhắn";
+            if (isChatPage)
+            {
+                _chatUnreadLoadVersion++;
+                _sidebar.ChatUnreadCount = 0;
+            }
+
             LoadUI(factory());
+
+            if (isChatPage)
+            {
+                MarkAllChatReadAsync().FireAndForgetSafe(this);
+            }
 
             if (focusSecurity)
                 FocusProfileSecuritySection();
@@ -388,7 +408,61 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 e.Cancel = true;
                 return;
             }
+            SupabaseRealtimeChatService.Instance.OnChatChanged -= OnChatRealtimeChanged;
+            SupabaseRealtimeChatService.Instance.Stop();
             base.OnFormClosing(e);
+        }
+
+        private void OnChatRealtimeChanged(object? sender, ChatChangedEventArgs e)
+        {
+            if (_currentPageName != "Tin nhắn" && e.SenderId != _teacherId)
+            {
+                LoadChatUnreadCountAsync().FireAndForgetSafe(this);
+            }
+        }
+
+        private async Task LoadChatUnreadCountAsync()
+        {
+            int loadVersion = _chatUnreadLoadVersion;
+            int userId = _teacherId;
+            if (userId <= 0) return;
+            int unreadCount = await Task.Run(
+                () => ActivityDisplayHelper.SafeMetricCount(() => _chatController.GetUnreadCount(userId)));
+            SetChatUnreadCountSafe(unreadCount, loadVersion);
+        }
+
+        private void SetChatUnreadCountSafe(int count, int loadVersion)
+        {
+            if (IsDisposed) return;
+            if (InvokeRequired)
+            {
+                if (!IsHandleCreated) return;
+                try
+                {
+                    BeginInvoke(new MethodInvoker(() => SetChatUnreadCountSafe(count, loadVersion)));
+                }
+                catch (InvalidOperationException) { }
+                return;
+            }
+
+            if (loadVersion != _chatUnreadLoadVersion || _currentPageName == "Tin nhắn")
+                return;
+
+            _sidebar.ChatUnreadCount = count;
+        }
+
+        private async Task MarkAllChatReadAsync()
+        {
+            int userId = _teacherId;
+            if (userId <= 0) return;
+            await Task.Run(() =>
+            {
+                try
+                {
+                    _chatController.MarkAllRead(userId);
+                }
+                catch { }
+            });
         }
 
         private void ReloadCurrentPage()

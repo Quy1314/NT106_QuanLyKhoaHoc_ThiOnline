@@ -28,6 +28,7 @@ namespace CourseGuard.Frontend.Forms.Student
         private bool _submitted;
         private bool _connectionLostViolationRecorded;
         private bool _autoSubmitTriggered;
+        private bool _isShowingSubmitConfirmation;
         private Label _progressLabel = null!;
         private Label _saveStatusLabel = null!;
 
@@ -52,6 +53,7 @@ namespace CourseGuard.Frontend.Forms.Student
 
             LowLevelKeyboardHook.OnCheatKeyPressed += LowLevelKeyboardHook_OnCheatKeyPressed;
             LowLevelKeyboardHook.SetHook();
+            this.Deactivate += DoExamForm_Deactivate;
         }
 
         public DoExamForm(int examId, StudentExamTakingModel preloadedSession) : this(examId)
@@ -63,6 +65,18 @@ namespace CourseGuard.Frontend.Forms.Student
         {
             _screenStreamClient?.SendWarning();
             HandleViolationAsync("KEY_PRESS", "RECORDED_AUTOMATICALLY").FireAndForgetSafe(this);
+        }
+
+        private void DoExamForm_Deactivate(object? sender, EventArgs e)
+        {
+            if (_submitted || _autoSubmitTriggered || _isShowingSubmitConfirmation)
+                return;
+
+            if (this.IsDisposed || !this.IsHandleCreated)
+                return;
+
+            _screenStreamClient?.SendWarning();
+            HandleViolationAsync("SCREEN_SWITCH", "RECORDED_AUTOMATICALLY").FireAndForgetSafe(this);
         }
 
         private void DoExamForm_Shown(object? sender, EventArgs e)
@@ -476,7 +490,9 @@ namespace CourseGuard.Frontend.Forms.Student
                 int markedCount = _session.Questions.Count(q => q.IsMarkedForReview);
                 string message = ExamProgressPresenter.BuildSubmitConfirmMessage(unansweredCount, markedCount);
 
+                _isShowingSubmitConfirmation = true;
                 DialogResult res = MetaTheme.ShowModernDialog(this, message, "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                _isShowingSubmitConfirmation = false;
                 if (res != DialogResult.Yes)
                     return;
             }

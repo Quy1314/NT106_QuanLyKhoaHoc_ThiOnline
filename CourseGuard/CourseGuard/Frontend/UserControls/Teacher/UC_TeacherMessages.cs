@@ -400,11 +400,33 @@ namespace CourseGuard.Frontend.UserControls.Teacher
                 {
                     _messageList.AppendMessages(messages, _teacherId);
                 }
+
+                MarkDisplayedMessagesReadAsync(courseId).FireAndForgetSafe(this);
             }
             finally
             {
                 _isLoadingMessages = false;
             }
+        }
+
+        private Task MarkDisplayedMessagesReadAsync(int courseId)
+        {
+            int userId = _teacherId;
+            if (userId <= 0 || courseId <= 0)
+            {
+                return Task.CompletedTask;
+            }
+
+            return Task.Run(() =>
+            {
+                try
+                {
+                    _chat.MarkCourseRead(userId, courseId);
+                }
+                catch
+                {
+                }
+            });
         }
 
         private async Task LoadOlderMessagesAsync()
