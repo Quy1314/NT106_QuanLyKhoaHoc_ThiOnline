@@ -13,7 +13,8 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
 
         public async Task<Image?> LoadThumbnailAsync(string imagePath, Size targetSize, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath))
+            string resolvedPath = Helpers.ChatImageHelper.ResolveLocalFilePath(imagePath);
+            if (string.IsNullOrWhiteSpace(resolvedPath) || !File.Exists(resolvedPath))
             {
                 return null;
             }
@@ -22,7 +23,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                return await Task.Run(() => CreateThumbnail(imagePath, targetSize, cancellationToken), cancellationToken);
+                return await Task.Run(() => CreateThumbnail(resolvedPath, targetSize, cancellationToken), cancellationToken);
             }
             finally
             {

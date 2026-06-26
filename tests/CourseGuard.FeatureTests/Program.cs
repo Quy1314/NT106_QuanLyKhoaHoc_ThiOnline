@@ -3488,8 +3488,86 @@ Run("chat unread API uses chat reads", RunChatUnreadSourceTests);
 Run("student sidebar exposes chat unread badge", RunSidebarChatBadgeSourceTests);
 Run("student dashboard loads and clears chat unread badge", RunStudentDashboardChatBadgeSourceTests);
 Run("student chat page advances read watermark after refresh", RunStudentChatPageReadWatermarkSourceTests);
+Run("course management and security requirements", RunCourseManagementAndSecurityTests);
 
 Console.WriteLine("Feature tests passed.");
+
+static void RunCourseManagementAndSecurityTests()
+{
+    string repoRoot = RepoRoot();
+    string dbPath = Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Backend", "Data", "CourseGuardDbContext.cs");
+    string courseControllerPath = Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Backend", "Controllers", "CourseController.cs");
+    string teacherControllerPath = Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Backend", "Controllers", "TeacherController.cs");
+    string teacherStudentsPath = Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Teacher", "UC_TeacherStudents.cs");
+    string chatImageHelperPath = Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Frontend", "Helpers", "ChatImageHelper.cs");
+    string chatImageLoaderPath = Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Shared", "Chat", "ChatImageLoader.cs");
+    string chatBubblePath = Path.Combine(repoRoot, "CourseGuard", "CourseGuard", "Frontend", "UserControls", "Shared", "Chat", "ChatBubbleControl.cs");
+
+    AssertTrue(File.Exists(dbPath), "CourseGuardDbContext must exist");
+    AssertTrue(File.Exists(courseControllerPath), "CourseController must exist");
+    AssertTrue(File.Exists(teacherControllerPath), "TeacherController must exist");
+    AssertTrue(File.Exists(teacherStudentsPath), "UC_TeacherStudents must exist");
+    AssertTrue(File.Exists(chatImageHelperPath), "ChatImageHelper must exist");
+
+    string db = File.ReadAllText(dbPath);
+    string cc = File.ReadAllText(courseControllerPath);
+    string tc = File.ReadAllText(teacherControllerPath);
+    string ts = File.ReadAllText(teacherStudentsPath);
+    string cih = File.ReadAllText(chatImageHelperPath);
+    string cil = File.ReadAllText(chatImageLoaderPath);
+    string cb = File.ReadAllText(chatBubblePath);
+
+    // 1. Fixed Course Schedule column migrations & cascade deletes
+    AssertTrue(db.Contains("teaching_days VARCHAR(255)"), "COURSES schema must migrate teaching_days");
+    AssertTrue(db.Contains("session_start_time TIME"), "COURSES schema must migrate session_start_time");
+    AssertTrue(db.Contains("session_end_time TIME"), "COURSES schema must migrate session_end_time");
+    AssertTrue(db.Contains("InsertGeneratedSessions"), "CourseGuardDbContext must generate session schedule");
+    AssertTrue(db.Contains("ON DELETE CASCADE"), "User deletion constraints must use ON DELETE CASCADE");
+    AssertTrue(db.Contains("ON DELETE SET NULL"), "User deletion constraints must use ON DELETE SET NULL");
+
+    // 2. Schedule Conflict Checks
+    AssertTrue(db.Contains("HasTeacherConflict"), "DbContext must support teacher conflict detection");
+    AssertTrue(db.Contains("HasStudentConflict"), "DbContext must support student conflict detection");
+    AssertTrue(cc.Contains("HasTeacherConflict"), "CourseController must prevent teacher conflicts");
+    AssertTrue(tc.Contains("HasTeacherConflict"), "TeacherController must prevent teacher conflicts");
+    AssertTrue(cc.Contains("HasStudentConflict"), "CourseController must prevent student conflicts");
+
+    // 3. Student join conflict check
+    AssertTrue(cc.Contains("StudentJoinCourse"), "CourseController must support StudentJoinCourse");
+    string studentJoin = ExtractMethodSource(cc, "public bool StudentJoinCourse");
+    AssertTrue(studentJoin.Contains("HasStudentConflict"), "StudentJoinCourse must validate student conflicts");
+
+    // 4. Teacher privilege restrictions (Admin only)
+    string ccApprove = ExtractMethodSource(cc, "public bool ApproveEnrollment");
+    string ccReject = ExtractMethodSource(cc, "public bool RejectEnrollment");
+    AssertTrue(ccApprove.Contains("CurrentRole != \"ADMIN\""), "CourseController student approval must restrict to Admin only");
+    AssertTrue(ccReject.Contains("CurrentRole != \"ADMIN\""), "CourseController student rejection must restrict to Admin only");
+
+    string tcApprove = ExtractMethodSource(tc, "public bool ApproveEnrollment");
+    string tcReject = ExtractMethodSource(tc, "public bool RejectEnrollment");
+    AssertTrue(tcApprove.Contains("CurrentRole != \"ADMIN\""), "TeacherController student approval must restrict to Admin only");
+    AssertTrue(tcReject.Contains("CurrentRole != \"ADMIN\""), "TeacherController student rejection must restrict to Admin only");
+
+    // UI visibility
+    AssertTrue(ts.Contains("AddButton.Visible = false;"), "UC_TeacherStudents constructor must hide AddButton");
+    AssertTrue(ts.Contains("EditButton.Visible = false;"), "UC_TeacherStudents constructor must hide EditButton");
+
+    // 5. Recent Activity and Student notifications
+    string tcCreateMaterial = ExtractMethodSource(tc, "public int CreateMaterial");
+    string tcCreateAssignment = ExtractMethodSource(tc, "public int CreateAssignment");
+    string tcCreateLesson = ExtractMethodSource(tc, "public int CreateLesson");
+
+    AssertTrue(tcCreateMaterial.Contains("LogUserActivity"), "CreateMaterial must record recent activity");
+    AssertTrue(tcCreateMaterial.Contains("_notifications.Create"), "CreateMaterial must notify students");
+    AssertTrue(tcCreateAssignment.Contains("LogUserActivity"), "CreateAssignment must record recent activity");
+    AssertTrue(tcCreateAssignment.Contains("_notifications.Create"), "CreateAssignment must notify students");
+    AssertTrue(tcCreateLesson.Contains("LogUserActivity"), "CreateLesson must record recent activity");
+
+    // 6. Chat Image viewing path resolution
+    AssertTrue(cih.Contains("ResolveLocalFilePath"), "ChatImageHelper must support resolving local paths");
+    AssertTrue(cil.Contains("ResolveLocalFilePath"), "ChatImageLoader must resolve image path");
+    AssertTrue(cb.Contains("ResolveLocalFilePath"), "ChatBubbleControl must resolve preview image path");
+}
 
 static string RepoRoot()
 {

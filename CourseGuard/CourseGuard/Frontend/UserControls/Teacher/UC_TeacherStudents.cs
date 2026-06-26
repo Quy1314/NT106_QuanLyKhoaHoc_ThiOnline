@@ -23,11 +23,8 @@ namespace CourseGuard.Frontend.UserControls.Teacher
 
         public UC_TeacherStudents(int teacherId, TeacherController controller) : base(teacherId, controller, "Sinh viên", "Duyệt ghi danh và xem danh sách học viên thuộc khóa học của mình.", "Yêu cầu và học viên")
         {
-            AddButton.Text = "Duyệt";
-            EditButton.Text = "Từ chối";
-            TeacherTabChrome.StyleDangerButton(EditButton);
-            TeacherTabChrome.FitButtonToText(AddButton);
-            TeacherTabChrome.FitButtonToText(EditButton);
+            AddButton.Visible = false;
+            EditButton.Visible = false;
             DeleteButton.Visible = false;
 
             TeacherTabChrome.FitButtonToText(_exportExcelButton);

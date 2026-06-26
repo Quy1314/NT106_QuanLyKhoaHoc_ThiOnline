@@ -33,6 +33,14 @@ namespace CourseGuard.Backend.Controllers
                 return "Forbidden";
             }
 
+            if (course.GenerateSchedule && !string.IsNullOrEmpty(course.TeachingDays) && course.SessionStartTime.HasValue && course.SessionEndTime.HasValue)
+            {
+                if (_dbContext.HasTeacherConflict(course.TeacherId, course.StartDate, course.EndDate, course.TeachingDays, course.SessionStartTime.Value, course.SessionEndTime.Value))
+                {
+                    return "Giáo viên đã có lịch dạy vào thời gian này.";
+                }
+            }
+
             try
             {
                 _dbContext.InsertCourse(course);
@@ -49,6 +57,14 @@ namespace CourseGuard.Backend.Controllers
             if (!UserSessionContext.IsAdmin())
             {
                 return false;
+            }
+
+            if (course.GenerateSchedule && !string.IsNullOrEmpty(course.TeachingDays) && course.SessionStartTime.HasValue && course.SessionEndTime.HasValue)
+            {
+                if (_dbContext.HasTeacherConflict(course.TeacherId, course.StartDate, course.EndDate, course.TeachingDays, course.SessionStartTime.Value, course.SessionEndTime.Value, course.Id))
+                {
+                    throw new InvalidOperationException("Giáo viên đã có lịch dạy vào thời gian này.");
+                }
             }
 
             try
@@ -150,6 +166,11 @@ namespace CourseGuard.Backend.Controllers
                 return false;
             }
 
+            if (_dbContext.HasStudentConflict(studentId, courseId))
+            {
+                throw new InvalidOperationException("Học sinh đã có lịch học trùng với khóa học này.");
+            }
+
             try
             {
                 bool enrolled = _dbContext.EnrollStudent(courseId, studentId);
@@ -189,6 +210,11 @@ namespace CourseGuard.Backend.Controllers
             if (UserSessionContext.CurrentUserId != studentId)
             {
                 return false;
+            }
+
+            if (_dbContext.HasStudentConflict(studentId, courseId))
+            {
+                throw new InvalidOperationException("Học sinh đã có lịch học trùng với khóa học này.");
             }
 
             try
@@ -232,8 +258,13 @@ namespace CourseGuard.Backend.Controllers
 
         public bool ApproveEnrollment(int courseId, int studentId)
         {
-            if (UserSessionContext.CurrentRole != "ADMIN" && UserSessionContext.CurrentRole != "TEACHER") 
+            if (UserSessionContext.CurrentRole != "ADMIN") 
                 return false;
+
+            if (_dbContext.HasStudentConflict(studentId, courseId))
+            {
+                throw new InvalidOperationException("Học sinh đã có lịch học trùng với khóa học này.");
+            }
 
             try { return _dbContext.ApproveEnrollment(courseId, studentId); }
             catch { return false; }
@@ -241,7 +272,7 @@ namespace CourseGuard.Backend.Controllers
 
         public bool RejectEnrollment(int courseId, int studentId)
         {
-            if (UserSessionContext.CurrentRole != "ADMIN" && UserSessionContext.CurrentRole != "TEACHER") 
+            if (UserSessionContext.CurrentRole != "ADMIN") 
                 return false;
 
             try { return _dbContext.RejectEnrollment(courseId, studentId); }
@@ -300,6 +331,11 @@ namespace CourseGuard.Backend.Controllers
                 CourseModel? course = _dbContext.GetCourseById(courseId);
                 if (course == null || !string.Equals(course.Status, WorkflowConstants.CourseStatus.Active, StringComparison.OrdinalIgnoreCase))
                     return "Khóa học này chưa được mở ghi danh.";
+
+                if (_dbContext.HasStudentConflict(studentId, courseId))
+                {
+                    return "Học sinh đã có lịch học trùng với khóa học này.";
+                }
 
                 // Kiểm tra trạng thái hiện tại
                 var existing = _dbContext.GetEnrollmentStatus(courseId, studentId);

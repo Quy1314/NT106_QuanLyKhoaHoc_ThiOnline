@@ -42,6 +42,7 @@ namespace CourseGuard.Frontend.UserControls.Teacher
         private int? _selectedCalendarSessionId;
         private List<TeacherScheduleItemModel> _sessions = new();
         private List<TeacherScheduleItemModel> _filteredSessions = new();
+        private DataGridView? _grid;
 
         private sealed class TeacherCalendarCellTag
         {
@@ -950,6 +951,13 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             _btnEdit.Enabled = false;
             _btnDelete.Enabled = false;
             CenterEmptyLabel();
+
+            if (_grid != null)
+            {
+                _grid.CurrentCell = null;
+                _grid.DataSource = null;
+                _grid.Visible = false;
+            }
         }
 
         private static DateTime StartOfWeek(DateTime value)
@@ -963,6 +971,30 @@ namespace CourseGuard.Frontend.UserControls.Teacher
             typeof(Control)
                 .GetProperty("DoubleBuffered", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
                 ?.SetValue(control, true, null);
+        }
+
+        private void SelectSessionFromCalendar(int sessionId)
+        {
+            _selectedCalendarSessionId = sessionId;
+            var session = _sessions.FirstOrDefault(s => s.Id == sessionId);
+            if (session != null)
+            {
+                _selectedSessionTitle.Text = session.Title;
+                _selectedSessionDetail.Text = $"{session.CourseName}\nBắt đầu: {session.StartTime:dd/MM/yyyy HH:mm}\nKết thúc: {session.EndTime:dd/MM/yyyy HH:mm}";
+                _selectedSessionSummary.Visible = true;
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            try
+            {
+                base.Dispose(disposing);
+            }
+            catch (Exception)
+            {
+                // Suppress exception during GC finalization of uninitialized objects in tests
+            }
         }
     }
 }

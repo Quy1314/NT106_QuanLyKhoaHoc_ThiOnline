@@ -479,16 +479,14 @@ namespace CourseGuard.Frontend.Forms.Student
 
             StudentExamTakingQuestionModel question = _session.Questions[_currentIndex];
             bool saved = false;
-            bool offline = false;
             try
             {
                 saved = _dbContext.SaveStudentExamAnswer(UserSessionContext.CurrentUserId ?? 0, _session.AttemptId, question.Id, option);
             }
             catch (Exception)
             {
-                LocalAnswerCache.SaveAnswer(UserSessionContext.CurrentUserId ?? 0, _session.AttemptId, question.Id, option);
-                saved = true;
-                offline = true;
+                UpdateSaveStatus(false);
+                return;
             }
 
             if (saved)
@@ -496,16 +494,11 @@ namespace CourseGuard.Frontend.Forms.Student
                 question.SelectedOption = option;
                 UpdateQuestionButtons();
                 UpdateProgressSummary();
-                UpdateSaveStatus(true, offline);
+                UpdateSaveStatus(true);
                 return;
             }
 
-            // Fallback if DB returns false (e.g. database logic failure or silent timeout)
-            LocalAnswerCache.SaveAnswer(UserSessionContext.CurrentUserId ?? 0, _session.AttemptId, question.Id, option);
-            question.SelectedOption = option;
-            UpdateQuestionButtons();
-            UpdateProgressSummary();
-            UpdateSaveStatus(true, offline: true);
+            UpdateSaveStatus(false);
         }
 
         private void UpdateProgressSummary()

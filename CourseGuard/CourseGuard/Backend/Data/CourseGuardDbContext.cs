@@ -89,13 +89,47 @@ namespace CourseGuard.Backend.Data
             connection.Open();
             using var command = new NpgsqlCommand(@"
                 ALTER TABLE courses
-                    ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+                    ADD COLUMN IF NOT EXISTS rejection_reason TEXT,
+                    ADD COLUMN IF NOT EXISTS teaching_days VARCHAR(255),
+                    ADD COLUMN IF NOT EXISTS session_start_time TIME,
+                    ADD COLUMN IF NOT EXISTS session_end_time TIME,
+                    ADD COLUMN IF NOT EXISTS frequency VARCHAR(50) DEFAULT 'Weekly',
+                    ADD COLUMN IF NOT EXISTS meeting_link VARCHAR(500);
 
                 ALTER TABLE notifications
                     ADD COLUMN IF NOT EXISTS category VARCHAR(32) NOT NULL DEFAULT 'SystemAdmin',
                     ADD COLUMN IF NOT EXISTS notification_type VARCHAR(32) NOT NULL DEFAULT 'Informational',
                     ADD COLUMN IF NOT EXISTS source_type VARCHAR(64),
-                    ADD COLUMN IF NOT EXISTS source_id INT;", connection);
+                    ADD COLUMN IF NOT EXISTS source_id INT;
+
+                -- Drop and recreate constraints to support clean user deletion
+                ALTER TABLE COURSES DROP CONSTRAINT IF EXISTS courses_teacher_id_fkey;
+                ALTER TABLE COURSES ADD CONSTRAINT courses_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES USERS(id) ON DELETE CASCADE;
+
+                ALTER TABLE ENROLLMENTS DROP CONSTRAINT IF EXISTS enrollments_student_id_fkey;
+                ALTER TABLE ENROLLMENTS ADD CONSTRAINT enrollments_student_id_fkey FOREIGN KEY (student_id) REFERENCES USERS(id) ON DELETE CASCADE;
+
+                ALTER TABLE EXAMS DROP CONSTRAINT IF EXISTS exams_created_by_fkey;
+                ALTER TABLE EXAMS ADD CONSTRAINT exams_created_by_fkey FOREIGN KEY (created_by) REFERENCES USERS(id) ON DELETE SET NULL;
+
+                ALTER TABLE EXAM_ATTEMPTS DROP CONSTRAINT IF EXISTS exam_attempts_student_id_fkey;
+                ALTER TABLE EXAM_ATTEMPTS ADD CONSTRAINT exam_attempts_student_id_fkey FOREIGN KEY (student_id) REFERENCES USERS(id) ON DELETE CASCADE;
+
+                ALTER TABLE ONLINE_SESSIONS DROP CONSTRAINT IF EXISTS online_sessions_created_by_fkey;
+                ALTER TABLE ONLINE_SESSIONS ADD CONSTRAINT online_sessions_created_by_fkey FOREIGN KEY (created_by) REFERENCES USERS(id) ON DELETE SET NULL;
+
+                ALTER TABLE MATERIALS DROP CONSTRAINT IF EXISTS materials_uploaded_by_fkey;
+                ALTER TABLE MATERIALS ADD CONSTRAINT materials_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES USERS(id) ON DELETE CASCADE;
+
+                ALTER TABLE MESSAGES ALTER COLUMN sender_id DROP NOT NULL;
+                ALTER TABLE MESSAGES DROP CONSTRAINT IF EXISTS messages_sender_id_fkey;
+                ALTER TABLE MESSAGES ADD CONSTRAINT messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES USERS(id) ON DELETE SET NULL;
+
+                ALTER TABLE AUDIT_LOGS DROP CONSTRAINT IF EXISTS audit_logs_user_id_fkey;
+                ALTER TABLE AUDIT_LOGS ADD CONSTRAINT audit_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES USERS(id) ON DELETE SET NULL;
+
+                ALTER TABLE VIOLATIONS DROP CONSTRAINT IF EXISTS violations_user_id_fkey;
+                ALTER TABLE VIOLATIONS ADD CONSTRAINT violations_user_id_fkey FOREIGN KEY (user_id) REFERENCES USERS(id) ON DELETE CASCADE;", connection);
             command.ExecuteNonQuery();
         }
 
@@ -2219,37 +2253,6 @@ namespace CourseGuard.Backend.Data
                 {
                     return false;
                 }
-
-                // If deleting a teacher, their courses must be removed first because
-                // COURSES.TEACHER_ID is NOT NULL and FK does not cascade.
-                if (roleName == "TEACHER")
-                {
-                    using var tx = connection.BeginTransaction();
-
-                    try
-                    {
-                        const string deleteCoursesQuery = "DELETE FROM COURSES WHERE TEACHER_ID = @id";
-                        using (var deleteCoursesCmd = new NpgsqlCommand(deleteCoursesQuery, connection, tx))
-                        {
-                            deleteCoursesCmd.Parameters.AddWithValue("@id", userId);
-                            deleteCoursesCmd.ExecuteNonQuery();
-                        }
-
-                        const string deleteUserQuery = "DELETE FROM USERS WHERE id = @id";
-                        using (var deleteUserCmd = new NpgsqlCommand(deleteUserQuery, connection, tx))
-                        {
-                            deleteUserCmd.Parameters.AddWithValue("@id", userId);
-                            int userAffectedRows = deleteUserCmd.ExecuteNonQuery();
-                            tx.Commit();
-                            return userAffectedRows > 0;
-                        }
-                    }
-                    catch
-                    {
-                        try { tx.Rollback(); } catch { /* ignore */ }
-                        throw;
-                    }
-                }
             }
 
             const string deleteQuery = "DELETE FROM USERS WHERE id = @id";
@@ -2299,7 +2302,9 @@ namespace CourseGuard.Backend.Data
             connection.Open();
 
             string query = @"SELECT c.id, c.name, c.description, c.teacher_id, u.full_name as teacher_name,
-                                    c.status, c.start_date, c.end_date, COALESCE(c.rejection_reason, '')
+                                    c.status, c.start_date, c.end_date, COALESCE(c.rejection_reason, ''),
+                                    COALESCE(c.teaching_days, ''), c.session_start_time, c.session_end_time,
+                                    COALESCE(c.frequency, 'Weekly'), COALESCE(c.meeting_link, '')
                              FROM COURSES c 
                              JOIN USERS u ON c.teacher_id = u.id";
             
@@ -2317,7 +2322,12 @@ namespace CourseGuard.Backend.Data
                     Status = reader.GetString(5),
                     StartDate = reader.IsDBNull(6) ? DateTime.MinValue : reader.GetDateTime(6),
                     EndDate = reader.IsDBNull(7) ? DateTime.MinValue : reader.GetDateTime(7),
-                    RejectionReason = reader.GetString(8)
+                    RejectionReason = reader.GetString(8),
+                    TeachingDays = reader.GetString(9),
+                    SessionStartTime = reader.IsDBNull(10) ? null : reader.GetTimeSpan(10),
+                    SessionEndTime = reader.IsDBNull(11) ? null : reader.GetTimeSpan(11),
+                    Frequency = reader.GetString(12),
+                    MeetingLink = reader.GetString(13)
                 });
             }
 
@@ -2333,7 +2343,9 @@ namespace CourseGuard.Backend.Data
                 SELECT c.id, c.name, COALESCE(c.description, ''), c.teacher_id,
                        COALESCE(u.full_name, u.username) AS teacher_name,
                        COALESCE(c.status, 'ACTIVE'), c.start_date, c.end_date,
-                       COALESCE(c.rejection_reason, '')
+                       COALESCE(c.rejection_reason, ''),
+                       COALESCE(c.teaching_days, ''), c.session_start_time, c.session_end_time,
+                       COALESCE(c.frequency, 'Weekly'), COALESCE(c.meeting_link, '')
                 FROM courses c
                 JOIN users u ON u.id = c.teacher_id
                 WHERE c.id = @id";
@@ -2354,7 +2366,12 @@ namespace CourseGuard.Backend.Data
                 Status = reader.GetString(5),
                 StartDate = reader.IsDBNull(6) ? DateTime.MinValue : reader.GetDateTime(6),
                 EndDate = reader.IsDBNull(7) ? DateTime.MinValue : reader.GetDateTime(7),
-                RejectionReason = reader.GetString(8)
+                RejectionReason = reader.GetString(8),
+                TeachingDays = reader.GetString(9),
+                SessionStartTime = reader.IsDBNull(10) ? null : reader.GetTimeSpan(10),
+                SessionEndTime = reader.IsDBNull(11) ? null : reader.GetTimeSpan(11),
+                Frequency = reader.GetString(12),
+                MeetingLink = reader.GetString(13)
             };
         }
 
@@ -2363,8 +2380,8 @@ namespace CourseGuard.Backend.Data
             using var connection = CreateConnection();
             connection.Open();
 
-            string query = @"INSERT INTO COURSES (name, description, teacher_id, status, rejection_reason, start_date, end_date) 
-                            VALUES (@name, @description, @teacher_id, @status, @rejection_reason, @start_date, @end_date)";
+            string query = @"INSERT INTO COURSES (name, description, teacher_id, status, rejection_reason, start_date, end_date, teaching_days, session_start_time, session_end_time, frequency, meeting_link) 
+                            VALUES (@name, @description, @teacher_id, @status, @rejection_reason, @start_date, @end_date, @teaching_days, @session_start_time, @session_end_time, @frequency, @meeting_link) RETURNING id";
             
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@name", course.Name);
@@ -2374,8 +2391,19 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@rejection_reason", string.IsNullOrWhiteSpace(course.RejectionReason) ? (object)DBNull.Value : course.RejectionReason);
             command.Parameters.AddWithValue("@start_date", course.StartDate == DateTime.MinValue ? (object)DBNull.Value : course.StartDate);
             command.Parameters.AddWithValue("@end_date", course.EndDate == DateTime.MinValue ? (object)DBNull.Value : course.EndDate);
+            command.Parameters.AddWithValue("@teaching_days", course.TeachingDays ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@session_start_time", course.SessionStartTime.HasValue ? course.SessionStartTime.Value : (object)DBNull.Value);
+            command.Parameters.AddWithValue("@session_end_time", course.SessionEndTime.HasValue ? course.SessionEndTime.Value : (object)DBNull.Value);
+            command.Parameters.AddWithValue("@frequency", course.Frequency ?? "Weekly");
+            command.Parameters.AddWithValue("@meeting_link", course.MeetingLink ?? (object)DBNull.Value);
 
-            command.ExecuteNonQuery();
+            int courseId = Convert.ToInt32(command.ExecuteScalar());
+            course.Id = courseId;
+
+            if (course.GenerateSchedule)
+            {
+                InsertGeneratedSessions(courseId, course.TeacherId, course.Name, course.StartDate, course.EndDate, course.TeachingDays, course.SessionStartTime, course.SessionEndTime, course.MeetingLink);
+            }
         }
 
         public void UpdateCourse(CourseModel course)
@@ -2384,7 +2412,9 @@ namespace CourseGuard.Backend.Data
             connection.Open();
 
             string query = @"UPDATE COURSES SET name = @name, description = @description, teacher_id = @teacher_id, 
-                             status = @status, rejection_reason = @rejection_reason, start_date = @start_date, end_date = @end_date WHERE id = @id";
+                             status = @status, rejection_reason = @rejection_reason, start_date = @start_date, end_date = @end_date,
+                             teaching_days = @teaching_days, session_start_time = @session_start_time, session_end_time = @session_end_time,
+                             frequency = @frequency, meeting_link = @meeting_link WHERE id = @id";
             
             using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("@name", course.Name);
@@ -2394,9 +2424,23 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@rejection_reason", string.IsNullOrWhiteSpace(course.RejectionReason) ? (object)DBNull.Value : course.RejectionReason);
             command.Parameters.AddWithValue("@start_date", course.StartDate == DateTime.MinValue ? (object)DBNull.Value : course.StartDate);
             command.Parameters.AddWithValue("@end_date", course.EndDate == DateTime.MinValue ? (object)DBNull.Value : course.EndDate);
+            command.Parameters.AddWithValue("@teaching_days", course.TeachingDays ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@session_start_time", course.SessionStartTime.HasValue ? course.SessionStartTime.Value : (object)DBNull.Value);
+            command.Parameters.AddWithValue("@session_end_time", course.SessionEndTime.HasValue ? course.SessionEndTime.Value : (object)DBNull.Value);
+            command.Parameters.AddWithValue("@frequency", course.Frequency ?? "Weekly");
+            command.Parameters.AddWithValue("@meeting_link", course.MeetingLink ?? (object)DBNull.Value);
             command.Parameters.AddWithValue("@id", course.Id);
 
             command.ExecuteNonQuery();
+
+            if (course.GenerateSchedule)
+            {
+                using var deleteCmd = new NpgsqlCommand("DELETE FROM online_sessions WHERE course_id = @course_id", connection);
+                deleteCmd.Parameters.AddWithValue("@course_id", course.Id);
+                deleteCmd.ExecuteNonQuery();
+
+                InsertGeneratedSessions(course.Id, course.TeacherId, course.Name, course.StartDate, course.EndDate, course.TeachingDays, course.SessionStartTime, course.SessionEndTime, course.MeetingLink);
+            }
         }
 
         public void DeleteCourse(int courseId)
@@ -5447,6 +5491,175 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@device_name", deviceName);
             var result = await command.ExecuteScalarAsync(cancellationToken);
             return result != null;
+        }
+
+        public void InsertGeneratedSessions(int courseId, int teacherId, string name, DateTime? startDate, DateTime? endDate, string teachingDaysStr, TimeSpan? sessionStartTime, TimeSpan? sessionEndTime, string meetingLink)
+        {
+            if (!startDate.HasValue || !endDate.HasValue) return;
+            if (!sessionStartTime.HasValue || !sessionEndTime.HasValue) return;
+            if (string.IsNullOrEmpty(teachingDaysStr)) return;
+
+            var days = teachingDaysStr.Split(',', System.StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(d => System.Enum.Parse<System.DayOfWeek>(d.Trim()))
+                                      .ToList();
+            if (days.Count == 0) return;
+
+            System.DateTime startD = startDate.Value.Date;
+            System.DateTime endD = endDate.Value.Date;
+            if (endD < startD || sessionEndTime.Value <= sessionStartTime.Value) return;
+
+            using var connection = CreateConnection();
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+
+            try
+            {
+                for (System.DateTime day = startD; day <= endD; day = day.AddDays(1))
+                {
+                    if (!days.Contains(day.DayOfWeek)) continue;
+
+                    System.DateTime sessionStart = day.Add(sessionStartTime.Value);
+                    System.DateTime sessionEnd = day.Add(sessionEndTime.Value);
+
+                    using var cmd = new NpgsqlCommand(@"
+                        INSERT INTO online_sessions (course_id, title, start_time, end_time, meeting_link, created_by)
+                        VALUES (@course_id, @title, @start_time, @end_time, @meeting_link, @teacher_id)", connection, transaction);
+                    cmd.Parameters.AddWithValue("@course_id", courseId);
+                    cmd.Parameters.AddWithValue("@title", string.IsNullOrWhiteSpace(name) ? "Buổi học" : name);
+                    cmd.Parameters.AddWithValue("@start_time", sessionStart);
+                    cmd.Parameters.AddWithValue("@end_time", sessionEnd);
+                    cmd.Parameters.AddWithValue("@meeting_link", string.IsNullOrWhiteSpace(meetingLink) ? System.DBNull.Value : meetingLink);
+                    cmd.Parameters.AddWithValue("@teacher_id", teacherId);
+                    cmd.ExecuteNonQuery();
+                }
+                transaction.Commit();
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
+        }
+
+        public bool HasTeacherConflict(int teacherId, DateTime startDate, DateTime endDate, string teachingDaysStr, TimeSpan startTime, TimeSpan endTime, int? excludeCourseId = null)
+        {
+            if (string.IsNullOrEmpty(teachingDaysStr)) return false;
+
+            var days = teachingDaysStr.Split(',', System.StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(d => System.Enum.Parse<System.DayOfWeek>(d.Trim()))
+                                      .ToList();
+
+            var proposedSessions = new System.Collections.Generic.List<(System.DateTime Start, System.DateTime End)>();
+            for (System.DateTime day = startDate.Date; day <= endDate.Date; day = day.AddDays(1))
+            {
+                if (!days.Contains(day.DayOfWeek)) continue;
+                proposedSessions.Add((day.Add(startTime), day.Add(endTime)));
+            }
+
+            if (proposedSessions.Count == 0) return false;
+
+            using var connection = CreateConnection();
+            connection.Open();
+
+            const string query = @"
+                SELECT os.start_time, os.end_time
+                FROM online_sessions os
+                JOIN courses c ON c.id = os.course_id
+                WHERE c.teacher_id = @teacher_id
+                  AND (@exclude_course_id IS NULL OR c.id <> @exclude_course_id)
+                  AND UPPER(COALESCE(c.status, '')) IN ('ACTIVE', 'APPROVED')";
+
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@teacher_id", teacherId);
+            command.Parameters.AddWithValue("@exclude_course_id", excludeCourseId.HasValue ? excludeCourseId.Value : (object)System.DBNull.Value);
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                System.DateTime existStart = reader.GetDateTime(0);
+                System.DateTime existEnd = reader.GetDateTime(1);
+
+                foreach (var prop in proposedSessions)
+                {
+                    if (prop.Start < existEnd && prop.End > existStart)
+                    {
+                        return true; // Conflict!
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        public bool HasStudentConflict(int studentId, int courseId)
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            var targetSessions = new System.Collections.Generic.List<(System.DateTime Start, System.DateTime End)>();
+            const string targetQuery = "SELECT start_time, end_time FROM online_sessions WHERE course_id = @course_id";
+            using (var cmd = new NpgsqlCommand(targetQuery, connection))
+            {
+                cmd.Parameters.AddWithValue("@course_id", courseId);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    if (!reader.IsDBNull(0) && !reader.IsDBNull(1))
+                        targetSessions.Add((reader.GetDateTime(0), reader.GetDateTime(1)));
+                }
+            }
+
+            if (targetSessions.Count == 0) return false;
+
+            const string existQuery = @"
+                SELECT os.start_time, os.end_time
+                FROM online_sessions os
+                JOIN courses c ON c.id = os.course_id
+                JOIN enrollments e ON e.course_id = c.id
+                WHERE e.student_id = @student_id
+                  AND e.course_id <> @course_id
+                  AND UPPER(COALESCE(e.status, '')) IN ('ACTIVE', 'APPROVED')
+                  AND UPPER(COALESCE(c.status, '')) IN ('ACTIVE', 'APPROVED', 'OPEN')";
+
+            using (var cmd = new NpgsqlCommand(existQuery, connection))
+            {
+                cmd.Parameters.AddWithValue("@student_id", studentId);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    if (!reader.IsDBNull(0) && !reader.IsDBNull(1))
+                    {
+                        System.DateTime existStart = reader.GetDateTime(0);
+                        System.DateTime existEnd = reader.GetDateTime(1);
+
+                        foreach (var target in targetSessions)
+                        {
+                            if (target.Start < existEnd && target.End > existStart)
+                            {
+                                return true; // Conflict!
+                            }
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        public System.Collections.Generic.List<int> GetCourseStudents(int courseId)
+        {
+            var list = new System.Collections.Generic.List<int>();
+            using var connection = CreateConnection();
+            connection.Open();
+            const string query = "SELECT student_id FROM enrollments WHERE course_id = @course_id AND UPPER(COALESCE(status, '')) IN ('ACTIVE', 'APPROVED')";
+            using var command = new NpgsqlCommand(query, connection);
+            command.Parameters.AddWithValue("@course_id", courseId);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                list.Add(reader.GetInt32(0));
+            }
+            return list;
         }
     }
 }

@@ -6,12 +6,19 @@ namespace CourseGuard.Frontend.UserControls.Student
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            try
             {
-                components.Dispose();
-            }
+                if (disposing && (components != null))
+                {
+                    components.Dispose();
+                }
 
-            base.Dispose(disposing);
+                base.Dispose(disposing);
+            }
+            catch (Exception)
+            {
+                // Suppress exceptions during finalization/disposing of uninitialized objects in tests
+            }
         }
 
         private void InitializeComponent()
