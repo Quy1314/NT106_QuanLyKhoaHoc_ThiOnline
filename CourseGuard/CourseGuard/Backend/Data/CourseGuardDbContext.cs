@@ -53,6 +53,37 @@ namespace CourseGuard.Backend.Data
 
             using var command = new NpgsqlCommand(sql, connection);
             command.ExecuteNonQuery();
+
+            EnsureStudentProfileSchema(connection);
+            EnsureTeacherProfileSchema(connection);
+        }
+
+        private static void EnsureTeacherProfileSchema(NpgsqlConnection connection)
+        {
+            const string sql = @"
+                CREATE TABLE IF NOT EXISTS teacher_profiles (
+                    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                    teacher_code VARCHAR(32) UNIQUE NOT NULL,
+                    phone TEXT,
+                    gender TEXT,
+                    birth_date DATE,
+                    address TEXT,
+                    major TEXT,
+                    degrees TEXT,
+                    bio TEXT,
+                    avatar_path TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                INSERT INTO teacher_profiles (user_id, teacher_code)
+                SELECT u.id, 'GV' || LPAD(u.id::text, 5, '0')
+                FROM users u
+                JOIN roles r ON r.id = u.role_id
+                WHERE UPPER(r.name) = 'TEACHER'
+                ON CONFLICT (user_id) DO NOTHING;";
+
+            using var command = new NpgsqlCommand(sql, connection);
+            command.ExecuteNonQuery();
         }
 
         private static UserModel ReadUser(NpgsqlDataReader reader, int tempPasswordExpiresAtIndex, int? avatarPathIndex = null)
