@@ -47,6 +47,57 @@ Run("student exam scoring sums matching answers", () =>
     AssertEqual(5.0, result.Score);
 });
 
+Run("ai services expose essay grading virtual tutor and flashcard generation", () =>
+{
+    var service = new AiQuestionGeneratorService();
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+
+    var essayTask = service.GradeEssayAsync("Giải thích TCP/IP", "Mô hình 4 tầng...", "Bài làm của sinh viên...", 10m);
+    var tutorTask = service.AskVirtualTutorAsync("Lập trình mạng", "Khái niệm Socket...", "Socket là gì?");
+    var flashcardsTask = service.GenerateFlashcardsAsync("Khái niệm TCP Handshake...", 3);
+
+    Task.WaitAll(essayTask, tutorTask, flashcardsTask);
+    sw.Stop();
+
+    AssertTrue(sw.ElapsedMilliseconds < 10000, $"AI services latency should be fast (took {sw.ElapsedMilliseconds}ms)");
+    AssertTrue(essayTask.Result != null && essayTask.Result.SuggestedScore >= 0m, "essay grading must return valid score");
+    AssertFalse(string.IsNullOrWhiteSpace(tutorTask.Result), "virtual tutor must return non-empty answer");
+    AssertTrue(flashcardsTask.Result != null, "flashcard generation must return list");
+});
+
+Run("calendar export service generates valid ics string and alarms", () =>
+{
+    var events = new[]
+    {
+        new CalendarEventItem
+        {
+            Summary = "Thi giữa kỳ Mạng máy tính",
+            Description = "Phòng 302 - Giám sát tự động",
+            Location = "Tòa A",
+            StartTime = new DateTime(2026, 7, 1, 8, 0, 0),
+            EndTime = new DateTime(2026, 7, 1, 9, 30, 0)
+        }
+    };
+
+    string ics = CalendarExportService.ExportToIcsString(events);
+    AssertTrue(ics.Contains("BEGIN:VCALENDAR"), "ics output must start with VCALENDAR header");
+    AssertTrue(ics.Contains("SUMMARY:Thi giữa kỳ Mạng máy tính"), "ics must contain escaped summary");
+    AssertTrue(ics.Contains("TRIGGER:-PT30M"), "ics must contain 30-minute advance alarm");
+});
+
+Run("gamification and schedule conflict service calculates badges and overlaps", () =>
+{
+    var service = new GamificationAndScheduleService();
+    var badges = service.GetStudentBadges(95, 9.0m);
+
+    AssertTrue(badges.Exists(b => b.Title == "Chăm chỉ"), "student with 95% attendance gets Cham chi badge");
+    AssertTrue(badges.Exists(b => b.Title == "Thủ khoa"), "student with 9.0 avg score gets Thu khoa badge");
+
+    var conflictTask = service.HasExamScheduleConflictAsync(1, new DateTime(2026, 7, 1, 8, 0, 0), new DateTime(2026, 7, 1, 10, 0, 0), 99);
+    conflictTask.Wait();
+    AssertFalse(conflictTask.Result, "non-overlapping or empty db schedule check returns false safely");
+});
+
 Run("teacher exam scoring sums only correct selected options", () =>
 {
     var questions = new[]

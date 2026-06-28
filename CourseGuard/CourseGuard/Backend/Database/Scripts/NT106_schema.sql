@@ -515,3 +515,31 @@ COMMIT;
 -- =========================================================
 -- [END] Migrations/20260416_normalize_user_status.sql
 -- =========================================================
+
+-- =========================================================
+-- [BEGIN] Migrations/20260628_teacher_profiles_and_performance_indexes.sql
+-- =========================================================
+CREATE TABLE IF NOT EXISTS TEACHER_PROFILES (
+    USER_ID INT PRIMARY KEY REFERENCES USERS(ID) ON DELETE CASCADE,
+    TEACHER_CODE VARCHAR(50) UNIQUE,
+    PHONE VARCHAR(30),
+    GENDER VARCHAR(20),
+    BIRTH_DATE DATE,
+    ADDRESS TEXT,
+    MAJOR VARCHAR(100),
+    DEGREES VARCHAR(255),
+    BIO TEXT,
+    AVATAR_PATH TEXT,
+    UPDATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS IDX_TEACHER_PROFILES_TEACHER_CODE
+    ON TEACHER_PROFILES(TEACHER_CODE);
+
+-- Performance Index for Schedule Conflict Detection
+CREATE INDEX IF NOT EXISTS IDX_EXAMS_TIME_RANGE
+    ON EXAMS (COURSE_ID, START_TIME, END_TIME);
+-- =========================================================
+-- [END] Migrations/20260628_teacher_profiles_and_performance_indexes.sql
+-- =========================================================
+
