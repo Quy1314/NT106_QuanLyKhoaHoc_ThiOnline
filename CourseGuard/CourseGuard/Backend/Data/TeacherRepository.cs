@@ -209,8 +209,8 @@ namespace CourseGuard.Backend.Data
             connection.Open();
             using var transaction = connection.BeginTransaction();
             using var command = new NpgsqlCommand(@"
-                INSERT INTO courses (name, description, teacher_id, status, rejection_reason, start_date, end_date)
-                VALUES (@name, @description, @teacher_id, 'DRAFT', NULL, @start_date, @end_date)
+                INSERT INTO courses (name, description, teacher_id, status, rejection_reason, start_date, end_date, teaching_days, session_start_time, session_end_time, frequency, meeting_link)
+                VALUES (@name, @description, @teacher_id, 'DRAFT', NULL, @start_date, @end_date, @teaching_days, @session_start_time, @session_end_time, @frequency, @meeting_link)
                 RETURNING id", connection, transaction);
             AddCourseParameters(command, teacherId, input, includeId: false);
             int courseId = Convert.ToInt32(command.ExecuteScalar());
@@ -236,7 +236,12 @@ namespace CourseGuard.Backend.Data
                         ELSE @status
                     END,
                     start_date = @start_date,
-                    end_date = @end_date
+                    end_date = @end_date,
+                    teaching_days = @teaching_days,
+                    session_start_time = @session_start_time,
+                    session_end_time = @session_end_time,
+                    frequency = @frequency,
+                    meeting_link = @meeting_link
                 WHERE id = @id AND teacher_id = @teacher_id", connection);
             AddCourseParameters(command, teacherId, input, includeId: true);
             return command.ExecuteNonQuery() > 0;
@@ -1712,6 +1717,11 @@ namespace CourseGuard.Backend.Data
             command.Parameters.AddWithValue("@status", status);
             command.Parameters.AddWithValue("@start_date", input.StartDate.HasValue ? input.StartDate.Value : DBNull.Value);
             command.Parameters.AddWithValue("@end_date", input.EndDate.HasValue ? input.EndDate.Value : DBNull.Value);
+            command.Parameters.AddWithValue("@teaching_days", input.TeachingDays != null && input.TeachingDays.Count > 0 ? string.Join(",", input.TeachingDays) : DBNull.Value);
+            command.Parameters.AddWithValue("@session_start_time", input.SessionStartTime.HasValue ? input.SessionStartTime.Value : DBNull.Value);
+            command.Parameters.AddWithValue("@session_end_time", input.SessionEndTime.HasValue ? input.SessionEndTime.Value : DBNull.Value);
+            command.Parameters.AddWithValue("@frequency", "Weekly");
+            command.Parameters.AddWithValue("@meeting_link", input.MeetingLink ?? string.Empty);
         }
 
         private static string NormalizeTeacherEditableCourseStatus(string? status)

@@ -30,6 +30,7 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
         private InitialsAvatarControl? _avatarControl;
         private Image? _thumbnailImage;
         private readonly List<Image> _attachmentThumbnails = new();
+        private DataGridView? _grid;
 
         public int MessageId => _message.Id;
         public DateTime SentAt => _message.SentAt;
@@ -398,13 +399,14 @@ namespace CourseGuard.Frontend.UserControls.Shared.Chat
 
         private void OpenImagePreview(string imagePath, string title)
         {
-            if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath))
+            string resolvedPath = Helpers.ChatImageHelper.ResolveLocalFilePath(imagePath);
+            if (string.IsNullOrWhiteSpace(resolvedPath) || !File.Exists(resolvedPath))
             {
                 MessageBox.Show("Không tìm thấy ảnh để xem trước.", "Ảnh", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            using (var dialog = new ImagePreviewDialog(imagePath, string.IsNullOrWhiteSpace(title) ? "Ảnh chat" : title))
+            using (var dialog = new ImagePreviewDialog(resolvedPath, string.IsNullOrWhiteSpace(title) ? "Ảnh chat" : title))
             {
                 dialog.ShowDialog(this);
             }

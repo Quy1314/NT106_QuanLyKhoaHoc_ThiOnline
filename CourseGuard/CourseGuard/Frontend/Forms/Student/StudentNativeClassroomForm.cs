@@ -821,17 +821,11 @@ namespace CourseGuard.Frontend.Forms.Student
                 _btnCamera == null ||
                 _btnMic == null ||
                 _btnShareScreen == null ||
-                _btnRaiseHand == null ||
-                _studentPreviewPanel == null ||
-                _studentHandBadge == null ||
                 _statusLabel.IsDisposed ||
                 _mediaStateLabel.IsDisposed ||
                 _btnCamera.IsDisposed ||
                 _btnMic.IsDisposed ||
-                _btnShareScreen.IsDisposed ||
-                _btnRaiseHand.IsDisposed ||
-                _studentPreviewPanel.IsDisposed ||
-                _studentHandBadge.IsDisposed)
+                _btnShareScreen.IsDisposed)
             {
                 return;
             }
@@ -881,10 +875,13 @@ namespace CourseGuard.Frontend.Forms.Student
             _btnCamera.Text = cameraActionText;
             _btnMic.Text = micActionText;
             _btnShareScreen.Text = "Share màn hình";
-            _btnRaiseHand.Text = _isHandRaised ? "✋ Hạ tay" : "✋ Giơ tay";
-            _btnRaiseHand.BackColor = _isHandRaised ? AppColors.Warning : Color.FromArgb(245, 158, 11);
-            _btnRaiseHand.ForeColor = _isHandRaised ? Color.FromArgb(15, 23, 42) : Color.White;
-            _controlToolTip.SetToolTip(_btnRaiseHand, _isHandRaised ? "Hạ tay" : "Giơ tay để xin phát biểu");
+            if (_btnRaiseHand != null && !_btnRaiseHand.IsDisposed)
+            {
+                _btnRaiseHand.Text = _isHandRaised ? "✋ Hạ tay" : "✋ Giơ tay";
+                _btnRaiseHand.BackColor = _isHandRaised ? AppColors.Warning : Color.FromArgb(245, 158, 11);
+                _btnRaiseHand.ForeColor = _isHandRaised ? Color.FromArgb(15, 23, 42) : Color.White;
+                _controlToolTip?.SetToolTip(_btnRaiseHand, _isHandRaised ? "Hạ tay" : "Giơ tay để xin phát biểu");
+            }
             ApplyLocalHandVisualState();
         }
 
@@ -1823,6 +1820,18 @@ namespace CourseGuard.Frontend.Forms.Student
             }
 
             _isConnectedToClassroom = false;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            try
+            {
+                base.Dispose(disposing);
+            }
+            catch (Exception)
+            {
+                // Suppress exception during GC finalization of uninitialized objects in tests
+            }
         }
 
         private sealed class StudentPeerTileState

@@ -9,6 +9,7 @@ namespace CourseGuard.Backend.Models
         public string Role { get; set; } = string.Empty;
         public bool IsOnline { get; set; }
         public bool IsHandRaised { get; set; }
+        public DateTime? RaisedHandAt { get; set; }
         public bool IsMuted { get; set; }
         public bool IsCameraOn { get; set; }
         public string AvatarPath { get; set; } = string.Empty;

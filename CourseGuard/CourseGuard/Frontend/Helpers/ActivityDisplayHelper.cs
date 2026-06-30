@@ -61,6 +61,9 @@ namespace CourseGuard.Frontend.Helpers
                 "EXAM_JOIN" => "Bắt đầu làm bài kiểm tra",
                 "EXAM_SUBMIT" => "Nộp bài kiểm tra",
                 "EXAM_EXIT" => "Thoát màn hình làm bài kiểm tra",
+                "MATERIAL_UPLOAD" => "Đã tải lên tài liệu mới",
+                "ASSIGNMENT_CREATE" => "Đã tạo bài tập mới",
+                "LESSON_CREATE" => "Đã tạo bài học/nội dung mới",
                 _ => "Đã cập nhật hoạt động giảng dạy"
             };
         }
@@ -114,7 +117,7 @@ namespace CourseGuard.Frontend.Helpers
         {
             return (action ?? string.Empty).ToUpperInvariant() switch
             {
-                "LOGIN" or "COURSE_ENROLL" or "EXAM_SUBMIT" or "CHANGE_PASSWORD" => AppColors.Success,
+                "LOGIN" or "COURSE_ENROLL" or "EXAM_SUBMIT" or "CHANGE_PASSWORD" or "MATERIAL_UPLOAD" or "ASSIGNMENT_CREATE" or "LESSON_CREATE" => AppColors.Success,
                 "COURSE_ENROLL_REQUEST" or "EXAM_JOIN" or "ONLINE_SESSION_JOIN" or "CHAT_USE" => AppColors.Warning,
                 "LOGOUT" or "EXAM_EXIT" or "ONLINE_SESSION_EXIT" => AppColors.TextMuted,
                 _ => AppColors.AccentBlue

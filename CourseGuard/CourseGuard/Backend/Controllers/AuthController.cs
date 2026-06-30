@@ -130,6 +130,11 @@ namespace CourseGuard.Backend.Controllers
             return result.Succeeded ? result.User : null;
         }
 
+        public async Task<LoginResultModel> LoginAsync(string username, string password, CancellationToken cancellationToken)
+        {
+            return await LoginAsync(username, password, null, cancellationToken);
+        }
+
         public async Task<LoginResultModel> LoginAsync(string username, string password, string? deviceName = null, CancellationToken cancellationToken = default)
         {
             if (!UserIdentityBloomIndex.UsernameExists(_dbContext, username))

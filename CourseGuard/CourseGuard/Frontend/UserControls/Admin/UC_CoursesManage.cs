@@ -15,8 +15,10 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using CourseGuard.Backend.Models;
-using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Frontend.Helpers;
+using CourseGuard.Frontend.Forms.Admin;
+using CourseGuard.Frontend.Forms.Teacher;
 
 namespace CourseGuard.Frontend.UserControls.Admin
 {
@@ -29,6 +31,12 @@ namespace CourseGuard.Frontend.UserControls.Admin
         private List<CourseGuard.Backend.Models.UserModel> _allStudents = new List<CourseGuard.Backend.Models.UserModel>();
         private readonly Button _btnApproveCourse = new Button();
         private readonly Button _btnRejectCourse = new Button();
+        private readonly Button _btnConfigureSchedule = new Button();
+        private string _teachingDays = string.Empty;
+        private TimeSpan? _sessionStartTime;
+        private TimeSpan? _sessionEndTime;
+        private string _meetingLink = string.Empty;
+        private bool _generateSchedule = false;
 
         public UC_CoursesManage()
         {
@@ -84,7 +92,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
         private void SetupCourseApprovalButtons()
         {
-            grpCourseInfo.Height = 392;
+            grpCourseInfo.Height = 435;
             _btnApproveCourse.Text = "Duyệt";
             _btnApproveCourse.Location = new Point(20, 342);
             _btnApproveCourse.Size = new Size(125, 35);
@@ -103,9 +111,19 @@ namespace CourseGuard.Frontend.UserControls.Admin
             _btnRejectCourse.BackColor = Color.FromArgb(220, 38, 38);
             _btnRejectCourse.ForeColor = Color.White;
 
-            RoundedButtonHelper.Apply(10, _btnApproveCourse, _btnRejectCourse);
+            _btnConfigureSchedule.Text = "Cấu hình lịch học";
+            _btnConfigureSchedule.Location = new Point(20, 385);
+            _btnConfigureSchedule.Size = new Size(260, 35);
+            _btnConfigureSchedule.FlatStyle = FlatStyle.Flat;
+            _btnConfigureSchedule.FlatAppearance.BorderSize = 0;
+            _btnConfigureSchedule.Font = MetaTheme.Fonts.ButtonMd();
+            _btnConfigureSchedule.BackColor = Color.FromArgb(79, 70, 229);
+            _btnConfigureSchedule.ForeColor = Color.White;
+
+            RoundedButtonHelper.Apply(10, _btnApproveCourse, _btnRejectCourse, _btnConfigureSchedule);
             grpCourseInfo.Controls.Add(_btnApproveCourse);
             grpCourseInfo.Controls.Add(_btnRejectCourse);
+            grpCourseInfo.Controls.Add(_btnConfigureSchedule);
         }
 
         private void WireEvents()
@@ -116,6 +134,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btnDeleteCourse.Click += btnDeleteCourse_Click;
             _btnApproveCourse.Click += btnApproveCourse_Click;
             _btnRejectCourse.Click += btnRejectCourse_Click;
+            _btnConfigureSchedule.Click += btnConfigureSchedule_Click;
             dgvCourses.CellClick += dgvCourses_CellClick;
             WireStudentApprovalEvents();
         }
@@ -235,6 +254,11 @@ namespace CourseGuard.Frontend.UserControls.Admin
                     cboStatus.Text = course.Status;
                     dtpStartDate.Value = course.StartDate != DateTime.MinValue ? course.StartDate : DateTime.Now;
                     dtpEndDate.Value = course.EndDate != DateTime.MinValue ? course.EndDate : DateTime.Now;
+                    _teachingDays = course.TeachingDays ?? string.Empty;
+                    _sessionStartTime = course.SessionStartTime;
+                    _sessionEndTime = course.SessionEndTime;
+                    _meetingLink = course.MeetingLink ?? string.Empty;
+                    _generateSchedule = false; // default false when selecting an existing course
                 }
             }
         }
@@ -250,7 +274,12 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 TeacherId = Convert.ToInt32(cboTeacher.SelectedValue),
                 Status = cboStatus.Text, // "Active" or "Closed"
                 StartDate = dtpStartDate.Value,
-                EndDate = dtpEndDate.Value
+                EndDate = dtpEndDate.Value,
+                TeachingDays = _teachingDays,
+                SessionStartTime = _sessionStartTime,
+                SessionEndTime = _sessionEndTime,
+                MeetingLink = _meetingLink,
+                GenerateSchedule = _generateSchedule
             };
 
             try
@@ -293,7 +322,12 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 TeacherId = Convert.ToInt32(cboTeacher.SelectedValue),
                 Status = cboStatus.Text,
                 StartDate = dtpStartDate.Value,
-                EndDate = dtpEndDate.Value
+                EndDate = dtpEndDate.Value,
+                TeachingDays = _teachingDays,
+                SessionStartTime = _sessionStartTime,
+                SessionEndTime = _sessionEndTime,
+                MeetingLink = _meetingLink,
+                GenerateSchedule = _generateSchedule
             };
 
             try
@@ -590,6 +624,26 @@ namespace CourseGuard.Frontend.UserControls.Admin
             return true;
         }
 
+        private void btnConfigureSchedule_Click(object? sender, EventArgs e)
+        {
+            using var dialog = new AdminCourseScheduleDialog(
+                _teachingDays,
+                _sessionStartTime,
+                _sessionEndTime,
+                _meetingLink,
+                _generateSchedule
+            );
+            if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
+            {
+                _teachingDays = dialog.TeachingDaysResult;
+                _sessionStartTime = dialog.SessionStartTimeResult;
+                _sessionEndTime = dialog.SessionEndTimeResult;
+                _meetingLink = dialog.MeetingLinkResult;
+                _generateSchedule = dialog.GenerateScheduleResult;
+                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Đã lưu cấu hình lịch học tạm thời. Vui lòng bấm Thêm hoặc Sửa để cập nhật khóa học.");
+            }
+        }
+
         private void ClearInputs()
         {
             _selectedCourseId = -1;
@@ -599,6 +653,11 @@ namespace CourseGuard.Frontend.UserControls.Admin
             cboStatus.SelectedIndex = -1;
             dtpStartDate.Value = DateTime.Now;
             dtpEndDate.Value = DateTime.Now.AddMonths(1);
+            _teachingDays = string.Empty;
+            _sessionStartTime = null;
+            _sessionEndTime = null;
+            _meetingLink = string.Empty;
+            _generateSchedule = false;
         }
     }
 }

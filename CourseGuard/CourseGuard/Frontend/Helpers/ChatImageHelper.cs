@@ -235,5 +235,43 @@ namespace CourseGuard.Frontend.Helpers
                 image.Save(outputPath, jpegCodec, parameters);
             }
         }
+
+        public static string ResolveLocalFilePath(string? dbPath)
+        {
+            if (string.IsNullOrWhiteSpace(dbPath)) return string.Empty;
+            
+            // 1. Try direct path
+            if (File.Exists(dbPath)) return Path.GetFullPath(dbPath);
+
+            // 2. Clean dbPath from leading slashes/backslashes
+            string cleanPath = dbPath.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+            if (cleanPath.StartsWith(Path.DirectorySeparatorChar))
+            {
+                cleanPath = cleanPath.Substring(1);
+            }
+
+            // 3. Try app domain base directory
+            string appDir = AppDomain.CurrentDomain.BaseDirectory;
+            string combined = Path.Combine(appDir, cleanPath);
+            if (File.Exists(combined)) return Path.GetFullPath(combined);
+
+            // 4. Try walking up parent directories
+            string? currentDir = appDir;
+            for (int i = 0; i < 5; i++)
+            {
+                if (currentDir == null) break;
+                
+                string try1 = Path.Combine(currentDir, cleanPath);
+                if (File.Exists(try1)) return Path.GetFullPath(try1);
+
+                // Also try appending CourseGuard folder name if it's there
+                string try2 = Path.Combine(currentDir, "CourseGuard", cleanPath);
+                if (File.Exists(try2)) return Path.GetFullPath(try2);
+
+                currentDir = Path.GetDirectoryName(currentDir);
+            }
+
+            return dbPath; // Return original if not found
+        }
     }
 }

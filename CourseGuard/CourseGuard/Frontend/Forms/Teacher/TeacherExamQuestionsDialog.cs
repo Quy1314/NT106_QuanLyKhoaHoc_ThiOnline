@@ -34,6 +34,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
         private readonly Button _delete = TeacherTabChrome.DangerButton("Xóa câu");
         private readonly Button _close = TeacherTabChrome.SecondaryButton("Đóng");
         private readonly Button _randomBuilder = TeacherTabChrome.SecondaryButton("Tao ngau nhien");
+        private readonly Button _aiGenerate = TeacherTabChrome.PrimaryButton("🤖 Tạo bằng AI");
         private bool _canEdit;
         private readonly int _courseId;
 
@@ -116,6 +117,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             leftButtons.Controls.Add(_importExcel);
             leftButtons.Controls.Add(_questionBank);
             leftButtons.Controls.Add(_randomBuilder);
+            leftButtons.Controls.Add(_aiGenerate);
             leftPanel.Controls.Add(leftButtons, 0, 1);
 
             root.Controls.Add(leftPanel, 0, 0);
@@ -172,6 +174,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _importExcel.Click += async (_, _) => await ImportFromExcelAsync();
             _questionBank.Click += (_, _) => OpenQuestionBank();
             _randomBuilder.Click += (_, _) => OpenRandomBuilder();
+            _aiGenerate.Click += (_, _) => OpenAiGenerator();
             ApplyEditState();
         }
 
@@ -194,6 +197,7 @@ namespace CourseGuard.Frontend.Forms.Teacher
             _importExcel.Enabled = _canEdit;
             _questionBank.Enabled = _canEdit;
             _randomBuilder.Enabled = _canEdit;
+            _aiGenerate.Enabled = _canEdit;
             if (!_canEdit)
                 ClearEditor();
         }
@@ -311,6 +315,24 @@ namespace CourseGuard.Frontend.Forms.Teacher
             }
 
             using var dialog = new RandomExamBuilderDialog(_teacherId, _examId, _courseId);
+            dialog.ShowDialog(this);
+            if (dialog.QuestionsAdded)
+            {
+                RefreshEditState();
+                LoadQuestions();
+            }
+        }
+
+        private void OpenAiGenerator()
+        {
+            if (!RefreshEditState())
+            {
+                ShowGuardedQuestionWriteFailure();
+                LoadQuestions();
+                return;
+            }
+
+            using var dialog = new AiQuestionGeneratorDialog(_teacherId, _examId, _courseId);
             dialog.ShowDialog(this);
             if (dialog.QuestionsAdded)
             {

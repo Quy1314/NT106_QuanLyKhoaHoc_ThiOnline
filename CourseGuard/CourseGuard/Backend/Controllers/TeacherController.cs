@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Backend.Services;
+using CourseGuard.Backend.Security;
 
 namespace CourseGuard.Backend.Controllers
 {
@@ -13,6 +14,7 @@ namespace CourseGuard.Backend.Controllers
         private readonly TeacherRepository _repository;
         private readonly CourseGuardDbContext _dbContext;
         private readonly TeacherStudentExcelExportService _studentExcelExportService;
+        private readonly NotificationRepository _notifications = new();
 
         public TeacherController(CourseGuardDbContext dbContext)
         {
@@ -39,11 +41,33 @@ namespace CourseGuard.Backend.Controllers
         public List<TeacherCourseModel> GetCourses(int teacherId) =>
             teacherId <= 0 ? new List<TeacherCourseModel>() : _repository.GetCourses(teacherId);
 
-        public int CreateCourse(int teacherId, TeacherCourseModel input) =>
-            teacherId <= 0 ? 0 : _repository.CreateCourse(teacherId, input);
+        public int CreateCourse(int teacherId, TeacherCourseModel input)
+        {
+            if (teacherId <= 0) return 0;
+            if (input.GenerateScheduleOnCreate && input.StartDate.HasValue && input.EndDate.HasValue && input.SessionStartTime.HasValue && input.SessionEndTime.HasValue && input.TeachingDays.Count > 0)
+            {
+                string daysStr = string.Join(",", input.TeachingDays);
+                if (_dbContext.HasTeacherConflict(teacherId, input.StartDate.Value, input.EndDate.Value, daysStr, input.SessionStartTime.Value, input.SessionEndTime.Value))
+                {
+                    throw new InvalidOperationException("Giáo viên đã có lịch dạy vào thời gian này.");
+                }
+            }
+            return _repository.CreateCourse(teacherId, input);
+        }
 
-        public bool UpdateCourse(int teacherId, TeacherCourseModel input) =>
-            teacherId > 0 && _repository.UpdateCourse(teacherId, input);
+        public bool UpdateCourse(int teacherId, TeacherCourseModel input)
+        {
+            if (teacherId <= 0) return false;
+            if (input.StartDate.HasValue && input.EndDate.HasValue && input.SessionStartTime.HasValue && input.SessionEndTime.HasValue && input.TeachingDays.Count > 0)
+            {
+                string daysStr = string.Join(",", input.TeachingDays);
+                if (_dbContext.HasTeacherConflict(teacherId, input.StartDate.Value, input.EndDate.Value, daysStr, input.SessionStartTime.Value, input.SessionEndTime.Value, input.Id))
+                {
+                    throw new InvalidOperationException("Giáo viên đã có lịch dạy vào thời gian này.");
+                }
+            }
+            return _repository.UpdateCourse(teacherId, input);
+        }
 
         public bool SubmitCourseForApproval(int teacherId, int courseId) =>
             teacherId > 0 && _repository.SubmitCourseForApproval(teacherId, courseId);
@@ -54,8 +78,16 @@ namespace CourseGuard.Backend.Controllers
         public List<TeacherLessonModel> GetLessons(int teacherId) =>
             teacherId <= 0 ? new List<TeacherLessonModel>() : _repository.GetLessons(teacherId);
 
-        public int CreateLesson(int teacherId, TeacherLessonModel input) =>
-            teacherId <= 0 ? 0 : _repository.CreateLesson(teacherId, input);
+        public int CreateLesson(int teacherId, TeacherLessonModel input)
+        {
+            if (teacherId <= 0) return 0;
+            int lessonId = _repository.CreateLesson(teacherId, input);
+            if (lessonId > 0)
+            {
+                _dbContext.LogUserActivity(teacherId, "LESSON_CREATE", $"Giảng viên tạo bài học/thông báo mới: {input.Title}", string.Empty);
+            }
+            return lessonId;
+        }
 
         public bool UpdateLesson(int teacherId, TeacherLessonModel input) =>
             teacherId > 0 && _repository.UpdateLesson(teacherId, input);
@@ -66,8 +98,32 @@ namespace CourseGuard.Backend.Controllers
         public List<TeacherAssignmentModel> GetAssignments(int teacherId) =>
             teacherId <= 0 ? new List<TeacherAssignmentModel>() : _repository.GetAssignments(teacherId);
 
-        public int CreateAssignment(int teacherId, TeacherAssignmentModel input) =>
-            teacherId <= 0 ? 0 : _repository.CreateAssignment(teacherId, input);
+        public int CreateAssignment(int teacherId, TeacherAssignmentModel input)
+        {
+            if (teacherId <= 0) return 0;
+            int assignmentId = _repository.CreateAssignment(teacherId, input);
+            if (assignmentId > 0)
+            {
+                _dbContext.LogUserActivity(teacherId, "ASSIGNMENT_CREATE", $"Giảng viên tạo bài tập mới: {input.Title}", string.Empty);
+                try
+                {
+                    var studentIds = _dbContext.GetCourseStudents(input.CourseId);
+                    foreach (int studentId in studentIds)
+                    {
+                        _notifications.Create(
+                            studentId,
+                            "Bài tập mới",
+                            $"Giảng viên đã tạo bài tập mới: \"{input.Title}\" trong khóa học.",
+                            WorkflowConstants.NotificationCategory.Assignment,
+                            WorkflowConstants.NotificationType.Informational,
+                            "Assignment",
+                            assignmentId);
+                    }
+                }
+                catch { /* Ignore notification creation errors */ }
+            }
+            return assignmentId;
+        }
 
         public bool UpdateAssignment(int teacherId, TeacherAssignmentModel input) =>
             teacherId > 0 && _repository.UpdateAssignment(teacherId, input);
@@ -125,11 +181,17 @@ namespace CourseGuard.Backend.Controllers
             return _studentExcelExportService.ExportStudentsAsync(students, filePath, cancellationToken);
         }
 
-        public bool ApproveEnrollment(int teacherId, int courseId, int studentId) =>
-            teacherId > 0 && _repository.ApproveEnrollment(teacherId, courseId, studentId);
+        public bool ApproveEnrollment(int teacherId, int courseId, int studentId)
+        {
+            if (UserSessionContext.CurrentRole != "ADMIN") return false;
+            return teacherId > 0 && _repository.ApproveEnrollment(teacherId, courseId, studentId);
+        }
 
-        public bool RejectEnrollment(int teacherId, int courseId, int studentId) =>
-            teacherId > 0 && _repository.RejectEnrollment(teacherId, courseId, studentId);
+        public bool RejectEnrollment(int teacherId, int courseId, int studentId)
+        {
+            if (UserSessionContext.CurrentRole != "ADMIN") return false;
+            return teacherId > 0 && _repository.RejectEnrollment(teacherId, courseId, studentId);
+        }
 
         public List<TeacherScoreModel> GetResults(int teacherId, int? courseId = null, int? examId = null) =>
             teacherId <= 0 ? new List<TeacherScoreModel>() : _repository.GetResults(teacherId, courseId, examId);
@@ -140,8 +202,32 @@ namespace CourseGuard.Backend.Controllers
         public List<TeacherMaterialModel> GetMaterials(int teacherId, int? courseId = null) =>
             teacherId <= 0 ? new List<TeacherMaterialModel>() : _repository.GetMaterials(teacherId, courseId);
 
-        public int CreateMaterial(int teacherId, TeacherMaterialModel input) =>
-            teacherId <= 0 ? 0 : _repository.CreateMaterial(teacherId, input);
+        public int CreateMaterial(int teacherId, TeacherMaterialModel input)
+        {
+            if (teacherId <= 0) return 0;
+            int materialId = _repository.CreateMaterial(teacherId, input);
+            if (materialId > 0)
+            {
+                _dbContext.LogUserActivity(teacherId, "MATERIAL_UPLOAD", $"Giảng viên tải lên tài liệu: {input.FileName}", string.Empty);
+                try
+                {
+                    var studentIds = _dbContext.GetCourseStudents(input.CourseId);
+                    foreach (int studentId in studentIds)
+                    {
+                        _notifications.Create(
+                            studentId,
+                            "Tài liệu mới",
+                            $"Giảng viên đã tải lên tài liệu mới: \"{input.FileName}\" trong khóa học.",
+                            WorkflowConstants.NotificationCategory.Assignment,
+                            WorkflowConstants.NotificationType.Informational,
+                            "Material",
+                            materialId);
+                    }
+                }
+                catch { /* Ignore notification creation errors */ }
+            }
+            return materialId;
+        }
 
         public bool UpdateMaterial(int teacherId, TeacherMaterialModel input) =>
             teacherId > 0 && _repository.UpdateMaterial(teacherId, input);

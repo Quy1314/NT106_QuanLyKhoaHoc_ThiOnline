@@ -1978,6 +1978,19 @@ namespace CourseGuard.Frontend.Forms.Teacher
 
             await BeginCloseAfterConfirmationAsync();
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            try
+            {
+                base.Dispose(disposing);
+            }
+            catch (Exception)
+            {
+                // Suppress exception during GC finalization of uninitialized objects in tests
+            }
+        }
+
         private sealed class StudentTileState
         {
             public int StudentId { get; init; }

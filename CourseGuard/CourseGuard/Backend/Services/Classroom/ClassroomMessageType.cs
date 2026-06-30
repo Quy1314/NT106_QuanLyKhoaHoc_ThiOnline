@@ -15,13 +15,16 @@ namespace CourseGuard.Backend.Services.Classroom
         public const string ClassClosed = "CLASS_CLOSED";
         public const string ParticipantList = "PARTICIPANT_LIST";
         public const string TeacherMuteStudent = "TEACHER_MUTE_STUDENT";
+        public const string TeacherMuteAll = "TEACHER_MUTE_ALL";
         public const string TeacherKickStudent = "TEACHER_KICK_STUDENT";
+        public const string Reaction = "REACTION";
         public const string Ping = "PING";
         public const string Pong = "PONG";
         public const string VideoFrame = "VIDEO_FRAME";
         public const string ScreenShareOn = "SCREEN_SHARE_ON";
         public const string ScreenShareOff = "SCREEN_SHARE_OFF";
         public const string ScreenShareFrame = "SCREEN_SHARE_FRAME";
+        public const string WindowShareOn = "WINDOW_SHARE_ON";
         public const string Error = "ERROR";
     }
 }

@@ -21,5 +21,13 @@ namespace CourseGuard.Backend.Models
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public DateTime CreatedAt { get; set; }
+
+        // Structured schedule fields
+        public string TeachingDays { get; set; } = string.Empty;
+        public TimeSpan? SessionStartTime { get; set; }
+        public TimeSpan? SessionEndTime { get; set; }
+        public string Frequency { get; set; } = "Weekly";
+        public string MeetingLink { get; set; } = string.Empty;
+        public bool GenerateSchedule { get; set; } = false;
     }
 }

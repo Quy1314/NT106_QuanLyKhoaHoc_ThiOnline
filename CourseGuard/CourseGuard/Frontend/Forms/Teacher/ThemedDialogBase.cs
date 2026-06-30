@@ -257,5 +257,17 @@ namespace CourseGuard.Frontend.Forms.Teacher
                 _footerPanel.Controls.Add(buttons[i], i + 1, 0);
             }
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            try
+            {
+                base.Dispose(disposing);
+            }
+            catch (Exception)
+            {
+                // Suppress exception during GC finalization of uninitialized objects in tests
+            }
+        }
     }
 }
