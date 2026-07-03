@@ -33,7 +33,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             this.panelHeader = new System.Windows.Forms.Panel();
             this.lblTitle = new System.Windows.Forms.Label();
             
-            this.grpFilter = new System.Windows.Forms.GroupBox();
+            this.grpFilter = new System.Windows.Forms.Panel();
             this.lblReportType = new System.Windows.Forms.Label();
             this.cboReportType = new System.Windows.Forms.ComboBox();
             this.lblStartDate = new System.Windows.Forms.Label();
@@ -42,7 +42,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             this.dtpEndDate = new System.Windows.Forms.DateTimePicker();
             this.btnFilter = new System.Windows.Forms.Button();
             
-            this.grpExport = new System.Windows.Forms.GroupBox();
+            this.grpExport = new System.Windows.Forms.Panel();
             this.btnExportExcel = new System.Windows.Forms.Button();
             this.btnExportCSV = new System.Windows.Forms.Button();
             this.btnExportPDF = new System.Windows.Forms.Button();
@@ -77,7 +77,6 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // 
             // grpFilter
             // 
-            this.grpFilter.Text = "Bộ lọc và Tìm kiếm";
             this.grpFilter.Dock = System.Windows.Forms.DockStyle.Top;
             this.grpFilter.Height = 100;
             this.grpFilter.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMdBold();
@@ -149,7 +148,6 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // 
             // grpExport
             // 
-            this.grpExport.Text = "Xuất dữ liệu";
             this.grpExport.Dock = System.Windows.Forms.DockStyle.Top;
             this.grpExport.Height = 80;
             this.grpExport.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMdBold();
@@ -235,8 +233,8 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
         private System.Windows.Forms.Panel panelHeader;
         private System.Windows.Forms.Label lblTitle;
-        private System.Windows.Forms.GroupBox grpFilter;
-        private System.Windows.Forms.GroupBox grpExport;
+        private System.Windows.Forms.Panel grpFilter;
+        private System.Windows.Forms.Panel grpExport;
         private System.Windows.Forms.DataGridView dataGridView1;
         
         private System.Windows.Forms.Label lblReportType;

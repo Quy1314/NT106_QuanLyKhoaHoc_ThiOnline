@@ -29,6 +29,7 @@ namespace CourseGuard.Frontend.Forms.Admin
         private SidebarPanel _sidebar;
         private TopbarPanel _topbar;
         private Panel _rightPanel;   // container: topbar + mainboard
+        private string _currentPageName = "Tổng quan";
 
         public AdminDashboard()
         {
@@ -38,20 +39,33 @@ namespace CourseGuard.Frontend.Forms.Admin
             // ── 1. Build layout skeleton (Skill 01) ──────────────────
             // Sidebar docks Left on Form
             _sidebar = new SidebarPanel { Dock = DockStyle.Left };
-            _sidebar.SetNavItems(
-                new[] { "Tổng quan", "Người dùng", "Khóa học", "Báo cáo", "Thiết bị", "Nhật ký", "Cài đặt" },
-                new[] { "🏠", "👥", "📚", "📊", "💻", "📝", "⚙" }
-            );
+            _sidebar.SetNavItems(new[]
+            {
+                new SidebarNavItem("Tổng quan", string.Empty, isHeading: true),
+                new SidebarNavItem("Tổng quan", "home"),
+                new SidebarNavItem("Quản lý", string.Empty, isHeading: true),
+                new SidebarNavItem("Người dùng", "user"),
+                new SidebarNavItem("Khóa học", "folder-check"),
+                new SidebarNavItem("Phân tích", string.Empty, isHeading: true),
+                new SidebarNavItem("Báo cáo", "chart"),
+                new SidebarNavItem("Thiết bị", "monitor"),
+                new SidebarNavItem("Hệ thống", string.Empty, isHeading: true),
+                new SidebarNavItem("Nhật ký", "document"),
+                new SidebarNavItem("Cài đặt", "settings")
+            });
             _sidebar.NavItemClicked += Sidebar_NavItemClicked;
 
             // Right container holds Topbar(Top) + mainboard(Fill)
-            _rightPanel = new Panel { Dock = DockStyle.Fill, Padding = Padding.Empty };
+            _rightPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 8, 12, 0) };
             _topbar = new TopbarPanel
             {
                 Dock = DockStyle.Top,
                 PageTitle = "Tổng quan",
-                Subtitle = "Quản trị hệ thống CourseGuard"
+                Subtitle = string.Empty,
+                UseStudentTopbar = true
             };
+            _topbar.ThemeToggled += (_, _) => ReloadCurrentPage();
+            _topbar.LogoutRequested += (_, _) => Sidebar_NavItemClicked(this, "Logout");
 
             // mainboard (from Designer) fills remaining space under topbar
             mainboard.Dock = DockStyle.Fill;
@@ -119,6 +133,7 @@ namespace CourseGuard.Frontend.Forms.Admin
 
             if (_nav.ContainsKey(pageName))
             {
+                _currentPageName = pageName;
                 _topbar.PageTitle = pageName;
                 LoadUI(_nav[pageName]());
             }
@@ -137,10 +152,27 @@ namespace CourseGuard.Frontend.Forms.Admin
 
             if (targetPage != null && _nav.ContainsKey(targetPage))
             {
+                _currentPageName = targetPage;
                 _sidebar.SetActiveByName(targetPage);
                 _topbar.PageTitle = targetPage;
                 LoadUI(_nav[targetPage]());
             }
+        }
+
+        private void ReloadCurrentPage()
+        {
+            BackColor = AppColors.BgBase;
+            _rightPanel.BackColor = AppColors.BgBase;
+            mainboard.BackColor = AppColors.BgBase;
+            _topbar.BackColor = AppColors.BgCard;
+            _topbar.PageTitle = _currentPageName;
+            _sidebar.SetActiveByName(_currentPageName);
+
+            if (_nav.TryGetValue(_currentPageName, out var factory))
+                LoadUI(factory());
+
+            _sidebar.Invalidate();
+            _topbar.Invalidate();
         }
 
         private void LoadUI(UserControl uc)

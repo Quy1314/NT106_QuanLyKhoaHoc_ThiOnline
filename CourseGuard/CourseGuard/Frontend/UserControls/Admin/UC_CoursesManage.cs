@@ -1,142 +1,71 @@
-/*
- * UC_CoursesManage.cs
- * 
- * Layer: Presentation (UserControls)
- * Vai trò: Màn hình quản lý khóa học. Hiển thị danh sách khóa học (kèm tên giáo viên), thêm/xóa/sửa khóa học.
- * Phụ thuộc: CourseService, UserService (để lấy danh sách giáo viên).
- */
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Text;
+using System.Drawing.Drawing2D;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using CourseGuard.Backend.Controllers;
+using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
-using CourseGuard.Frontend.Theme;
-using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Forms.Admin;
-using CourseGuard.Frontend.Forms.Teacher;
+using CourseGuard.Frontend.Helpers;
+using CourseGuard.Frontend.Theme;
+using CourseGuard.Frontend.UserControls.Teacher;
 
 namespace CourseGuard.Frontend.UserControls.Admin
 {
     public partial class UC_CoursesManage : UserControl
     {
-        private readonly CourseGuard.Backend.Controllers.UserController _userService;
-        private readonly CourseGuard.Backend.Controllers.CourseController _courseService;
-        private int _selectedCourseId = -1;
+        private readonly CourseController _courseService;
         private bool _isBusy;
-        private List<CourseGuard.Backend.Models.UserModel> _allStudents = new List<CourseGuard.Backend.Models.UserModel>();
-        private readonly Button _btnApproveCourse = new Button();
-        private readonly Button _btnRejectCourse = new Button();
-        private readonly Button _btnConfigureSchedule = new Button();
-        private string _teachingDays = string.Empty;
-        private TimeSpan? _sessionStartTime;
-        private TimeSpan? _sessionEndTime;
-        private string _meetingLink = string.Empty;
-        private bool _generateSchedule = false;
+        private int _hoveredActionRowIndex = -1;
 
         public UC_CoursesManage()
         {
             InitializeComponent();
-            ApplyAcademicStyle();
+            ApplyThemeStyle();
 
-            // Bo góc + cursor tay cho tất cả buttons
-            CourseGuard.Frontend.Theme.RoundedButtonHelper.Apply(10,
-                btnAddCourse, btnUpdateCourse, btnDeleteCourse,
-                btnApproveStudent, btnRemoveStudent);
-
-            var dbContext = new CourseGuard.Backend.Data.CourseGuardDbContext("");
-            _userService = new CourseGuard.Backend.Controllers.UserController(dbContext);
-            _courseService = new CourseGuard.Backend.Controllers.CourseController(dbContext);
-
-            // Set up cboRegStatus items
-            cboRegStatus.Items.Clear();
-            cboRegStatus.Items.AddRange(new object[] { "Chờ duyệt (Pending)", "Đã tham gia (Approved)", "Tất cả học viên (All)" });
-            cboRegStatus.SelectedIndex = 0; // Default to Pending
-            cboStatus.Items.Clear();
-            cboStatus.Items.AddRange(new object[] { WorkflowConstants.CourseStatus.Draft, WorkflowConstants.CourseStatus.Pending, WorkflowConstants.CourseStatus.Active, WorkflowConstants.CourseStatus.Rejected, WorkflowConstants.CourseStatus.Closed });
-            SetupCourseApprovalButtons();
+            var dbContext = new CourseGuardDbContext("");
+            _courseService = new CourseController(dbContext);
 
             WireEvents();
-            // Initial load
             RefreshDataAsync().FireAndForgetSafe(this);
         }
 
-        private void ApplyAcademicStyle()
+        private void ApplyThemeStyle()
         {
-            BackColor = AcademicTheme.AppBackground;
-            btnAddCourse.BackColor = AcademicTheme.Primary;
-            btnAddCourse.ForeColor = Color.White;
-            btnUpdateCourse.BackColor = AcademicTheme.Primary;
-            btnUpdateCourse.ForeColor = Color.White;
-            btnDeleteCourse.BackColor = Color.FromArgb(220, 38, 38);
-            btnDeleteCourse.ForeColor = Color.White;
-            
-            btnApproveStudent.BackColor = AcademicTheme.Primary;
-            btnApproveStudent.ForeColor = Color.White;
-            
-            btnRemoveStudent.BackColor = AcademicTheme.Surface;
-            btnRemoveStudent.ForeColor = AcademicTheme.TextSecondary;
-            btnRemoveStudent.FlatAppearance.BorderColor = AcademicTheme.BorderSoft;
-            btnRemoveStudent.FlatAppearance.BorderSize = 1;
-            
-            lblSelectCourse.ForeColor = AcademicTheme.TextSecondary;
-            lblStudent.ForeColor = AcademicTheme.TextSecondary;
-            lblRegStatus.ForeColor = AcademicTheme.TextSecondary;
-            
-            AcademicTheme.StyleGrid(dgvCourses);
+            TeacherTabChrome.StylePrimaryButton(btnAddCourse);
+            btnAddCourse.Width = TextRenderer.MeasureText(btnAddCourse.Text, btnAddCourse.Font).Width + 22;
+            btnAddCourse.MinimumSize = new Size(108, btnAddCourse.Height);
+
+            AppColors.ApplyTheme(this);
+            WrapWithCards();
         }
 
-        private void SetupCourseApprovalButtons()
+        private void WrapWithCards()
         {
-            grpCourseInfo.Height = 435;
-            _btnApproveCourse.Text = "Duyệt";
-            _btnApproveCourse.Location = new Point(20, 342);
-            _btnApproveCourse.Size = new Size(125, 35);
-            _btnApproveCourse.FlatStyle = FlatStyle.Flat;
-            _btnApproveCourse.FlatAppearance.BorderSize = 0;
-            _btnApproveCourse.Font = MetaTheme.Fonts.ButtonMd();
-            _btnApproveCourse.BackColor = AcademicTheme.Primary;
-            _btnApproveCourse.ForeColor = Color.White;
+            var root = TeacherTabChrome.CreateRoot(this);
+            var headerCard = TeacherTabChrome.CreateHeader(
+                "Danh sách khóa học",
+                "Quản lý, thêm, sửa, xóa thông tin và danh sách lớp của các khóa học trên hệ thống",
+                btnAddCourse);
+            var cardGrid = TeacherTabChrome.CreateDataCard("Danh sách khóa học", dgvCourses);
 
-            _btnRejectCourse.Text = "Từ chối";
-            _btnRejectCourse.Location = new Point(155, 342);
-            _btnRejectCourse.Size = new Size(125, 35);
-            _btnRejectCourse.FlatStyle = FlatStyle.Flat;
-            _btnRejectCourse.FlatAppearance.BorderSize = 0;
-            _btnRejectCourse.Font = MetaTheme.Fonts.ButtonMd();
-            _btnRejectCourse.BackColor = Color.FromArgb(220, 38, 38);
-            _btnRejectCourse.ForeColor = Color.White;
+            root.Controls.Add(headerCard, 0, 0);
+            root.Controls.Add(cardGrid, 0, 1);
 
-            _btnConfigureSchedule.Text = "Cấu hình lịch học";
-            _btnConfigureSchedule.Location = new Point(20, 385);
-            _btnConfigureSchedule.Size = new Size(260, 35);
-            _btnConfigureSchedule.FlatStyle = FlatStyle.Flat;
-            _btnConfigureSchedule.FlatAppearance.BorderSize = 0;
-            _btnConfigureSchedule.Font = MetaTheme.Fonts.ButtonMd();
-            _btnConfigureSchedule.BackColor = Color.FromArgb(79, 70, 229);
-            _btnConfigureSchedule.ForeColor = Color.White;
-
-            RoundedButtonHelper.Apply(10, _btnApproveCourse, _btnRejectCourse, _btnConfigureSchedule);
-            grpCourseInfo.Controls.Add(_btnApproveCourse);
-            grpCourseInfo.Controls.Add(_btnRejectCourse);
-            grpCourseInfo.Controls.Add(_btnConfigureSchedule);
+            TeacherTabChrome.StyleGrid(dgvCourses);
         }
 
         private void WireEvents()
         {
             this.VisibleChanged += UC_CoursesManage_VisibleChanged;
             btnAddCourse.Click += btnAddCourse_Click;
-            btnUpdateCourse.Click += btnUpdateCourse_Click;
-            btnDeleteCourse.Click += btnDeleteCourse_Click;
-            _btnApproveCourse.Click += btnApproveCourse_Click;
-            _btnRejectCourse.Click += btnRejectCourse_Click;
-            _btnConfigureSchedule.Click += btnConfigureSchedule_Click;
+            dgvCourses.CellDoubleClick += dgvCourses_CellDoubleClick;
             dgvCourses.CellClick += dgvCourses_CellClick;
-            WireStudentApprovalEvents();
+            dgvCourses.CellPainting += dgvCourses_CellPainting;
+            dgvCourses.MouseMove += dgvCourses_MouseMove;
+            dgvCourses.MouseLeave += dgvCourses_MouseLeave;
         }
 
         private async void UC_CoursesManage_VisibleChanged(object? sender, EventArgs e)
@@ -154,33 +83,15 @@ namespace CourseGuard.Frontend.UserControls.Admin
             this.ShowSkeleton(SkeletonType.FormWithTable);
             try
             {
-                // Parallelize data loading since DbContext uses a separate connection per method call
-                var teachersTask = Task.Run(() => _userService.GetByRole("TEACHER"));
-                var studentsTask = Task.Run(() => _userService.GetByRole("STUDENT"));
-                var coursesTask = Task.Run(() => _courseService.GetAllCourses());
-
-                await Task.WhenAll(teachersTask, studentsTask, coursesTask);
+                var courses = await Task.Run(() => _courseService.GetAllCourses());
 
                 if (IsDisposed || Disposing) return;
-
-                var teachers = await teachersTask;
-                var students = await studentsTask;
-                var courses = await coursesTask;
-
-                _allStudents = students;
-                BindTeachers(teachers);
-                BindStudents(students);
                 BindCourses(courses);
-
-                ClearInputs();
             }
-            catch (ObjectDisposedException)
-            {
-                // Ignore when control is closed while background load is running.
-            }
+            catch (ObjectDisposedException) { }
             catch (Exception ex)
             {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi tải dữ liệu: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MetaTheme.ShowModernDialog("Lỗi tải dữ liệu: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -189,31 +100,13 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
         }
 
-        private void BindTeachers(List<CourseGuard.Backend.Models.UserModel> teachers)
-        {
-            cboTeacher.DataSource = teachers;
-            cboTeacher.DisplayMember = "FullName";
-            cboTeacher.ValueMember = "Id";
-            cboTeacher.SelectedIndex = -1;
-        }
-        
-        private void BindStudents(List<CourseGuard.Backend.Models.UserModel> students)
-        {
-            cboStudent.DataSource = students;
-            cboStudent.DisplayMember = "FullName";
-            cboStudent.ValueMember = "Id";
-            cboStudent.SelectedIndex = -1;
-        }
-
-        private void BindCourses(List<CourseGuard.Backend.Models.CourseModel> courses)
+        private void BindCourses(List<CourseModel> courses)
         {
             dgvCourses.DataSource = courses;
 
-            // Adjust columns if needed
             if (dgvCourses.Columns["TeacherId"] is DataGridViewColumn teacherIdColumn) teacherIdColumn.Visible = false;
             if (dgvCourses.Columns["CreatedAt"] is DataGridViewColumn createdAtColumn) createdAtColumn.Visible = false;
 
-            // Headers (Optional customization)
 #pragma warning disable CS8602
             if (dgvCourses.Columns["Id"] is DataGridViewColumn idColumn) idColumn.HeaderText = "ID";
             if (dgvCourses.Columns["Name"] != null) dgvCourses.Columns["Name"].HeaderText = "Tên Khóa Học";
@@ -223,441 +116,177 @@ namespace CourseGuard.Frontend.UserControls.Admin
             if (dgvCourses.Columns["RejectionReason"] != null) dgvCourses.Columns["RejectionReason"].HeaderText = "Lý Do Từ Chối";
             if (dgvCourses.Columns["StartDate"] != null) dgvCourses.Columns["StartDate"].HeaderText = "Ngày Bắt Đầu";
             if (dgvCourses.Columns["EndDate"] != null) dgvCourses.Columns["EndDate"].HeaderText = "Ngày Kết Thúc";
-
 #pragma warning restore CS8602
 
-            // Reuse same source to avoid duplicate query
-            cboSelectCourse.DataSource = courses.ToList();
-            cboSelectCourse.DisplayMember = "Name";
-            cboSelectCourse.ValueMember = "Id";
-            cboSelectCourse.SelectedIndex = -1;
+            if (dgvCourses.Columns["colViewDetail"] == null)
+            {
+                var btnCol = new DataGridViewButtonColumn
+                {
+                    Name = "colViewDetail",
+                    HeaderText = "Thao tác",
+                    Text = "Xem chi tiết",
+                    UseColumnTextForButtonValue = true,
+                    Width = 110,
+                    FlatStyle = FlatStyle.Flat
+                };
+                btnCol.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+                btnCol.DefaultCellStyle.Padding = new Padding(6, 4, 6, 4);
+                dgvCourses.Columns.Add(btnCol);
+            }
         }
 
-        private void dgvCourses_CellClick(object? sender, DataGridViewCellEventArgs e)
+        private void dgvCourses_MouseMove(object? sender, MouseEventArgs e)
+        {
+            var hit = dgvCourses.HitTest(e.X, e.Y);
+            bool overAction = hit.RowIndex >= 0
+                && hit.ColumnIndex >= 0
+                && dgvCourses.Columns[hit.ColumnIndex]?.Name == "colViewDetail";
+            int newHoveredRow = overAction ? hit.RowIndex : -1;
+
+            if (_hoveredActionRowIndex == newHoveredRow)
+                return;
+
+            int oldHoveredRow = _hoveredActionRowIndex;
+            _hoveredActionRowIndex = newHoveredRow;
+            dgvCourses.Cursor = overAction ? Cursors.Hand : Cursors.Default;
+
+            InvalidateActionCell(oldHoveredRow);
+            InvalidateActionCell(newHoveredRow);
+        }
+
+        private void dgvCourses_MouseLeave(object? sender, EventArgs e)
+        {
+            int oldHoveredRow = _hoveredActionRowIndex;
+            _hoveredActionRowIndex = -1;
+            dgvCourses.Cursor = Cursors.Default;
+            InvalidateActionCell(oldHoveredRow);
+        }
+
+        private void InvalidateActionCell(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= dgvCourses.Rows.Count)
+                return;
+
+            if (dgvCourses.Columns["colViewDetail"] is DataGridViewColumn actionColumn)
+                dgvCourses.InvalidateCell(actionColumn.Index, rowIndex);
+        }
+
+        private void dgvCourses_CellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0)
+                return;
+
+            if (dgvCourses.Columns[e.ColumnIndex]?.Name != "colViewDetail")
+                return;
+
+            e.Paint(e.CellBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.Border);
+
+            bool isHovered = e.RowIndex == _hoveredActionRowIndex;
+            Rectangle buttonBounds = Rectangle.Inflate(e.CellBounds, -10, -6);
+            Color fill = isHovered
+                ? AppColors.AccentHover
+                : (AppColors.IsDarkMode ? Color.FromArgb(36, 36, 54) : ColorTranslator.FromHtml("#F8FAFC"));
+            Color border = isHovered ? AppColors.AccentHover : AppColors.BorderStrong;
+            Color text = isHovered ? Color.White : AppColors.TextPrimary;
+
+            Graphics? graphics = e.Graphics;
+            if (graphics == null)
+                return;
+
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using (var path = RoundedRect(buttonBounds, 8))
+            using (var brush = new SolidBrush(fill))
+            using (var pen = new Pen(border, 1f))
+            {
+                graphics.FillPath(brush, path);
+                graphics.DrawPath(pen, path);
+            }
+
+            TextRenderer.DrawText(
+                graphics,
+                "Xem chi tiết",
+                dgvCourses.Font,
+                buttonBounds,
+                text,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+            e.Handled = true;
+        }
+
+        private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
+        {
+            var path = new GraphicsPath();
+            int diameter = radius * 2;
+
+            path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
+            path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
+            path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+            path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        private void dgvCourses_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex >= 0)
             {
                 var selectedRow = dgvCourses.Rows[e.RowIndex];
-                var course = selectedRow.DataBoundItem as CourseGuard.Backend.Models.CourseModel;
-
-                if (course != null)
-                {
-                    _selectedCourseId = course.Id;
-                    txtCourseName.Text = course.Name;
-                    txtDescription.Text = course.Description;
-                    try 
-                    { 
-                        cboTeacher.SelectedValue = course.TeacherId; 
-                    } 
-                    catch { /* If teacher deleted/inactive, handle gracefully */ }
-                    
-                    cboStatus.Text = course.Status;
-                    dtpStartDate.Value = course.StartDate != DateTime.MinValue ? course.StartDate : DateTime.Now;
-                    dtpEndDate.Value = course.EndDate != DateTime.MinValue ? course.EndDate : DateTime.Now;
-                    _teachingDays = course.TeachingDays ?? string.Empty;
-                    _sessionStartTime = course.SessionStartTime;
-                    _sessionEndTime = course.SessionEndTime;
-                    _meetingLink = course.MeetingLink ?? string.Empty;
-                    _generateSchedule = false; // default false when selecting an existing course
-                }
+                if (selectedRow.DataBoundItem is CourseModel course)
+                    OpenCourseModal(course.Id);
             }
         }
 
-        private async void btnAddCourse_Click(object? sender, EventArgs e)
+        private void dgvCourses_CellClick(object? sender, DataGridViewCellEventArgs e)
         {
-            if (!ValidateInputs()) return;
-
-            var course = new CourseGuard.Backend.Models.CourseModel
+            if (e.RowIndex >= 0
+                && e.ColumnIndex >= 0
+                && dgvCourses.Columns[e.ColumnIndex]?.Name == "colViewDetail")
             {
-                Name = txtCourseName.Text.Trim(),
-                Description = txtDescription.Text.Trim(),
-                TeacherId = Convert.ToInt32(cboTeacher.SelectedValue),
-                Status = cboStatus.Text, // "Active" or "Closed"
-                StartDate = dtpStartDate.Value,
-                EndDate = dtpEndDate.Value,
-                TeachingDays = _teachingDays,
-                SessionStartTime = _sessionStartTime,
-                SessionEndTime = _sessionEndTime,
-                MeetingLink = _meetingLink,
-                GenerateSchedule = _generateSchedule
-            };
-
-            try
-            {
-                string result = await Task.Run(() => _courseService.AddCourse(course));
-                if (result == "Success")
-                {
-                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Thêm khóa học thành công!");
-                    await RefreshDataAsync();
-                }
-                else if (result == "Forbidden")
-                {
-                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Bạn không có quyền thực hiện thao tác này.");
-                }
-                else
-                {
-                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi thêm khóa học: " + result);
-                }
-            }
-            catch (Exception ex)
-            {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi thêm khóa học: " + ex.Message);
+                var selectedRow = dgvCourses.Rows[e.RowIndex];
+                if (selectedRow.DataBoundItem is CourseModel course)
+                    OpenCourseModal(course.Id);
             }
         }
 
-        private async void btnUpdateCourse_Click(object? sender, EventArgs e)
+        private void btnAddCourse_Click(object? sender, EventArgs e)
         {
-            if (_selectedCourseId == -1)
-            {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn khóa học để cập nhật.");
-                return;
-            }
-            if (!ValidateInputs()) return;
-
-            var course = new CourseGuard.Backend.Models.CourseModel
-            {
-                Id = _selectedCourseId,
-                Name = txtCourseName.Text.Trim(),
-                Description = txtDescription.Text.Trim(),
-                TeacherId = Convert.ToInt32(cboTeacher.SelectedValue),
-                Status = cboStatus.Text,
-                StartDate = dtpStartDate.Value,
-                EndDate = dtpEndDate.Value,
-                TeachingDays = _teachingDays,
-                SessionStartTime = _sessionStartTime,
-                SessionEndTime = _sessionEndTime,
-                MeetingLink = _meetingLink,
-                GenerateSchedule = _generateSchedule
-            };
-
-            try
-            {
-                bool success = await Task.Run(() => _courseService.UpdateCourse(course));
-                if (success)
-                {
-                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Cập nhật khóa học thành công!");
-                    await RefreshDataAsync();
-                }
-                else
-                {
-                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Cập nhật thất bại hoặc bạn không có quyền.");
-                }
-            }
-            catch (Exception ex)
-            {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi cập nhật khóa học: " + ex.Message);
-            }
+            OpenCourseModal(-1);
         }
 
-        private async void btnDeleteCourse_Click(object? sender, EventArgs e)
+        private async void OpenCourseModal(int courseId)
         {
-            if (_selectedCourseId == -1)
+            using (var modal = new CourseManageModal(courseId))
             {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn khóa học để xóa.");
-                return;
-            }
+                Form? parentForm = FindForm();
+                Form? darkBg = null;
+                if (parentForm != null)
+                {
+                    darkBg = new Form
+                    {
+                        StartPosition = FormStartPosition.Manual,
+                        FormBorderStyle = FormBorderStyle.None,
+                        Opacity = 0.50d,
+                        BackColor = Color.Black,
+                        Size = parentForm.Size,
+                        Location = parentForm.Location,
+                        ShowInTaskbar = false
+                    };
+                    darkBg.Show(parentForm);
+                }
 
-            var confirmResult = CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Bạn có chắc chắn muốn xóa khóa học này không?",
-                                     "Xác nhận xóa",
-                                     MessageBoxButtons.YesNo);
-            if (confirmResult == DialogResult.Yes)
-            {
                 try
                 {
-                    bool success = await Task.Run(() => _courseService.DeleteCourse(_selectedCourseId));
-                    if (success)
+                    if (modal.ShowDialog(parentForm) == DialogResult.OK)
                     {
-                        CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Xóa khóa học thành công!");
                         await RefreshDataAsync();
                     }
-                    else
-                    {
-                        CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Xóa thất bại hoặc bạn không có quyền.");
-                    }
                 }
-                catch (Exception ex)
+                finally
                 {
-                    CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi xóa khóa học: " + ex.Message);
+                    darkBg?.Close();
+                    darkBg?.Dispose();
                 }
             }
-        }
-
-        private async void btnApproveCourse_Click(object? sender, EventArgs e)
-        {
-            if (_selectedCourseId <= 0)
-            {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn khóa học cần duyệt.");
-                return;
-            }
-
-            bool ok = await Task.Run(() => _courseService.ApproveCourse(_selectedCourseId));
-            CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(ok ? "Đã duyệt khóa học." : "Chỉ khóa học đang chờ duyệt mới có thể được duyệt.");
-            await RefreshDataAsync();
-        }
-
-        private async void btnRejectCourse_Click(object? sender, EventArgs e)
-        {
-            if (_selectedCourseId <= 0)
-            {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn khóa học cần từ chối.");
-                return;
-            }
-
-            string reason = PromptRejectReason();
-            bool ok = await Task.Run(() => _courseService.RejectCourse(_selectedCourseId, reason));
-            CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog(ok ? "Đã từ chối khóa học." : "Chỉ khóa học đang chờ duyệt mới có thể bị từ chối.");
-            await RefreshDataAsync();
-        }
-
-        private static string PromptRejectReason()
-        {
-            using var form = new Form
-            {
-                Text = "Từ chối khóa học",
-                Width = 420,
-                Height = 180,
-                StartPosition = FormStartPosition.CenterParent,
-                FormBorderStyle = FormBorderStyle.FixedDialog,
-                MaximizeBox = false,
-                MinimizeBox = false
-            };
-            var input = new TextBox { Left = 16, Top = 42, Width = 370 };
-            var label = new Label { Left = 16, Top = 16, Width = 370, Text = "Nhập lý do từ chối:" };
-            var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Left = 214, Top = 82, Width = 80 };
-            var cancel = new Button { Text = "Hủy", DialogResult = DialogResult.Cancel, Left = 304, Top = 82, Width = 80 };
-            form.Controls.Add(label);
-            form.Controls.Add(input);
-            form.Controls.Add(ok);
-            form.Controls.Add(cancel);
-            form.AcceptButton = ok;
-            form.CancelButton = cancel;
-            return form.ShowDialog() == DialogResult.OK ? input.Text.Trim() : string.Empty;
-        }
-        
-        private void WireStudentApprovalEvents()
-        {
-            cboSelectCourse.SelectedIndexChanged += async (s, e) =>
-            {
-                if (cboSelectCourse.SelectedValue is int courseId)
-                {
-                    await RefreshStudentDropdown(courseId);
-                }
-            };
-
-            cboRegStatus.SelectedIndexChanged += async (s, e) =>
-            {
-                if (cboSelectCourse.SelectedValue is int courseId)
-                {
-                    await RefreshStudentDropdown(courseId);
-                }
-            };
-
-            btnApproveStudent.Click += async (s, e) =>
-            {
-                if (cboSelectCourse.SelectedValue is int courseId && cboStudent.SelectedValue is int studentId)
-                {
-                    if (studentId <= 0)
-                    {
-                        CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Không có học viên hợp lệ để thao tác.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        return;
-                    }
-
-                    // Check if there is an enrollment status for this student
-                    string? status = await Task.Run(() => _courseService.GetEnrollmentStatus(courseId, studentId));
-                    if (status == "PENDING")
-                    {
-                        bool ok = await Task.Run(() => _courseService.ApproveEnrollment(courseId, studentId));
-                        if (ok)
-                        {
-                            CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Đã duyệt yêu cầu tham gia khóa học của học viên!");
-                            await RefreshStudentDropdown(courseId);
-                        }
-                        else CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi duyệt học viên.");
-                    }
-                    else if (status == "ACTIVE" || status == "APPROVED")
-                    {
-                        CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Học viên này đã tham gia khóa học rồi.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                    else
-                    {
-                        // Directly enroll
-                        bool ok = await Task.Run(() => _courseService.EnrollStudent(courseId, studentId));
-                        if (ok)
-                        {
-                            CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Thêm học viên vào khóa học thành công!");
-                            await RefreshStudentDropdown(courseId);
-                        }
-                        else CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi thêm học viên vào khóa học.");
-                    }
-                }
-                else CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn khóa học và học viên.");
-            };
-
-            btnRemoveStudent.Click += async (s, e) =>
-            {
-                if (cboSelectCourse.SelectedValue is int courseId && cboStudent.SelectedValue is int studentId)
-                {
-                    if (studentId <= 0)
-                    {
-                        CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Không có học viên hợp lệ để thao tác.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        return;
-                    }
-
-                    bool ok = await Task.Run(() => _courseService.RejectEnrollment(courseId, studentId));
-                    if (ok)
-                    {
-                        CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Đã xóa học viên khỏi khóa học / từ chối yêu cầu tham gia!");
-                        await RefreshStudentDropdown(courseId);
-                    }
-                    else CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Lỗi xóa/từ chối học viên.");
-                }
-                else CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn khóa học và học viên.");
-            };
-        }
-
-        private async Task RefreshStudentDropdown(int courseId)
-        {
-            if (cboRegStatus.SelectedIndex == -1)
-            {
-                cboRegStatus.SelectedIndex = 0;
-                return;
-            }
-
-            string selectedStatus = cboRegStatus.SelectedItem?.ToString() ?? "Pending";
-            
-            try
-            {
-                if (selectedStatus.Contains("Pending") || selectedStatus.Contains("Chờ duyệt"))
-                {
-                    var pendings = await Task.Run(() => _courseService.GetPendingEnrollments(courseId));
-                    
-                    cboStudent.DataSource = null;
-                    if (pendings.Count == 0)
-                    {
-                        var dummyList = new List<CourseGuard.Backend.Models.EnrollmentModel>
-                        {
-                            new CourseGuard.Backend.Models.EnrollmentModel { StudentId = -1, StudentName = "Không có yêu cầu chờ duyệt" }
-                        };
-                        cboStudent.DataSource = dummyList;
-                        cboStudent.DisplayMember = "StudentName";
-                        cboStudent.ValueMember = "StudentId";
-                        cboStudent.SelectedIndex = 0;
-                    }
-                    else
-                    {
-                        cboStudent.DataSource = pendings;
-                        cboStudent.DisplayMember = "StudentName";
-                        cboStudent.ValueMember = "StudentId";
-                        cboStudent.SelectedIndex = -1;
-                    }
-                }
-                else if (selectedStatus.Contains("Approved") || selectedStatus.Contains("Đã tham gia"))
-                {
-                    var approveds = await Task.Run(() => _courseService.GetEnrollmentsByStatus(courseId, "ACTIVE"));
-                    
-                    cboStudent.DataSource = null;
-                    if (approveds.Count == 0)
-                    {
-                        var dummyList = new List<CourseGuard.Backend.Models.EnrollmentModel>
-                        {
-                            new CourseGuard.Backend.Models.EnrollmentModel { StudentId = -1, StudentName = "Không có học viên đã tham gia" }
-                        };
-                        cboStudent.DataSource = dummyList;
-                        cboStudent.DisplayMember = "StudentName";
-                        cboStudent.ValueMember = "StudentId";
-                        cboStudent.SelectedIndex = 0;
-                    }
-                    else
-                    {
-                        cboStudent.DataSource = approveds;
-                        cboStudent.DisplayMember = "StudentName";
-                        cboStudent.ValueMember = "StudentId";
-                        cboStudent.SelectedIndex = -1;
-                    }
-                }
-                else // "Tất cả học viên"
-                {
-                    cboStudent.DataSource = null;
-                    if (_allStudents == null || _allStudents.Count == 0)
-                    {
-                        var dummyList = new List<CourseGuard.Backend.Models.UserModel>
-                        {
-                            new CourseGuard.Backend.Models.UserModel { Id = -1, FullName = "Không có học viên nào" }
-                        };
-                        cboStudent.DataSource = dummyList;
-                        cboStudent.DisplayMember = "FullName";
-                        cboStudent.ValueMember = "Id";
-                        cboStudent.SelectedIndex = 0;
-                    }
-                    else
-                    {
-                        cboStudent.DataSource = _allStudents;
-                        cboStudent.DisplayMember = "FullName";
-                        cboStudent.ValueMember = "Id";
-                        cboStudent.SelectedIndex = -1;
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                // ignore
-            }
-        }
-
-        private bool ValidateInputs()
-        {
-            if (string.IsNullOrWhiteSpace(txtCourseName.Text))
-            {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Tên khóa học không được để trống.");
-                return false;
-            }
-            if (cboTeacher.SelectedValue == null)
-            {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Vui lòng chọn giáo viên.");
-                return false;
-            }
-            if (dtpStartDate.Value > dtpEndDate.Value)
-            {
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Ngày bắt đầu phải trước ngày kết thúc.");
-                return false;
-            }
-            return true;
-        }
-
-        private void btnConfigureSchedule_Click(object? sender, EventArgs e)
-        {
-            using var dialog = new AdminCourseScheduleDialog(
-                _teachingDays,
-                _sessionStartTime,
-                _sessionEndTime,
-                _meetingLink,
-                _generateSchedule
-            );
-            if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
-            {
-                _teachingDays = dialog.TeachingDaysResult;
-                _sessionStartTime = dialog.SessionStartTimeResult;
-                _sessionEndTime = dialog.SessionEndTimeResult;
-                _meetingLink = dialog.MeetingLinkResult;
-                _generateSchedule = dialog.GenerateScheduleResult;
-                CourseGuard.Frontend.Theme.MetaTheme.ShowModernDialog("Đã lưu cấu hình lịch học tạm thời. Vui lòng bấm Thêm hoặc Sửa để cập nhật khóa học.");
-            }
-        }
-
-        private void ClearInputs()
-        {
-            _selectedCourseId = -1;
-            txtCourseName.Clear();
-            txtDescription.Clear();
-            cboTeacher.SelectedIndex = -1;
-            cboStatus.SelectedIndex = -1;
-            dtpStartDate.Value = DateTime.Now;
-            dtpEndDate.Value = DateTime.Now.AddMonths(1);
-            _teachingDays = string.Empty;
-            _sessionStartTime = null;
-            _sessionEndTime = null;
-            _meetingLink = string.Empty;
-            _generateSchedule = false;
         }
     }
 }

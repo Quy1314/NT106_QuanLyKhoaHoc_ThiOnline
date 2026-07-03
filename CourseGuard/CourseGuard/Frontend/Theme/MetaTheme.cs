@@ -403,7 +403,9 @@ namespace CourseGuard.Frontend.Theme
                 StringFormat sf = new StringFormat
                 {
                     LineAlignment = StringAlignment.Center,
-                    Alignment = StringAlignment.Near
+                    Alignment = StringAlignment.Near,
+                    FormatFlags = StringFormatFlags.NoWrap,
+                    Trimming = StringTrimming.EllipsisCharacter
                 };
 
                 using (SolidBrush textBrush = new SolidBrush(fg))

@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Frontend.UserControls.Teacher;
 
 namespace CourseGuard.Frontend.UserControls.Admin
 {
@@ -39,75 +40,26 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
         private void BuildLayout()
         {
-            this.Dock = DockStyle.Fill;
-            this.BackColor = MetaTheme.Colors.FormBg;
-            this.Padding = new Padding(20);
+            var root = TeacherTabChrome.CreateRoot(this);
 
-            // Container Panel
-            var rootPanel = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = MetaTheme.Colors.FormBg
-            };
-
-            // Title Label
-            var lblTitle = new Label
-            {
-                Text = "Giám sát & Quản lý thiết bị truy cập",
-                Font = MetaTheme.Fonts.HeadingLg(),
-                ForeColor = MetaTheme.Colors.TextPrimary,
-                Dock = DockStyle.Top,
-                Height = 50,
-                TextAlign = ContentAlignment.MiddleLeft
-            };
-
-            // Top Search Bar Panel
-            var pnlSearch = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 60,
-                Padding = new Padding(0, 10, 0, 10)
-            };
-
-            _txtSearch.Width = 250;
-            _txtSearch.Height = 35;
-            _txtSearch.Font = MetaTheme.Fonts.BodyMd();
-            _txtSearch.ForeColor = MetaTheme.Colors.TextPrimary;
-            _txtSearch.BackColor = MetaTheme.Colors.InputBg;
-            _txtSearch.BorderStyle = BorderStyle.FixedSingle;
-            _txtSearch.Location = new Point(0, 12);
             _txtSearch.PlaceholderText = "Tìm theo tên máy, tài khoản...";
             _txtSearch.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) FilterDevices(); };
+            SearchBoxPanel searchBox = new SearchBoxPanel(_txtSearch, 360);
 
             var btnSearch = new Button
             {
                 Text = "Tìm kiếm",
-                Width = 100,
-                Height = 32,
-                Location = new Point(265, 11),
                 Cursor = Cursors.Hand
             };
-            MetaTheme.StylePrimaryButton(btnSearch);
+            TeacherTabChrome.StylePrimaryButton(btnSearch);
+            PrepareToolbarButton(btnSearch);
             btnSearch.Click += (s, e) => FilterDevices();
 
             _btnRefresh.Text = "Tải lại";
-            _btnRefresh.Width = 100;
-            _btnRefresh.Height = 32;
-            _btnRefresh.Location = new Point(375, 11);
             _btnRefresh.Cursor = Cursors.Hand;
-            MetaTheme.StyleGhostButton(_btnRefresh);
+            TeacherTabChrome.StyleSecondaryButton(_btnRefresh);
+            PrepareToolbarButton(_btnRefresh);
             _btnRefresh.Click += (s, e) => LoadDataAsync();
-
-            pnlSearch.Controls.Add(_txtSearch);
-            pnlSearch.Controls.Add(btnSearch);
-            pnlSearch.Controls.Add(_btnRefresh);
-
-            // Middle DataGridView Panel
-            var pnlGrid = new Panel
-            {
-                Dock = DockStyle.Fill,
-                Padding = new Padding(0, 10, 0, 10)
-            };
 
             _dgvDevices.Dock = DockStyle.Fill;
             _dgvDevices.AllowUserToAddRows = false;
@@ -134,56 +86,89 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
 
             _dgvDevices.CellFormatting += DgvDevices_CellFormatting;
-            MetaTheme.StyleGrid(_dgvDevices);
-            pnlGrid.Controls.Add(_dgvDevices);
-
-            // Bottom Action Bar Panel
-            var pnlActions = new Panel
-            {
-                Dock = DockStyle.Bottom,
-                Height = 60,
-                Padding = new Padding(0, 10, 0, 0)
-            };
+            TeacherTabChrome.StyleGrid(_dgvDevices);
 
             _btnBlock.Text = "Khóa thiết bị";
-            _btnBlock.Width = 140;
-            _btnBlock.Height = 40;
-            _btnBlock.Location = new Point(0, 10);
-            _btnBlock.BackColor = MetaTheme.Colors.LogoutRed;
-            _btnBlock.ForeColor = MetaTheme.Colors.TextPrimary;
-            _btnBlock.FlatStyle = FlatStyle.Flat;
-            _btnBlock.FlatAppearance.BorderSize = 0;
             _btnBlock.Cursor = Cursors.Hand;
+            TeacherTabChrome.StyleDangerButton(_btnBlock);
+            PrepareFooterButton(_btnBlock, 142);
             _btnBlock.Click += BtnBlock_Click;
 
             _btnUnblock.Text = "Mở khóa thiết bị";
-            _btnUnblock.Width = 140;
-            _btnUnblock.Height = 40;
-            _btnUnblock.Location = new Point(155, 10);
             _btnUnblock.Cursor = Cursors.Hand;
-            MetaTheme.StylePrimaryButton(_btnUnblock);
+            TeacherTabChrome.StylePrimaryButton(_btnUnblock);
+            PrepareFooterButton(_btnUnblock, 158);
             _btnUnblock.Click += BtnUnblock_Click;
 
             _btnForceLogout.Text = "Đăng xuất từ xa";
-            _btnForceLogout.Width = 140;
-            _btnForceLogout.Height = 40;
-            _btnForceLogout.Location = new Point(310, 10);
             _btnForceLogout.Cursor = Cursors.Hand;
-            MetaTheme.StyleGhostButton(_btnForceLogout);
+            TeacherTabChrome.StyleSecondaryButton(_btnForceLogout);
+            PrepareFooterButton(_btnForceLogout, 156);
             _btnForceLogout.Click += BtnForceLogout_Click;
 
-            RoundedButtonHelper.Apply(8, _btnBlock, _btnUnblock, _btnForceLogout, btnSearch, _btnRefresh);
+            var headerCard = TeacherTabChrome.CreateHeader(
+                "Thiết bị",
+                "Giám sát và quản lý các thiết bị đang truy cập hệ thống",
+                searchBox,
+                btnSearch,
+                _btnRefresh);
 
-            pnlActions.Controls.Add(_btnBlock);
-            pnlActions.Controls.Add(_btnUnblock);
-            pnlActions.Controls.Add(_btnForceLogout);
+            var tableBody = TeacherTabChrome.CreateTableBody(_dgvDevices, out _);
+            var content = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 1,
+                RowCount = 2,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            content.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));
+            content.Controls.Add(tableBody, 0, 0);
+            content.Controls.Add(CreateFooterActions(), 0, 1);
 
-            // Assemble
-            rootPanel.Controls.Add(pnlGrid);
-            rootPanel.Controls.Add(pnlSearch);
-            rootPanel.Controls.Add(pnlActions);
-            rootPanel.Controls.Add(lblTitle);
-            this.Controls.Add(rootPanel);
+            var cardGrid = TeacherTabChrome.CreateDataCard("Danh sách thiết bị truy cập", content);
+
+            root.Controls.Add(headerCard, 0, 0);
+            root.Controls.Add(cardGrid, 0, 1);
+        }
+
+        private FlowLayoutPanel CreateFooterActions()
+        {
+            var actions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Padding = new Padding(0, 18, 0, 0),
+                Margin = Padding.Empty
+            };
+
+            actions.Controls.Add(_btnBlock);
+            actions.Controls.Add(_btnUnblock);
+            actions.Controls.Add(_btnForceLogout);
+            return actions;
+        }
+
+        private static void PrepareToolbarButton(Button button)
+        {
+            button.Width = 116;
+            button.Height = 40;
+            button.MinimumSize = new Size(116, 40);
+            button.Margin = new Padding(8, 0, 0, 0);
+            button.Padding = new Padding(16, 0, 16, 1);
+        }
+
+        private static void PrepareFooterButton(Button button, int width)
+        {
+            button.Width = width;
+            button.Height = 40;
+            button.MinimumSize = new Size(width, 40);
+            button.Margin = new Padding(0, 0, 12, 0);
+            button.Padding = new Padding(16, 0, 16, 1);
         }
 
         private async void LoadDataAsync()
