@@ -34,7 +34,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
         private void BuildDashboardFromTemplate()
         {
             Controls.Clear();
-            BackColor = AcademicTheme.AppBackground;
+            BackColor = AppColors.BgBase;
 
             var root = new Panel
             {
@@ -44,33 +44,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Padding = new Padding(20)
             };
 
-            var titlePanel = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 100,
-                BackColor = Color.Transparent
-            };
-
-            var title = new Label
-            {
-                Text = "Bảng điều khiển Admin",
-                Font = MetaTheme.Fonts.DisplayLg(),
-                ForeColor = MetaTheme.Colors.TextPrimary,
-                AutoSize = true,
-                Location = new Point(4, 0)
-            };
-
-            var subtitle = new Label
-            {
-                Text = "Theo dõi người dùng, khóa học và phê duyệt tại một nơi",
-                Font = MetaTheme.Fonts.SubtitleMd(),
-                ForeColor = MetaTheme.Colors.TextSecondary,
-                AutoSize = true,
-                Location = new Point(8, 50)
-            };
-
-            titlePanel.Controls.Add(title);
-            titlePanel.Controls.Add(subtitle);
+            var titlePanel = CourseGuard.Frontend.UserControls.Teacher.TeacherTabChrome.CreateHeader(
+                "Bảng điều khiển Admin",
+                "Theo dõi người dùng, khóa học và phê duyệt tại một nơi");
+            titlePanel.Dock = DockStyle.Top;
 
             var kpiPanel = CreateKpiPanel();
             kpiPanel.Dock = DockStyle.Top;
@@ -80,9 +57,15 @@ namespace CourseGuard.Frontend.UserControls.Admin
             contentPanel.Dock = DockStyle.Fill;
 
             root.Controls.Add(contentPanel);
+            
+            var spacer = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = Color.Transparent, Tag = "custom" };
+            root.Controls.Add(spacer);
+            
             root.Controls.Add(kpiPanel);
             root.Controls.Add(titlePanel);
             Controls.Add(root);
+
+            AppColors.ApplyTheme(this);
         }
 
         private Control CreateKpiPanel()
@@ -109,13 +92,14 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
         private Control CreateKpiCard(string label, string value, string delta, Color accent)
         {
-            var card = new Panel
+            var card = new RoundedPanel
             {
                 Dock = DockStyle.Fill,
                 Margin = new Padding(8),
-                BackColor = AcademicTheme.Surface
+                FillColor = AppColors.BgCard,
+                CornerRadius = 16,
+                Tag = "card"
             };
-            AcademicTheme.StyleCard(card);
 
             var title = new Label { Text = label, AutoSize = true, ForeColor = MetaTheme.Colors.TextSecondary, Font = MetaTheme.Fonts.BodyMd(), Location = new Point(16, 16) };
             var number = new Label { Text = value, AutoSize = true, ForeColor = MetaTheme.Colors.TextPrimary, Font = MetaTheme.Fonts.DisplayLg(), Location = new Point(14, 42) };
@@ -142,9 +126,9 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 BackColor = Color.Transparent
             };
             container.ColumnStyles.Clear();
-            container.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45F));
-            container.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30F));
-            container.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            container.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60F));
+            container.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40F));
+            container.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 300F));
 
             container.Controls.Add(CreateRequestsTable(), 0, 0);
             container.Controls.Add(CreateActivitiesTable(), 1, 0);
@@ -154,11 +138,10 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
         private Control CreateRequestsTable()
         {
-            var panel = CreateCardPanel("Yêu cầu người dùng gần đây");
             _requestsGrid = new DataGridView
             {
                 Dock = DockStyle.Fill,
-                BackgroundColor = AcademicTheme.Surface,
+                BackgroundColor = AppColors.BgCard,
                 BorderStyle = BorderStyle.None,
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
@@ -168,7 +151,6 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Font = MetaTheme.Fonts.BodySm(),
                 EnableHeadersVisualStyles = false
             };
-            AcademicTheme.StyleGrid(_requestsGrid);
             _requestsGrid.ColumnHeadersDefaultCellStyle.Font = MetaTheme.Fonts.BodySmBold();
             _requestsGrid.ColumnHeadersHeight = 30;
             _requestsGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
@@ -179,7 +161,9 @@ namespace CourseGuard.Frontend.UserControls.Admin
             _requestsGrid.Columns.Add("Status", "Trạng thái");
             _requestsGrid.Columns.Add("Info", "Thông tin");
             _requestsGrid.Rows.Add("Đang tải...", "Đăng ký", "PENDING", "Vui lòng chờ");
-            AddCardContent(panel, _requestsGrid);
+
+            var panel = CourseGuard.Frontend.UserControls.Teacher.TeacherTabChrome.CreateDataCard("Yêu cầu người dùng gần đây", _requestsGrid);
+            panel.Margin = new Padding(8);
 
             LoadPendingRequestsAsync().FireAndForgetSafe(this);
             return panel;
@@ -223,7 +207,6 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
         private Control CreateActivitiesTable()
         {
-            var panel = CreateCardPanel("Hoạt động gần đây");
             var list = new ListBox
             {
                 Dock = DockStyle.Fill,
@@ -233,12 +216,13 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 ItemHeight = 22,
                 BackColor = AppColors.BgCard,
                 ForeColor = AppColors.TextPrimary,
-                HorizontalScrollbar = true,
-                ScrollAlwaysVisible = true
+                HorizontalScrollbar = false,
+                ScrollAlwaysVisible = false
             };
             list.Items.Add("Đang tải hoạt động...");
             _activitiesList = list;
-            AddCardContent(panel, list);
+            var panel = CourseGuard.Frontend.UserControls.Teacher.TeacherTabChrome.CreateDataCard("Hoạt động gần đây", list);
+            panel.Margin = new Padding(8);
             return panel;
         }
 
@@ -296,20 +280,20 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
         private Control CreateQuickActions()
         {
-            var panel = CreateCardPanel("Thao tác nhanh");
             var actions = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
-                AutoScroll = true,
+                AutoScroll = false,
                 BackColor = Color.Transparent
             };
             actions.Controls.Add(CreateActionButton("Thêm người dùng", AcademicTheme.Primary, "USERS"));
             actions.Controls.Add(CreateActionButton("Tạo khóa học", Color.FromArgb(34, 211, 238), "COURSES"));
             actions.Controls.Add(CreateActionButton("Xuất báo cáo", Color.FromArgb(139, 92, 246), "REPORTS"));
             actions.Controls.Add(CreateActionButton("Xem Audit", Color.FromArgb(245, 158, 11), "AUDIT"));
-            AddCardContent(panel, actions);
+            var panel = CourseGuard.Frontend.UserControls.Teacher.TeacherTabChrome.CreateDataCard("Thao tác nhanh", actions);
+            panel.Margin = new Padding(8);
             return panel;
         }
 
@@ -337,55 +321,13 @@ namespace CourseGuard.Frontend.UserControls.Admin
             button.FlatAppearance.BorderSize = 1;
             button.FlatAppearance.MouseOverBackColor = AppColors.BgCardHover;
             button.Click += (_, _) => QuickActionRequested?.Invoke(target);
+            
+            CourseGuard.Frontend.Theme.RoundedButtonHelper.Apply(button, 10);
 
             return button;
         }
 
-        private static Panel CreateCardPanel(string title)
-        {
-            var panel = new Panel
-            {
-                Dock = DockStyle.Fill,
-                Margin = new Padding(8),
-                BackColor = AppColors.BgCard,
-                Padding = new Padding(12),
-                Tag = "card"   // Mark as card for AppColors.ApplyTheme
-            };
-            AcademicTheme.StyleCard(panel);
 
-            var label = new Label
-            {
-                Text = title,
-                Dock = DockStyle.Top,
-                Height = 30,
-                Font = MetaTheme.Fonts.SubtitleLg(),
-                ForeColor = AppColors.TextPrimary
-            };
-
-            var contentHost = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = AppColors.BgCard,
-                Padding = new Padding(0, 4, 0, 0),
-                Tag = "card"
-            };
-
-            panel.Controls.Add(contentHost);
-            panel.Controls.Add(label);
-            panel.Tag = contentHost;
-            return panel;
-        }
-
-        private static void AddCardContent(Panel cardPanel, Control content)
-        {
-            if (cardPanel.Tag is Panel contentHost)
-            {
-                contentHost.Controls.Add(content);
-                return;
-            }
-
-            cardPanel.Controls.Add(content);
-        }
 
         private static string TranslateAuditAction(string action)
         {

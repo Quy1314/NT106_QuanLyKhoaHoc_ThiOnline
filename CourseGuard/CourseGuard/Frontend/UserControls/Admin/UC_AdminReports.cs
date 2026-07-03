@@ -14,17 +14,22 @@ using System.Windows.Forms;
 using CourseGuard.Backend.Data;
 using System.IO;
 using System.Drawing.Printing;
+using CourseGuard.Frontend.Forms.Admin;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Frontend.UserControls.Teacher;
 
 namespace CourseGuard.Frontend.UserControls.Admin
 {
     public partial class UC_AdminReports : UserControl
     {
         private bool _hasLoaded;
+        private readonly DarkDatePicker _reportStartDate = new();
+        private readonly DarkDatePicker _reportEndDate = new();
 
         public UC_AdminReports()
         {
             InitializeComponent();
+            ApplyThemeStyle();
 
             // Bo góc + cursor tay cho tất cả buttons
             CourseGuard.Frontend.Theme.RoundedButtonHelper.Apply(10,
@@ -33,6 +38,8 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // Default Date Range: Last 30 days
             dtpStartDate.Value = DateTime.Now.AddDays(-30);
             dtpEndDate.Value = DateTime.Now;
+            _reportStartDate.Value = dtpStartDate.Value;
+            _reportEndDate.Value = dtpEndDate.Value;
 
             // Wire up events
             btnFilter.Click += BtnFilter_Click;
@@ -49,6 +56,252 @@ namespace CourseGuard.Frontend.UserControls.Admin
             cboReportType.Items.Add("Danh sách đăng nhập");
 
             cboReportType.SelectedIndex = 0; 
+        }
+
+        private void ApplyThemeStyle()
+        {
+            btnFilter.Tag = "primary";
+            btnExportCSV.Tag = "secondary";
+            btnExportExcel.Tag = "secondary";
+            btnExportPDF.Tag = "secondary";
+
+            lblTitle.Text = "BÁO CÁO VÀ THỐNG KÊ";
+            BuildReportLayout();
+            AppColors.ApplyTheme(this);
+            TeacherTabChrome.StylePrimaryButton(btnFilter);
+            PrepareFilterButton();
+            TeacherTabChrome.StyleSecondaryButton(btnExportCSV);
+            TeacherTabChrome.StyleSecondaryButton(btnExportExcel);
+            TeacherTabChrome.StyleSecondaryButton(btnExportPDF);
+            TeacherTabChrome.StyleGrid(dataGridView1);
+        }
+
+        private void BuildReportLayout()
+        {
+            var root = TeacherTabChrome.CreateRoot(this);
+            var headerCard = TeacherTabChrome.CreateHeader(
+                lblTitle.Text,
+                "Xuất và phân tích dữ liệu hệ thống");
+
+            var content = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 1,
+                RowCount = 2,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 176f));
+            content.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+
+            var topRow = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 2,
+                RowCount = 1,
+                Margin = new Padding(0, 0, 0, 16),
+                Padding = Padding.Empty
+            };
+            topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 820f));
+            topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            topRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+
+            var cardFilter = TeacherTabChrome.CreateDataCard("Bộ lọc và Tìm kiếm", BuildFilterContent());
+            var cardExport = TeacherTabChrome.CreateDataCard("Xuất dữ liệu", BuildExportContent());
+            var cardGrid = TeacherTabChrome.CreateDataCard("Dữ liệu báo cáo", dataGridView1);
+
+            cardFilter.Margin = new Padding(0, 0, 16, 0);
+            cardExport.Margin = Padding.Empty;
+            cardGrid.Margin = Padding.Empty;
+
+            topRow.Controls.Add(cardFilter, 0, 0);
+            topRow.Controls.Add(cardExport, 1, 0);
+
+            content.Controls.Add(topRow, 0, 0);
+            content.Controls.Add(cardGrid, 0, 1);
+
+            root.Controls.Add(headerCard, 0, 0);
+            root.Controls.Add(content, 0, 1);
+        }
+
+        private Control BuildFilterContent()
+        {
+            grpFilter.Controls.Clear();
+            grpFilter.Dock = DockStyle.Fill;
+            grpFilter.Margin = Padding.Empty;
+            grpFilter.Padding = new Padding(10, 0, 10, 8);
+            grpFilter.BackColor = Color.Transparent;
+            grpFilter.Tag = "custom";
+
+            var grid = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 5,
+                RowCount = 2,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 212f));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 174f));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 174f));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 148f));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 24f));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 48f));
+
+            PrepareFilterLabel(lblReportType, "Loại báo cáo:");
+            PrepareFilterLabel(lblStartDate, "Từ ngày:");
+            PrepareFilterLabel(lblEndDate, "Đến ngày:");
+            PrepareFilterInput(cboReportType);
+            PrepareFilterInput(_reportStartDate);
+            PrepareFilterInput(_reportEndDate);
+
+            btnFilter.Text = "Xem Báo Cáo";
+            btnFilter.Width = 132;
+            btnFilter.Height = 40;
+            btnFilter.MinimumSize = new Size(132, 40);
+            btnFilter.Margin = new Padding(0, 8, 0, 0);
+            btnFilter.Anchor = AnchorStyles.Left | AnchorStyles.Top;
+
+            grid.Controls.Add(lblReportType, 0, 0);
+            grid.Controls.Add(lblStartDate, 1, 0);
+            grid.Controls.Add(lblEndDate, 2, 0);
+            grid.Controls.Add(cboReportType, 0, 1);
+            grid.Controls.Add(_reportStartDate, 1, 1);
+            grid.Controls.Add(_reportEndDate, 2, 1);
+            grid.Controls.Add(btnFilter, 3, 1);
+
+            grpFilter.Controls.Add(grid);
+            return grpFilter;
+        }
+
+        private Control BuildExportContent()
+        {
+            grpExport.Controls.Clear();
+            grpExport.Dock = DockStyle.Fill;
+            grpExport.Margin = Padding.Empty;
+            grpExport.Padding = new Padding(10, 2, 10, 8);
+            grpExport.BackColor = Color.Transparent;
+            grpExport.Tag = "custom";
+
+            var actions = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 3,
+                RowCount = 1,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.34f));
+            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+
+            PrepareExportButton(btnExportCSV, "Xuất CSV");
+            PrepareExportButton(btnExportExcel, "Xuất Excel");
+            PrepareExportButton(btnExportPDF, "Xuất PDF");
+            btnExportPDF.Margin = new Padding(0, 2, 0, 0);
+
+            actions.Controls.Add(btnExportCSV, 0, 0);
+            actions.Controls.Add(btnExportExcel, 1, 0);
+            actions.Controls.Add(btnExportPDF, 2, 0);
+            grpExport.Controls.Add(actions);
+            return grpExport;
+        }
+
+        private static void PrepareFilterLabel(Label label, string text)
+        {
+            label.Text = text;
+            label.Dock = DockStyle.Fill;
+            label.Margin = Padding.Empty;
+            label.TextAlign = ContentAlignment.BottomLeft;
+            label.AutoSize = false;
+            label.BackColor = Color.Transparent;
+        }
+
+        private static void PrepareFilterInput(Control control)
+        {
+            control.Tag = "custom";
+            control.Dock = DockStyle.Fill;
+            control.Margin = new Padding(0, 8, 18, 0);
+        }
+
+        private void PrepareFilterButton()
+        {
+            btnFilter.Width = 132;
+            btnFilter.Height = 40;
+            btnFilter.MinimumSize = new Size(132, 40);
+            btnFilter.Padding = new Padding(18, 0, 18, 1);
+            btnFilter.Margin = new Padding(0, 8, 0, 0);
+        }
+
+        private static void PrepareExportButton(Button button, string text)
+        {
+            button.Text = text;
+            button.Dock = DockStyle.Fill;
+            button.Margin = new Padding(0, 2, 12, 0);
+            button.MinimumSize = new Size(92, 36);
+            button.Height = 36;
+        }
+
+        private void WrapWithCards()
+        {
+            // Wrap Filter
+            this.Controls.Remove(grpFilter);
+            var cardFilter = CourseGuard.Frontend.UserControls.Teacher.TeacherTabChrome.CreateDataCard("Bộ lọc và Tìm kiếm", grpFilter);
+            cardFilter.Dock = DockStyle.Top;
+            cardFilter.Height = 160;
+            cardFilter.Padding = new Padding(12);
+            this.Controls.Add(cardFilter);
+            
+            // Wrap Export
+            this.Controls.Remove(grpExport);
+            var cardExport = CourseGuard.Frontend.UserControls.Teacher.TeacherTabChrome.CreateDataCard("Xuất dữ liệu", grpExport);
+            cardExport.Dock = DockStyle.Top;
+            cardExport.Height = 140;
+            cardExport.Padding = new Padding(12);
+            this.Controls.Add(cardExport);
+            
+            // Wrap Grid
+            this.Controls.Remove(dataGridView1);
+            var cardGrid = CourseGuard.Frontend.UserControls.Teacher.TeacherTabChrome.CreateDataCard("Dữ liệu báo cáo", dataGridView1);
+            cardGrid.Dock = DockStyle.Fill;
+            cardGrid.Padding = new Padding(12);
+            this.Controls.Add(cardGrid);
+            
+            // Wrap Header
+            this.Controls.Remove(panelHeader);
+            var headerCard = CourseGuard.Frontend.UserControls.Teacher.TeacherTabChrome.CreateHeader(
+                lblTitle.Text,
+                "Xuất và phân tích dữ liệu hệ thống");
+            headerCard.Dock = DockStyle.Top;
+            this.Controls.Add(headerCard);
+            
+            // Set Z-Order for correct Docking
+            headerCard.SendToBack(); // Docks first (Top)
+            
+            var spacer1 = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = Color.Transparent, Tag = "custom" };
+            this.Controls.Add(spacer1);
+            spacer1.SendToBack();
+            
+            cardFilter.SendToBack();  // Docks second (Top)
+            
+            var spacer2 = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = Color.Transparent, Tag = "custom" };
+            this.Controls.Add(spacer2);
+            spacer2.SendToBack();
+            
+            cardExport.SendToBack();  // Docks third (Top)
+            
+            var spacer3 = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = Color.Transparent, Tag = "custom" };
+            this.Controls.Add(spacer3);
+            spacer3.SendToBack();
+            
+            cardGrid.BringToFront();  // Docks last (Fill)
         }
 
         private void UC_AdminReports_VisibleChanged(object? sender, EventArgs e)
@@ -74,8 +327,8 @@ namespace CourseGuard.Frontend.UserControls.Admin
         private async void LoadData()
         {
             string? reportType = cboReportType.SelectedItem?.ToString();
-            DateTime start = dtpStartDate.Value.Date;
-            DateTime end = dtpEndDate.Value.Date.AddDays(1).AddTicks(-1); // End of day
+            DateTime start = _reportStartDate.Value.Date;
+            DateTime end = _reportEndDate.Value.Date.AddDays(1).AddTicks(-1); // End of day
 
             string query = "";
             

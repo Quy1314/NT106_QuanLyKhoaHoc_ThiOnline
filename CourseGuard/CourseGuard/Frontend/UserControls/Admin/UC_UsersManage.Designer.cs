@@ -40,7 +40,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             cb_StatusFilter = new ComboBox();
             btn_Approve = new Button();
             dataGridView1 = new DataGridView();
-            panel1 = new Panel();
+            panel1 = new CourseGuard.Frontend.Theme.RoundedPanel();
             panel1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
             SuspendLayout();
@@ -50,7 +50,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             cb_roleID.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             cb_roleID.FormattingEnabled = true;
             cb_roleID.Items.AddRange(new object[] { "Teacher", "Student" });
-            cb_roleID.Location = new Point(20, 110);
+            cb_roleID.Location = new Point(20, 65);
             cb_roleID.Name = "cb_roleID";
             cb_roleID.Size = new Size(220, 31);
             cb_roleID.TabIndex = 5;
@@ -59,7 +59,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // txt_Email
             // 
             txt_Email.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
-            txt_Email.Location = new Point(740, 65);
+            txt_Email.Location = new Point(740, 20);
             txt_Email.Name = "txt_Email";
             txt_Email.PlaceholderText = "Email";
             txt_Email.Size = new Size(220, 30);
@@ -68,7 +68,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // txt_FullName
             // 
             txt_FullName.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
-            txt_FullName.Location = new Point(500, 65);
+            txt_FullName.Location = new Point(500, 20);
             txt_FullName.Name = "txt_FullName";
             txt_FullName.PlaceholderText = "Full Name";
             txt_FullName.Size = new Size(220, 30);
@@ -77,17 +77,16 @@ namespace CourseGuard.Frontend.UserControls.Admin
             // txt_Password
             // 
             txt_Password.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
-            txt_Password.Location = new Point(260, 65);
+            txt_Password.Location = new Point(260, 20);
             txt_Password.Name = "txt_Password";
             txt_Password.PlaceholderText = "Password";
             txt_Password.Size = new Size(220, 30);
             txt_Password.TabIndex = 2;
-            txt_Password.UseSystemPasswordChar = true;
             // 
             // txt_Username
             // 
             txt_Username.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
-            txt_Username.Location = new Point(20, 65);
+            txt_Username.Location = new Point(20, 20);
             txt_Username.Name = "txt_Username";
             txt_Username.PlaceholderText = "Username";
             txt_Username.Size = new Size(220, 30);
@@ -100,7 +99,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btn_search.FlatStyle = FlatStyle.Flat;
             btn_search.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             btn_search.ForeColor = Color.White;
-            btn_search.Location = new Point(340, 150);
+            btn_search.Location = new Point(340, 105);
             btn_search.Name = "btn_search";
             btn_search.Size = new Size(140, 40);
             btn_search.TabIndex = 8;
@@ -114,7 +113,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btn_delete.FlatStyle = FlatStyle.Flat;
             btn_delete.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             btn_delete.ForeColor = Color.White;
-            btn_delete.Location = new Point(180, 150);
+            btn_delete.Location = new Point(180, 105);
             btn_delete.Name = "btn_delete";
             btn_delete.Size = new Size(140, 40);
             btn_delete.TabIndex = 7;
@@ -128,7 +127,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btn_insert.FlatStyle = FlatStyle.Flat;
             btn_insert.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             btn_insert.ForeColor = Color.White;
-            btn_insert.Location = new Point(20, 150);
+            btn_insert.Location = new Point(20, 105);
             btn_insert.Name = "btn_insert";
             btn_insert.Size = new Size(140, 40);
             btn_insert.TabIndex = 6;
@@ -141,7 +140,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             cb_StatusFilter.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.BodyMd();
             cb_StatusFilter.FormattingEnabled = true;
             cb_StatusFilter.Items.AddRange(new object[] { "ALL", "ACTIVE", "PENDING", "RESET_REQUEST" });
-            cb_StatusFilter.Location = new Point(500, 155);
+            cb_StatusFilter.Location = new Point(500, 110);
             cb_StatusFilter.Name = "cb_StatusFilter";
             cb_StatusFilter.Size = new Size(180, 31);
             cb_StatusFilter.TabIndex = 9;
@@ -154,7 +153,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             btn_Approve.FlatStyle = FlatStyle.Flat;
             btn_Approve.Font = global::CourseGuard.Frontend.Theme.MetaTheme.Fonts.ButtonMd();
             btn_Approve.ForeColor = Color.White;
-            btn_Approve.Location = new Point(700, 150);
+            btn_Approve.Location = new Point(700, 105);
             btn_Approve.Name = "btn_Approve";
             btn_Approve.Size = new Size(140, 40);
             btn_Approve.TabIndex = 10;
@@ -170,6 +169,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             lbl_Logo.Name = "lbl_Logo";
             lbl_Logo.Size = new Size(223, 37);
             lbl_Logo.TabIndex = 0;
+            lbl_Logo.Visible = false;
             lbl_Logo.Text = "COURSE GUARD";
             // 
             // panel1
@@ -189,7 +189,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             panel1.Dock = DockStyle.Top;
             panel1.Location = new Point(0, 0);
             panel1.Name = "panel1";
-            panel1.Size = new Size(980, 200);
+            panel1.Size = new Size(980, 160);
             panel1.TabIndex = 0;
             // 
             // dataGridView1
@@ -230,7 +230,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
         private System.Windows.Forms.Button btn_delete;
         private System.Windows.Forms.Button btn_insert;
         private System.Windows.Forms.Label lbl_Logo;
-        private System.Windows.Forms.Panel panel1;
+        private CourseGuard.Frontend.Theme.RoundedPanel panel1;
         private System.Windows.Forms.DataGridView dataGridView1;
         private System.Windows.Forms.ComboBox cb_StatusFilter;
         private System.Windows.Forms.Button btn_Approve;

@@ -7,6 +7,7 @@ using CourseGuard.Backend.Data;
 using CourseGuard.Backend.Models;
 using CourseGuard.Frontend.Helpers;
 using CourseGuard.Frontend.Theme;
+using CourseGuard.Frontend.UserControls.Teacher;
 
 namespace CourseGuard.Frontend.UserControls.Admin
 {
@@ -30,48 +31,46 @@ namespace CourseGuard.Frontend.UserControls.Admin
 
         private void BuildLayout()
         {
-            Controls.Clear();
-            BackColor = AcademicTheme.AppBackground;
-
-            var root = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = AcademicTheme.AppBackground,
-                Padding = new Padding(18),
-                AutoScroll = true
-            };
-
-            var title = new Label
-            {
-                Dock = DockStyle.Top,
-                Height = 44,
-                Text = "Thống kê nhật ký Admin",
-                Font = MetaTheme.Fonts.HeadingLg(),
-                ForeColor = AcademicTheme.TextPrimary
-            };
+            var root = TeacherTabChrome.CreateRoot(this);
+            var title = TeacherTabChrome.CreateHeader(
+                "Nhật ký",
+                "Theo dõi đăng nhập, tài khoản và thống kê hoạt động hệ thống");
 
             var summarySection = CreateAccountSummarySection();
-            summarySection.Dock = DockStyle.Top;
-            summarySection.Height = 165;
-
             var loginSection = CreateLoginFrequencySection();
-            loginSection.Dock = DockStyle.Top;
-            loginSection.Height = 280;
-
             var courseSection = CreateCourseListSection();
-            courseSection.Dock = DockStyle.Fill;
 
-            root.Controls.Add(courseSection);
-            root.Controls.Add(loginSection);
-            root.Controls.Add(summarySection);
-            root.Controls.Add(title);
-            Controls.Add(root);
+            var content = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                BackColor = Color.Transparent,
+                ColumnCount = 1,
+                RowCount = 3,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 216F));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 320F));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 460F));
+
+            summarySection.Margin = new Padding(0, 0, 0, 16);
+            loginSection.Margin = new Padding(0, 0, 0, 16);
+            courseSection.Margin = Padding.Empty;
+
+            content.Controls.Add(summarySection, 0, 0);
+            content.Controls.Add(loginSection, 0, 1);
+            content.Controls.Add(courseSection, 0, 2);
+
+            root.Controls.Add(title, 0, 0);
+            root.Controls.Add(content, 0, 1);
+
+            AppColors.ApplyTheme(this);
         }
 
         private Control CreateAccountSummarySection()
         {
-            var panel = CreateCardPanel("Phần 1 - Tổng quan tài khoản");
-
             var layout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -89,43 +88,46 @@ namespace CourseGuard.Frontend.UserControls.Admin
             layout.Controls.Add(CreateMetricCard("Giảng viên", out _teacherAccountsValue), 3, 0);
             layout.Controls.Add(CreateMetricCard("Học viên", out _studentAccountsValue), 4, 0);
 
-            AddCardContent(panel, layout);
+            var panel = TeacherTabChrome.CreateDataCard("Tổng quan tài khoản", layout);
             return panel;
         }
 
         private Control CreateLoginFrequencySection()
         {
-            var panel = CreateCardPanel("Phần 2 - Tần suất đăng nhập (14 ngày gần nhất)");
             _loginStatsGrid = CreateGrid();
             _loginStatsGrid.Columns.Add("LoginDate", "Ngày");
             _loginStatsGrid.Columns.Add("LoginCount", "Số lượt đăng nhập");
-            AddCardContent(panel, _loginStatsGrid);
+            
+            TeacherTabChrome.StyleGrid(_loginStatsGrid);
+            var panel = TeacherTabChrome.CreateDataCard("Tần suất đăng nhập (14 ngày gần nhất)", _loginStatsGrid);
             return panel;
         }
 
         private Control CreateCourseListSection()
         {
-            var panel = CreateCardPanel("Phần 3 - Thống kê danh sách khóa học");
             _courseStatsGrid = CreateGrid();
             _courseStatsGrid.Columns.Add("CourseId", "Mã khóa học");
             _courseStatsGrid.Columns.Add("CourseName", "Tên khóa học");
             _courseStatsGrid.Columns.Add("TeacherName", "Giảng viên");
             _courseStatsGrid.Columns.Add("Status", "Trạng thái");
             _courseStatsGrid.Columns.Add("EnrollmentCount", "Số lượt ghi danh");
-            AddCardContent(panel, _courseStatsGrid);
+            
+            TeacherTabChrome.StyleGrid(_courseStatsGrid);
+            var panel = TeacherTabChrome.CreateDataCard("Thống kê danh sách khóa học", _courseStatsGrid);
             return panel;
         }
 
         private static Control CreateMetricCard(string title, out Label valueLabel)
         {
-            var card = new Panel
+            var card = new RoundedPanel
             {
                 Dock = DockStyle.Fill,
                 Margin = new Padding(6),
                 Padding = new Padding(12),
-                BackColor = AcademicTheme.Surface
+                FillColor = AppColors.BgCard,
+                CornerRadius = 12,
+                Tag = "card"
             };
-            AcademicTheme.StyleCard(card);
 
             var titleLabel = new Label
             {
@@ -133,7 +135,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Dock = DockStyle.Top,
                 Height = 26,
                 Font = MetaTheme.Fonts.BodySmBold(),
-                ForeColor = AcademicTheme.TextSecondary
+                ForeColor = AppColors.TextSecondary
             };
 
             valueLabel = new Label
@@ -141,7 +143,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 Text = "0",
                 Dock = DockStyle.Fill,
                 Font = AppFonts.Semibold(19F),
-                ForeColor = AcademicTheme.TextPrimary,
+                ForeColor = AppColors.TextPrimary,
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
@@ -155,7 +157,7 @@ namespace CourseGuard.Frontend.UserControls.Admin
             var grid = new DataGridView
             {
                 Dock = DockStyle.Fill,
-                BackgroundColor = AcademicTheme.Surface,
+                BackgroundColor = AppColors.BgCard,
                 BorderStyle = BorderStyle.None,
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
@@ -166,7 +168,6 @@ namespace CourseGuard.Frontend.UserControls.Admin
                 EnableHeadersVisualStyles = false
             };
 
-            AcademicTheme.StyleGrid(grid);
             grid.ColumnHeadersDefaultCellStyle.Font = MetaTheme.Fonts.BodySmBold();
             grid.ColumnHeadersHeight = 30;
             grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
@@ -266,48 +267,6 @@ namespace CourseGuard.Frontend.UserControls.Admin
             }
         }
 
-        private static Panel CreateCardPanel(string title)
-        {
-            var panel = new Panel
-            {
-                Dock = DockStyle.Fill,
-                Margin = new Padding(8),
-                BackColor = AcademicTheme.Surface,
-                Padding = new Padding(12)
-            };
-            AcademicTheme.StyleCard(panel);
 
-            var label = new Label
-            {
-                Text = title,
-                Dock = DockStyle.Top,
-                Height = 32,
-                Font = MetaTheme.Fonts.SubtitleLg(),
-                ForeColor = AcademicTheme.TextPrimary
-            };
-
-            var contentHost = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = AcademicTheme.Surface,
-                Padding = new Padding(0, 4, 0, 0)
-            };
-
-            panel.Controls.Add(contentHost);
-            panel.Controls.Add(label);
-            panel.Tag = contentHost;
-            return panel;
-        }
-
-        private static void AddCardContent(Panel cardPanel, Control content)
-        {
-            if (cardPanel.Tag is Panel contentHost)
-            {
-                contentHost.Controls.Add(content);
-                return;
-            }
-
-            cardPanel.Controls.Add(content);
-        }
     }
 }
